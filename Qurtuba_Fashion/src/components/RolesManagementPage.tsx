@@ -1,97 +1,29 @@
-import React, { useState } from 'react';
-import { Plus, Edit, Trash2, Save, X, Shield, ArrowLeft, Check, Grid3X3, List } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Plus, Edit, Trash2, Shield, ArrowLeft, Grid3X3, List, Loader2 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Badge } from './ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
-import { Role, Page, Action } from '../types/user';
+import { rolesService, Role, Page, Action } from '../services/roles.service';
+import { toast } from 'sonner';
 
-const availablePages: Page[] = [
-  { id: 'dashboard', name: 'الصفحة الرئيسية', description: 'لوحة التحكم الرئيسية', category: 'عام' },
-  { id: 'invoices', name: 'الفواتير', description: 'إدارة الفواتير', category: 'المبيعات' },
-  { id: 'customers', name: 'الزبائن', description: 'إدارة العملاء', category: 'المبيعات' },
-  { id: 'financial', name: 'المالية', description: 'الإدارة المالية', category: 'المالية' },
-  { id: 'reports', name: 'التقارير', description: 'تقارير النظام', category: 'التقارير' },
-  { id: 'users', name: 'إدارة المستخدمين', description: 'إدارة المستخدمين والأدوار', category: 'الإدارة' }
-];
-
-const availableActions: Action[] = [
-  // إجراءات الفواتير
-  { id: 'create_invoice', name: 'إنشاء فاتورة جديدة', description: 'إضافة فاتورة جديدة', category: 'الفواتير' },
-  { id: 'edit_invoice', name: 'تعديل الفاتورة', description: 'تعديل بيانات الفاتورة', category: 'الفواتير' },
-  { id: 'delete_invoice', name: 'حذف الفاتورة', description: 'حذف الفاتورة', category: 'الفواتير' },
-  { id: 'change_invoice_status', name: 'تغيير حالة الفاتورة', description: 'تعديل حالة الفاتورة', category: 'الفواتير' },
-  { id: 'mark_invoice_paid', name: 'تسجيل دفع الفاتورة', description: 'تسجيل دفع الفاتورة', category: 'الفواتير' },
-  { id: 'print_invoice', name: 'طباعة الفاتورة', description: 'طباعة الفاتورة', category: 'الفواتير' },
-  { id: 'print_invoices_list', name: 'طباعة قائمة الفواتير', description: 'طباعة قائمة الفواتير', category: 'الفواتير' },
-  
-  // إجراءات العملاء
-  { id: 'create_customer', name: 'إضافة زبون جديد', description: 'إضافة عميل جديد', category: 'العملاء' },
-  { id: 'edit_customer', name: 'تعديل بيانات الزبون', description: 'تعديل بيانات العميل', category: 'العملاء' },
-  { id: 'delete_customer', name: 'حذف الزبون', description: 'حذف العميل', category: 'العملاء' },
-  { id: 'view_customer_details', name: 'عرض تفاصيل الزبون', description: 'عرض تفاصيل العميل', category: 'العملاء' },
-  { id: 'print_customers_list', name: 'طباعة قائمة الزبائن', description: 'طباعة قائمة العملاء', category: 'العملاء' },
-  
-  // إجراءات المالية
-  { id: 'view_financial_reports', name: 'عرض التقارير المالية', description: 'عرض التقارير المالية', category: 'المالية' },
-  { id: 'manage_payments', name: 'إدارة المدفوعات', description: 'إدارة المدفوعات', category: 'المالية' },
-  { id: 'view_income_statement', name: 'عرض قائمة الدخل', description: 'عرض قائمة الدخل', category: 'المالية' },
-  
-  // إجراءات التقارير
-  { id: 'generate_sales_report', name: 'تقرير المبيعات', description: 'توليد تقرير المبيعات', category: 'التقارير' },
-  { id: 'generate_customer_report', name: 'تقرير العملاء', description: 'توليد تقرير العملاء', category: 'التقارير' },
-  { id: 'generate_financial_report', name: 'تقرير مالي', description: 'توليد تقرير مالي', category: 'التقارير' },
-  
-  // إجراءات الإدارة
-  { id: 'manage_users', name: 'إدارة المستخدمين', description: 'إدارة المستخدمين', category: 'الإدارة' },
-  { id: 'manage_roles', name: 'إدارة الأدوار', description: 'إدارة الأدوار والصلاحيات', category: 'الإدارة' },
-  { id: 'system_settings', name: 'إعدادات النظام', description: 'تعديل إعدادات النظام', category: 'الإدارة' }
-];
-
-const initialRoles: Role[] = [
-  {
-    id: 1,
-    name: 'مدير النظام',
-    description: 'صلاحيات كاملة في النظام',
-    permissions: ['إدارة المستخدمين', 'إدارة الفواتير', 'إدارة العملاء', 'التقارير', 'الإعدادات'],
-    allowedPages: ['dashboard', 'invoices', 'customers', 'financial', 'reports', 'users'],
-    allowedActions: ['create_invoice', 'edit_invoice', 'delete_invoice', 'change_invoice_status', 'mark_invoice_paid', 'print_invoice', 'print_invoices_list', 'create_customer', 'edit_customer', 'delete_customer', 'view_customer_details', 'print_customers_list', 'view_financial_reports', 'manage_payments', 'view_income_statement', 'generate_sales_report', 'generate_customer_report', 'generate_financial_report', 'manage_users', 'manage_roles', 'system_settings'],
-    isActive: true,
-    createdAt: '2024-01-01'
-  },
-  {
-    id: 2,
-    name: 'مندوب مبيعات',
-    description: 'إدارة المبيعات والعملاء',
-    permissions: ['إدارة العملاء', 'إنشاء الفواتير', 'عرض التقارير'],
-    allowedPages: ['dashboard', 'invoices', 'customers', 'reports'],
-    allowedActions: ['create_invoice', 'edit_invoice', 'change_invoice_status', 'print_invoice', 'print_invoices_list', 'create_customer', 'edit_customer', 'view_customer_details', 'print_customers_list', 'generate_sales_report', 'generate_customer_report'],
-    isActive: true,
-    createdAt: '2024-01-01'
-  },
-  {
-    id: 3,
-    name: 'محاسب رئيسي',
-    description: 'إدارة الحسابات والمالية',
-    permissions: ['إدارة الفواتير', 'التقارير المالية', 'إدارة المدفوعات'],
-    allowedPages: ['dashboard', 'invoices', 'financial', 'reports'],
-    allowedActions: ['create_invoice', 'edit_invoice', 'delete_invoice', 'change_invoice_status', 'mark_invoice_paid', 'print_invoice', 'print_invoices_list', 'view_financial_reports', 'manage_payments', 'view_income_statement', 'generate_sales_report', 'generate_financial_report'],
-    isActive: true,
-    createdAt: '2024-01-01'
-  }
-];
+// This will be loaded from the service
 
 interface RolesManagementPageProps {
   onBack: () => void;
 }
 
 export function RolesManagementPage({ onBack }: RolesManagementPageProps) {
-  const [roles, setRoles] = useState<Role[]>(initialRoles);
+  const [roles, setRoles] = useState<Role[]>([]);
+  const [availablePages, setAvailablePages] = useState<Page[]>([]);
+  const [availableActions, setAvailableActions] = useState<Action[]>([]);
   const [isAddRoleDialogOpen, setIsAddRoleDialogOpen] = useState(false);
   const [editingRole, setEditingRole] = useState<Role | null>(null);
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [newRole, setNewRole] = useState<Partial<Role>>({
     name: '',
     description: '',
@@ -101,19 +33,65 @@ export function RolesManagementPage({ onBack }: RolesManagementPageProps) {
     isActive: true
   });
 
-  const handleAddRole = () => {
-    if (newRole.name && newRole.description) {
-      const role: Role = {
-        id: Math.max(...roles.map(r => r.id)) + 1,
-        name: newRole.name,
-        description: newRole.description,
+  // Load data on component mount
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      const [rolesData, pagesData, actionsData] = await Promise.all([
+        rolesService.getRoles(),
+        rolesService.getPages(),
+        rolesService.getActions()
+      ]);
+      
+      setRoles(rolesData);
+      setAvailablePages(pagesData);
+      setAvailableActions(actionsData);
+    } catch (error) {
+      console.error('Error loading data:', error);
+      toast.error('حدث خطأ في تحميل البيانات');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAddRole = async () => {
+    if (!newRole.name?.trim()) {
+      toast.error('اسم الدور مطلوب');
+      return;
+    }
+    
+    if (!newRole.description?.trim()) {
+      toast.error('وصف الدور مطلوب');
+      return;
+    }
+
+    // Check if role name already exists
+    const existingRole = roles.find(role => 
+      role.name.toLowerCase() === newRole.name?.toLowerCase()
+    );
+    if (existingRole) {
+      toast.error('اسم الدور موجود مسبقاً');
+      return;
+    }
+
+    try {
+      setSaving(true);
+      const roleData = {
+        name: newRole.name.trim(),
+        description: newRole.description.trim(),
         permissions: newRole.permissions || [],
         allowedPages: newRole.allowedPages || [],
         allowedActions: newRole.allowedActions || [],
-        isActive: newRole.isActive || true,
-        createdAt: new Date().toISOString().split('T')[0]
+        isActive: newRole.isActive || true
       };
-      setRoles([...roles, role]);
+
+      const createdRole = await rolesService.createRole(roleData);
+      setRoles([...roles, createdRole]);
+      
       setNewRole({
         name: '',
         description: '',
@@ -123,6 +101,12 @@ export function RolesManagementPage({ onBack }: RolesManagementPageProps) {
         isActive: true
       });
       setIsAddRoleDialogOpen(false);
+      toast.success('تم إنشاء الدور بنجاح');
+    } catch (error) {
+      console.error('Error creating role:', error);
+      toast.error('حدث خطأ في إنشاء الدور');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -130,93 +114,153 @@ export function RolesManagementPage({ onBack }: RolesManagementPageProps) {
     setEditingRole(role);
   };
 
-  const handleSaveRole = () => {
-    if (editingRole) {
-      setRoles(roles.map(r => r.id === editingRole.id ? editingRole : r));
+  const handleSaveRole = async () => {
+    if (!editingRole) return;
+
+    if (!editingRole.name?.trim()) {
+      toast.error('اسم الدور مطلوب');
+      return;
+    }
+    
+    if (!editingRole.description?.trim()) {
+      toast.error('وصف الدور مطلوب');
+      return;
+    }
+
+    // Check if role name already exists (excluding current role)
+    const existingRole = roles.find(role => 
+      role.id !== editingRole.id && 
+      role.name.toLowerCase() === editingRole.name?.toLowerCase()
+    );
+    if (existingRole) {
+      toast.error('اسم الدور موجود مسبقاً');
+      return;
+    }
+
+    try {
+      setSaving(true);
+      const updatedRoleData = {
+        ...editingRole,
+        name: editingRole.name.trim(),
+        description: editingRole.description.trim()
+      };
+      
+      const updatedRole = await rolesService.updateRole(editingRole.id, updatedRoleData);
+      setRoles(roles.map(r => r.id === editingRole.id ? updatedRole : r));
       setEditingRole(null);
+      toast.success('تم تحديث الدور بنجاح');
+    } catch (error) {
+      console.error('Error updating role:', error);
+      toast.error('حدث خطأ في تحديث الدور');
+    } finally {
+      setSaving(false);
     }
   };
 
-  const handleDeleteRole = (roleId: number) => {
-    setRoles(roles.filter(r => r.id !== roleId));
+  const handleDeleteRole = async (roleId: string) => {
+    const roleToDelete = roles.find(r => r.id === roleId);
+    if (!roleToDelete) return;
+
+    // Check if this is a default role
+    const defaultRoles = ['1', '2', '3']; // Default role IDs
+    if (defaultRoles.includes(roleId)) {
+      toast.error('لا يمكن حذف الأدوار الافتراضية');
+      return;
+    }
+
+    if (!confirm(`هل أنت متأكد من حذف دور "${roleToDelete.name}"؟\n\nسيتم حذف الدور نهائياً ولا يمكن التراجع عن هذا الإجراء.`)) return;
+
+    try {
+      setSaving(true);
+      await rolesService.deleteRole(roleId);
+      setRoles(roles.filter(r => r.id !== roleId));
+      toast.success('تم حذف الدور بنجاح');
+    } catch (error) {
+      console.error('Error deleting role:', error);
+      toast.error('حدث خطأ في حذف الدور');
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const handleTogglePage = (roleId: number, pageId: string) => {
-    setRoles(roles.map(role => {
-      if (role.id === roleId) {
-        const currentPages = role.allowedPages || [];
-        const newPages = currentPages.includes(pageId)
-          ? currentPages.filter(p => p !== pageId)
-          : [...currentPages, pageId];
-        return { ...role, allowedPages: newPages };
-      }
-      return role;
-    }));
+  const handleTogglePage = (roleId: string, pageId: string) => {
+    setEditingRole(prevRole => {
+      if (!prevRole) return null;
+      const currentPages = prevRole.allowedPages || [];
+      const newPages = currentPages.includes(pageId)
+        ? currentPages.filter(p => p !== pageId)
+        : [...currentPages, pageId];
+      return { ...prevRole, allowedPages: newPages };
+    });
   };
 
-  const handleToggleAction = (roleId: number, actionId: string) => {
-    setRoles(roles.map(role => {
-      if (role.id === roleId) {
-        const currentActions = role.allowedActions || [];
-        const newActions = currentActions.includes(actionId)
-          ? currentActions.filter(a => a !== actionId)
-          : [...currentActions, actionId];
-        return { ...role, allowedActions: newActions };
-      }
-      return role;
-    }));
+  const handleToggleAction = (roleId: string, actionId: string) => {
+    setEditingRole(prevRole => {
+      if (!prevRole) return null;
+      const currentActions = prevRole.allowedActions || [];
+      const newActions = currentActions.includes(actionId)
+        ? currentActions.filter(a => a !== actionId)
+        : [...currentActions, actionId];
+      return { ...prevRole, allowedActions: newActions };
+    });
   };
 
   const handleToggleNewRolePage = (pageId: string) => {
-    const currentPages = newRole.allowedPages || [];
-    const newPages = currentPages.includes(pageId)
-      ? currentPages.filter(p => p !== pageId)
-      : [...currentPages, pageId];
-    setNewRole({ ...newRole, allowedPages: newPages });
+    setNewRole(prevRole => {
+      const currentPages = prevRole.allowedPages || [];
+      const newPages = currentPages.includes(pageId)
+        ? currentPages.filter(p => p !== pageId)
+        : [...currentPages, pageId];
+      return { ...prevRole, allowedPages: newPages };
+    });
   };
 
   const handleToggleNewRoleAction = (actionId: string) => {
-    const currentActions = newRole.allowedActions || [];
-    const newActions = currentActions.includes(actionId)
-      ? currentActions.filter(a => a !== actionId)
-      : [...currentActions, actionId];
-    setNewRole({ ...newRole, allowedActions: newActions });
+    setNewRole(prevRole => {
+      const currentActions = prevRole.allowedActions || [];
+      const newActions = currentActions.includes(actionId)
+        ? currentActions.filter(a => a !== actionId)
+        : [...currentActions, actionId];
+      return { ...prevRole, allowedActions: newActions };
+    });
   };
 
   const handleSelectAllPages = () => {
     const allPageIds = availablePages.map(p => p.id);
-    setNewRole({ ...newRole, allowedPages: allPageIds });
+    setNewRole(prevRole => ({ ...prevRole, allowedPages: allPageIds }));
   };
 
   const handleDeselectAllPages = () => {
-    setNewRole({ ...newRole, allowedPages: [] });
+    setNewRole(prevRole => ({ ...prevRole, allowedPages: [] }));
   };
 
   const handleSelectAllActions = () => {
     const allActionIds = availableActions.map(a => a.id);
-    setNewRole({ ...newRole, allowedActions: allActionIds });
+    setNewRole(prevRole => ({ ...prevRole, allowedActions: allActionIds }));
   };
 
   const handleDeselectAllActions = () => {
-    setNewRole({ ...newRole, allowedActions: [] });
+    setNewRole(prevRole => ({ ...prevRole, allowedActions: [] }));
   };
 
   const handleToggleCategoryActions = (category: string, isSelected: boolean) => {
     const categoryActions = availableActions.filter(action => action.category === category);
     const categoryActionIds = categoryActions.map(action => action.id);
     
-    const currentActions = newRole.allowedActions || [];
-    let newActions;
-    
-    if (isSelected) {
-      // إضافة جميع إجراءات القسم
-      newActions = [...new Set([...currentActions, ...categoryActionIds])];
-    } else {
-      // إزالة جميع إجراءات القسم
-      newActions = currentActions.filter(actionId => !categoryActionIds.includes(actionId));
-    }
-    
-    setNewRole({ ...newRole, allowedActions: newActions });
+    setNewRole(prevRole => {
+      const currentActions = prevRole.allowedActions || [];
+      let newActions;
+      
+      if (isSelected) {
+        // إضافة جميع إجراءات القسم
+        newActions = [...new Set([...currentActions, ...categoryActionIds])];
+      } else {
+        // إزالة جميع إجراءات القسم
+        newActions = currentActions.filter(actionId => !categoryActionIds.includes(actionId));
+      }
+      
+      return { ...prevRole, allowedActions: newActions };
+    });
   };
 
   const isCategoryFullySelected = (category: string) => {
@@ -235,6 +279,19 @@ export function RolesManagementPage({ onBack }: RolesManagementPageProps) {
     const selectedCount = categoryActionIds.filter(actionId => currentActions.includes(actionId)).length;
     return selectedCount > 0 && selectedCount < categoryActionIds.length;
   };
+
+  if (loading) {
+    return (
+      <div className="p-6 space-y-6">
+        <div className="flex items-center justify-center h-64">
+          <div className="flex items-center gap-3">
+            <Loader2 className="w-6 h-6 animate-spin text-[#13312A]" />
+            <span className="arabic-text text-lg">جاري تحميل البيانات...</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 space-y-6">
@@ -283,14 +340,14 @@ export function RolesManagementPage({ onBack }: RolesManagementPageProps) {
               إضافة دور جديد
             </Button>
           </DialogTrigger>
-            <DialogContent className="max-w-4xl flex flex-col">
-            <DialogHeader>
+            <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
+            <DialogHeader className="flex-shrink-0">
               <DialogTitle className="arabic-text">إضافة دور جديد</DialogTitle>
               <DialogDescription className="arabic-text">
                 قم بإضافة دور جديد مع الصلاحيات المطلوبة
               </DialogDescription>
             </DialogHeader>
-            <div className="space-y-6 flex-1 min-h-0 px-6 py-4">
+            <div className="space-y-6 flex-1 min-h-0 px-6 py-4 overflow-y-auto">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <Label htmlFor="roleName" className="arabic-text">اسم الدور</Label>
@@ -337,7 +394,7 @@ export function RolesManagementPage({ onBack }: RolesManagementPageProps) {
                     </Button>
                   </div>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-60 overflow-y-auto border rounded-lg p-2 sm:p-4 bg-gray-50">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-60 overflow-y-auto border rounded-lg p-2 sm:p-4 bg-gray-50 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
                   {availablePages.map((page) => (
                     <div key={page.id} className="flex items-start space-x-3 space-x-reverse p-2 sm:p-3 bg-white rounded-lg border hover:shadow-sm transition-shadow">
                       <input
@@ -345,7 +402,7 @@ export function RolesManagementPage({ onBack }: RolesManagementPageProps) {
                         id={`new-role-page-${page.id}`}
                         checked={(newRole.allowedPages || []).includes(page.id)}
                         onChange={() => handleToggleNewRolePage(page.id)}
-                        className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 mt-0.5 flex-shrink-0"
+                        className="roles-checkbox mt-0.5 flex-shrink-0"
                       />
                       <label htmlFor={`new-role-page-${page.id}`} className="text-sm arabic-text cursor-pointer flex-1 min-w-0">
                         <div className="font-medium text-gray-900 truncate">{page.name}</div>
@@ -381,7 +438,7 @@ export function RolesManagementPage({ onBack }: RolesManagementPageProps) {
                     </Button>
                   </div>
                 </div>
-                <div className="space-y-3 max-h-80 overflow-y-auto">
+                <div className="space-y-3 max-h-80 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
                   {Object.entries(
                     availableActions.reduce((acc, action) => {
                       if (!acc[action.category]) {
@@ -404,7 +461,7 @@ export function RolesManagementPage({ onBack }: RolesManagementPageProps) {
                             }
                           }}
                           onChange={(e) => handleToggleCategoryActions(category, e.target.checked)}
-                          className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 flex-shrink-0"
+                          className="roles-checkbox flex-shrink-0"
                         />
                         <label htmlFor={`new-role-category-${category}`} className="text-sm font-semibold arabic-text cursor-pointer flex-1 min-w-0">
                           <div className="truncate">{category}</div>
@@ -423,7 +480,7 @@ export function RolesManagementPage({ onBack }: RolesManagementPageProps) {
                               id={`new-role-action-${action.id}`}
                               checked={(newRole.allowedActions || []).includes(action.id)}
                               onChange={() => handleToggleNewRoleAction(action.id)}
-                              className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 mt-0.5 flex-shrink-0"
+                              className="roles-checkbox mt-0.5 flex-shrink-0"
                             />
                             <label htmlFor={`new-role-action-${action.id}`} className="text-xs arabic-text cursor-pointer flex-1 min-w-0">
                               <div className="font-medium text-gray-900 truncate">{action.name}</div>
@@ -438,10 +495,19 @@ export function RolesManagementPage({ onBack }: RolesManagementPageProps) {
               </div>
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setIsAddRoleDialogOpen(false)}>
+              <Button variant="outline" onClick={() => setIsAddRoleDialogOpen(false)} disabled={saving}>
                 إلغاء
               </Button>
-              <Button onClick={handleAddRole}>إضافة</Button>
+              <Button onClick={handleAddRole} disabled={saving}>
+                {saving ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    جاري الإضافة...
+                  </>
+                ) : (
+                  'إضافة'
+                )}
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -473,7 +539,9 @@ export function RolesManagementPage({ onBack }: RolesManagementPageProps) {
                       variant="outline"
                       size="sm"
                       onClick={() => handleDeleteRole(role.id)}
-                      className="flex-1 sm:flex-none border-red-500 text-red-500 hover:bg-red-500 hover:text-white"
+                      disabled={['1', '2', '3'].includes(role.id)}
+                      className="flex-1 sm:flex-none border-red-500 text-red-500 hover:bg-red-500 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                      title={['1', '2', '3'].includes(role.id) ? 'لا يمكن حذف الأدوار الافتراضية' : 'حذف الدور'}
                     >
                       <Trash2 className="w-4 h-4 sm:mr-1" />
                       <span className="sm:hidden arabic-text text-xs">حذف</span>
@@ -503,7 +571,7 @@ export function RolesManagementPage({ onBack }: RolesManagementPageProps) {
                 {/* عرض الإجراءات المسموحة */}
                 <div className="flex-1">
                   <p className="text-sm font-medium text-gray-700 arabic-text mb-2">الإجراءات المسموحة:</p>
-                  <div className="space-y-2 max-h-32 overflow-y-auto">
+                  <div className="space-y-2 max-h-32 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
                     {Object.entries(
                       availableActions.reduce((acc, action) => {
                         if (!acc[action.category]) {
@@ -540,11 +608,18 @@ export function RolesManagementPage({ onBack }: RolesManagementPageProps) {
                 </div>
 
                 <div className="flex items-center justify-between pt-2 border-t border-gray-200 mt-auto">
-                  <Badge variant={role.isActive ? "default" : "secondary"} className={`text-xs px-2 py-1 ${role.isActive ? 'bg-green-100 text-green-800 border-green-200' : 'bg-gray-100 text-gray-600 border-gray-200'}`}>
-                    {role.isActive ? 'نشط' : 'غير نشط'}
-                  </Badge>
+                  <div className="flex items-center gap-2">
+                    <Badge variant={role.isActive ? "default" : "secondary"} className={`text-xs px-2 py-1 ${role.isActive ? 'bg-green-100 text-green-800 border-green-200' : 'bg-gray-100 text-gray-600 border-gray-200'}`}>
+                      {role.isActive ? 'نشط' : 'غير نشط'}
+                    </Badge>
+                    {['1', '2', '3'].includes(role.id) && (
+                      <Badge variant="outline" className="text-xs px-2 py-1 bg-blue-50 text-blue-700 border-blue-200">
+                        افتراضي
+                      </Badge>
+                    )}
+                  </div>
                   <span className="text-xs text-gray-500 arabic-text">
-                    {role.createdAt}
+                    {role.created_at}
                   </span>
                 </div>
               </CardContent>
@@ -613,12 +688,19 @@ export function RolesManagementPage({ onBack }: RolesManagementPageProps) {
                       </div>
                     </td>
                     <td className="px-4 py-4">
-                      <Badge variant={role.isActive ? "default" : "secondary"} className={`text-xs px-2 py-1 ${role.isActive ? 'bg-green-100 text-green-800 border-green-200' : 'bg-gray-100 text-gray-600 border-gray-200'}`}>
-                        {role.isActive ? 'نشط' : 'غير نشط'}
-                      </Badge>
+                      <div className="flex items-center gap-2">
+                        <Badge variant={role.isActive ? "default" : "secondary"} className={`text-xs px-2 py-1 ${role.isActive ? 'bg-green-100 text-green-800 border-green-200' : 'bg-gray-100 text-gray-600 border-gray-200'}`}>
+                          {role.isActive ? 'نشط' : 'غير نشط'}
+                        </Badge>
+                        {['1', '2', '3'].includes(role.id) && (
+                          <Badge variant="outline" className="text-xs px-2 py-1 bg-blue-50 text-blue-700 border-blue-200">
+                            افتراضي
+                          </Badge>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-4">
-                      <span className="text-xs text-gray-500 arabic-text">{role.createdAt}</span>
+                      <span className="text-xs text-gray-500 arabic-text">{role.created_at}</span>
                     </td>
                     <td className="px-4 py-4">
                       <div className="flex gap-1">
@@ -634,7 +716,9 @@ export function RolesManagementPage({ onBack }: RolesManagementPageProps) {
                           variant="outline"
                           size="sm"
                           onClick={() => handleDeleteRole(role.id)}
-                          className="border-red-500 text-red-500 hover:bg-red-500 hover:text-white"
+                          disabled={['1', '2', '3'].includes(role.id)}
+                          className="border-red-500 text-red-500 hover:bg-red-500 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                          title={['1', '2', '3'].includes(role.id) ? 'لا يمكن حذف الأدوار الافتراضية' : 'حذف الدور'}
                         >
                           <Trash2 className="w-4 h-4" />
                         </Button>
@@ -651,14 +735,14 @@ export function RolesManagementPage({ onBack }: RolesManagementPageProps) {
       {/* نافذة تعديل الدور */}
       {editingRole && (
         <Dialog open={!!editingRole} onOpenChange={() => setEditingRole(null)}>
-            <DialogContent className="max-w-4xl flex flex-col">
-            <DialogHeader>
+            <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
+            <DialogHeader className="flex-shrink-0">
               <DialogTitle className="arabic-text">تعديل الدور</DialogTitle>
               <DialogDescription className="arabic-text">
                 قم بتعديل بيانات الدور والصلاحيات
               </DialogDescription>
             </DialogHeader>
-            <div className="space-y-6 flex-1 min-h-0 px-6 py-4">
+            <div className="space-y-6 flex-1 min-h-0 px-6 py-4 overflow-y-auto">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <Label htmlFor="editRoleName" className="arabic-text">اسم الدور</Label>
@@ -681,7 +765,7 @@ export function RolesManagementPage({ onBack }: RolesManagementPageProps) {
               {/* اختيار الصفحات المسموحة */}
               <div>
                 <Label className="arabic-text text-base font-semibold">الصفحات المسموحة</Label>
-                <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-60 overflow-y-auto border rounded-lg p-2 sm:p-4 bg-gray-50">
+                <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-60 overflow-y-auto border rounded-lg p-2 sm:p-4 bg-gray-50 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
                   {availablePages.map((page) => (
                     <div key={page.id} className="flex items-start space-x-3 space-x-reverse p-2 sm:p-3 bg-white rounded-lg border hover:shadow-sm transition-shadow">
                       <input
@@ -689,7 +773,7 @@ export function RolesManagementPage({ onBack }: RolesManagementPageProps) {
                         id={`edit-role-page-${page.id}`}
                         checked={(editingRole.allowedPages || []).includes(page.id)}
                         onChange={() => handleTogglePage(editingRole.id, page.id)}
-                        className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 mt-0.5 flex-shrink-0"
+                        className="roles-checkbox mt-0.5 flex-shrink-0"
                       />
                       <label htmlFor={`edit-role-page-${page.id}`} className="text-sm arabic-text cursor-pointer flex-1 min-w-0">
                         <div className="font-medium text-gray-900 truncate">{page.name}</div>
@@ -703,7 +787,7 @@ export function RolesManagementPage({ onBack }: RolesManagementPageProps) {
               {/* اختيار الإجراءات المسموحة */}
               <div>
                 <Label className="arabic-text text-base font-semibold">الإجراءات المسموحة</Label>
-                <div className="mt-2 space-y-3 max-h-80 overflow-y-auto">
+                <div className="mt-2 space-y-3 max-h-80 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
                   {Object.entries(
                     availableActions.reduce((acc, action) => {
                       if (!acc[action.category]) {
@@ -739,7 +823,7 @@ export function RolesManagementPage({ onBack }: RolesManagementPageProps) {
                             
                             setEditingRole({ ...editingRole, allowedActions: newActions });
                           }}
-                          className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 flex-shrink-0"
+                          className="roles-checkbox flex-shrink-0"
                         />
                         <label htmlFor={`edit-role-category-${category}`} className="text-sm font-semibold arabic-text cursor-pointer flex-1 min-w-0">
                           <div className="truncate">{category}</div>
@@ -758,7 +842,7 @@ export function RolesManagementPage({ onBack }: RolesManagementPageProps) {
                               id={`edit-role-action-${action.id}`}
                               checked={(editingRole.allowedActions || []).includes(action.id)}
                               onChange={() => handleToggleAction(editingRole.id, action.id)}
-                              className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 mt-0.5 flex-shrink-0"
+                              className="roles-checkbox mt-0.5 flex-shrink-0"
                             />
                             <label htmlFor={`edit-role-action-${action.id}`} className="text-xs arabic-text cursor-pointer flex-1 min-w-0">
                               <div className="font-medium text-gray-900 truncate">{action.name}</div>
@@ -773,10 +857,19 @@ export function RolesManagementPage({ onBack }: RolesManagementPageProps) {
               </div>
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setEditingRole(null)}>
+              <Button variant="outline" onClick={() => setEditingRole(null)} disabled={saving}>
                 إلغاء
               </Button>
-              <Button onClick={handleSaveRole}>حفظ</Button>
+              <Button onClick={handleSaveRole} disabled={saving}>
+                {saving ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    جاري الحفظ...
+                  </>
+                ) : (
+                  'حفظ'
+                )}
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>

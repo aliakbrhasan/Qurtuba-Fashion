@@ -2,6 +2,8 @@ import React from 'react';
 import { Home, FileText, Receipt, Users, Menu, Settings, User, LogOut, DollarSign } from 'lucide-react';
 import { Button } from './ui/button';
 import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle, SheetDescription } from './ui/sheet';
+import { User as UserType } from '../services/auth.service';
+import { usePermissions } from '../hooks/usePermissions';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -9,15 +11,27 @@ interface LayoutProps {
   onNavigate: (page: string) => void;
   isLoggedIn: boolean;
   onLogout: () => void;
+  currentUser?: UserType | null;
 }
 
-export function Layout({ children, currentPage, onNavigate, isLoggedIn, onLogout }: LayoutProps) {
-  const navigationItems = [
+export function Layout({ children, currentPage, onNavigate, isLoggedIn, onLogout, currentUser }: LayoutProps) {
+  const { allowedPages, hasPagePermission } = usePermissions(currentUser);
+
+  // All possible navigation items
+  const allNavigationItems = [
     { id: 'dashboard', label: 'الصفحة الرئيسية', icon: Home },
     { id: 'invoices', label: 'الفواتير', icon: Receipt },
     { id: 'customers', label: 'الزبائن', icon: Users },
     { id: 'financial', label: 'المالية', icon: DollarSign },
+    { id: 'reports', label: 'التقارير', icon: FileText },
+    { id: 'users', label: 'إدارة المستخدمين', icon: Settings },
   ];
+
+  // Filter navigation items based on user permissions
+  const navigationItems = allNavigationItems.filter(item => 
+    hasPagePermission(item.id)
+  );
+
   const activePage = currentPage === 'customerDetails' ? 'customers' : currentPage;
 
   const MobileNavigation = () => (
@@ -55,23 +69,42 @@ export function Layout({ children, currentPage, onNavigate, isLoggedIn, onLogout
                 الخيارات والإعدادات الإضافية
               </SheetDescription>
             </SheetHeader>
+            
+            {currentUser && (
+              <div className="flex items-center gap-3 p-4 bg-[#155446] rounded-lg mt-4">
+                <div className="w-10 h-10 bg-[#13312A] rounded-full flex items-center justify-center">
+                  <User size={20} className="text-[#F6E9CA]" />
+                </div>
+                <div className="text-right flex-1">
+                  <div className="text-[#F6E9CA] arabic-text font-medium">{currentUser.name}</div>
+                  <div className="text-[#C69A72] arabic-text text-sm">{currentUser.status}</div>
+                  <div className="text-[#C69A72] arabic-text text-xs">{currentUser.email}</div>
+                </div>
+              </div>
+            )}
+            
             <div className="flex flex-col gap-4 mt-4">
-              <Button
-                variant="ghost"
-                onClick={() => onNavigate('reports')}
-                className="flex items-center gap-3 justify-start text-[#F6E9CA] hover:bg-[#155446] p-4 touch-target"
-              >
-                <FileText size={20} />
-                <span className="arabic-text">التقارير</span>
-              </Button>
-              <Button
-                variant="ghost"
-                onClick={() => onNavigate('users')}
-                className="flex items-center gap-3 justify-start text-[#F6E9CA] hover:bg-[#155446] p-4 touch-target"
-              >
-                <Settings size={20} />
-                <span className="arabic-text">إدارة المستخدمين</span>
-              </Button>
+              {/* Show additional pages based on permissions */}
+              {hasPagePermission('reports') && (
+                <Button
+                  variant="ghost"
+                  onClick={() => onNavigate('reports')}
+                  className="flex items-center gap-3 justify-start text-[#F6E9CA] hover:bg-[#155446] p-4 touch-target"
+                >
+                  <FileText size={20} />
+                  <span className="arabic-text">التقارير</span>
+                </Button>
+              )}
+              {hasPagePermission('users') && (
+                <Button
+                  variant="ghost"
+                  onClick={() => onNavigate('users')}
+                  className="flex items-center gap-3 justify-start text-[#F6E9CA] hover:bg-[#155446] p-4 touch-target"
+                >
+                  <Settings size={20} />
+                  <span className="arabic-text">إدارة المستخدمين</span>
+                </Button>
+              )}
               <Button
                 variant="ghost"
                 className="flex items-center gap-3 justify-start text-[#F6E9CA] hover:bg-[#155446] p-4 touch-target"
@@ -119,29 +152,44 @@ export function Layout({ children, currentPage, onNavigate, isLoggedIn, onLogout
                   </Button>
                 );
               })}
-              <Button
-                variant="ghost"
-                onClick={() => onNavigate('reports')}
-              className={`flex items-center gap-2 px-4 py-2 touch-target ${
-                activePage === 'reports'
-                  ? 'text-[#F6E9CA] bg-[#155446]'
-                  : 'text-[#C69A72] hover:text-[#F6E9CA] hover:bg-[#155446]'
-              }`}
-              >
-                <FileText size={18} />
-                <span className="arabic-text">التقارير</span>
-              </Button>
+              {hasPagePermission('reports') && (
+                <Button
+                  variant="ghost"
+                  onClick={() => onNavigate('reports')}
+                  className={`flex items-center gap-2 px-4 py-2 touch-target ${
+                    activePage === 'reports'
+                      ? 'text-[#F6E9CA] bg-[#155446]'
+                      : 'text-[#C69A72] hover:text-[#F6E9CA] hover:bg-[#155446]'
+                  }`}
+                >
+                  <FileText size={18} />
+                  <span className="arabic-text">التقارير</span>
+                </Button>
+              )}
             </nav>
           </div>
           
-          <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              onClick={() => onNavigate('users')}
-              className="text-[#C69A72] hover:text-[#F6E9CA] hover:bg-[#155446] p-2 touch-target"
-            >
-              <Settings size={18} />
-            </Button>
+          <div className="flex items-center gap-4">
+            {currentUser && (
+              <div className="flex items-center gap-2 text-[#F6E9CA]">
+                <div className="w-8 h-8 bg-[#155446] rounded-full flex items-center justify-center">
+                  <User size={16} />
+                </div>
+                <div className="text-right">
+                  <div className="text-sm arabic-text font-medium">{currentUser.name}</div>
+                  <div className="text-xs text-[#C69A72] arabic-text">{currentUser.status}</div>
+                </div>
+              </div>
+            )}
+            {hasPagePermission('users') && (
+              <Button
+                variant="ghost"
+                onClick={() => onNavigate('users')}
+                className="text-[#C69A72] hover:text-[#F6E9CA] hover:bg-[#155446] p-2 touch-target"
+              >
+                <Settings size={18} />
+              </Button>
+            )}
             <Button
               variant="ghost"
               onClick={onLogout}

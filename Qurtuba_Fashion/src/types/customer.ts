@@ -26,4 +26,5 @@ export interface Customer {
   measurements: CustomerMeasurements;
   orders: CustomerOrder[];
   notes?: string;
+  created_at?: string;
 }

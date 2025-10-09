@@ -1,4 +1,4 @@
-import React from 'react';
+import { useState } from 'react';
 import { Card, CardContent } from './ui/card';
 import { Skeleton } from './ui/skeleton';
 import { TrendingUp, AlertCircle, RefreshCw } from 'lucide-react';
@@ -8,7 +8,38 @@ import { StatCard } from './dashboard/StatCard';
 import { DashboardGrids } from './dashboard/ResponsiveGrid';
 
 export function FinancialPage() {
-  const { stats, isLoading, error } = useDashboardStats();
+  const [startDate, setStartDate] = useState<string>('');
+  const [endDate, setEndDate] = useState<string>('');
+
+  const { stats, isLoading, error, refetch } = useDashboardStats({
+    startDate: startDate || undefined,
+    endDate: endDate || undefined,
+  });
+
+  const exportCsv = () => {
+    const rows = [
+      ['رقم الفاتورة','العميل','الهاتف','الإجمالي','المدفوع','الحالة','تاريخ الإنشاء','تاريخ الاستحقاق'],
+      ...stats.filteredInvoices.map(inv => [
+        inv.invoice_number,
+        inv.customer_name,
+        inv.customer_phone || '',
+        String(inv.total ?? 0),
+        String(inv.paid_amount ?? 0),
+        inv.status,
+        inv.created_at,
+        inv.due_date || ''
+      ])
+    ];
+
+    const csv = rows.map(r => r.map(v => `"${String(v ?? '').replace(/"/g,'""')}"`).join(',')).join('\n');
+    const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'financial-report.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('ar-IQ', {
@@ -46,6 +77,35 @@ export function FinancialPage() {
 
   return (
     <div className="container mx-auto p-4 space-y-6">
+      {/* Filters */}
+      <div className="flex flex-col md:flex-row items-start md:items-end gap-3">
+        <div>
+          <label className="block text-sm text-[#13312A] arabic-text mb-1">تاريخ البداية</label>
+          <input
+            type="date"
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+            className="border rounded px-3 py-2"
+          />
+        </div>
+        <div>
+          <label className="block text-sm text-[#13312A] arabic-text mb-1">تاريخ النهاية</label>
+          <input
+            type="date"
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+            className="border rounded px-3 py-2"
+          />
+        </div>
+        <div className="flex gap-2">
+          <Button onClick={() => refetch()} className="bg-[#155446] hover:bg-[#13312A] text-white">
+            <RefreshCw className="w-4 h-4 ml-2" /> تحديث
+          </Button>
+          <Button onClick={exportCsv} variant="outline" className="border-[#13312A] text-[#13312A]">
+            تصدير CSV
+          </Button>
+        </div>
+      </div>
       {/* Header */}
       <div className="text-center mb-8">
         <h1 className="text-3xl text-[#13312A] arabic-text mb-2">

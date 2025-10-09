@@ -1,6 +1,6 @@
 import { supabase } from './client';
-import type { User, Role } from '@/types/user';
-import type { Order, NewOrder } from '@/ports/orders';
+import type { User, Role } from '../types/user';
+import type { Order, NewOrder } from '../ports/orders';
 
 // Customer interface
 export interface Customer {
@@ -8,6 +8,16 @@ export interface Customer {
   name: string;
   phone?: string;
   address?: string;
+  totalSpent?: number;
+  lastOrder?: string;
+  label?: string;
+  measurements?: {
+    height: number;
+    shoulder: number;
+    waist: number;
+    chest: number;
+  };
+  notes?: string;
   created_at: string;
 }
 
@@ -310,14 +320,14 @@ export class DatabaseService {
       console.warn('Supabase error, using local data:', error);
       const newCustomer: Customer = {
         ...customer,
-        id: Date.now()
+        id: Date.now().toString()
       };
       this.localData.customers.push(newCustomer);
       return newCustomer;
     }
   }
 
-  async updateCustomer(id: number, updates: Partial<Customer>): Promise<Customer> {
+  async updateCustomer(id: string, updates: Partial<Customer>): Promise<Customer> {
     try {
       const { data, error } = await supabase
         .from('customers')
@@ -348,7 +358,7 @@ export class DatabaseService {
     }
   }
 
-  async deleteCustomer(id: number): Promise<void> {
+  async deleteCustomer(id: string): Promise<void> {
     try {
       const { error } = await supabase
         .from('customers')
@@ -375,6 +385,22 @@ export class DatabaseService {
     } catch (error) {
       console.warn('Supabase error, using local data:', error);
       return this.localData.orders;
+    }
+  }
+
+  async getOrdersByCustomer(customerId: string): Promise<Order[]> {
+    try {
+      const { data, error } = await supabase
+        .from('orders')
+        .select('*')
+        .eq('customer_id', customerId)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      return (data || []).map(this.mapSupabaseOrderToOrder);
+    } catch (error) {
+      console.warn('Supabase error, using local data:', error);
+      return this.localData.orders.filter(order => order.customer_id === customerId);
     }
   }
 
@@ -781,22 +807,23 @@ export class DatabaseService {
 
   private mapSupabaseCustomerToCustomer(data: any): Customer {
     return {
-      id: parseInt(data.id) || data.id,
+      id: data.id,
       name: data.name,
       phone: data.phone,
       address: data.address,
       totalSpent: data.total_spent,
       lastOrder: data.last_order,
       label: data.label,
-      measurements: data.measurements || {},
-      orders: [], // Will be populated separately
-      notes: data.notes
+      measurements: data.measurements || undefined,
+      notes: data.notes,
+      created_at: data.created_at
     };
   }
 
   private mapSupabaseOrderToOrder(data: any): Order {
     return {
       id: data.id,
+      customer_id: data.customer_id,
       customer_name: data.customer_name,
       total: data.total,
       created_at: data.created_at

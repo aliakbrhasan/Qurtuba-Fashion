@@ -1,6 +1,6 @@
 import { databaseService } from './database.service';
-import type { User, Customer, NewOrder } from '@/types/user';
-import type { Order } from '@/ports/orders';
+import type { User, Customer, NewOrder } from '../types/user';
+import type { Order } from '../ports/orders';
 import type { Invoice, NewInvoice } from './database.service';
 
 export async function testDatabaseIntegration(): Promise<void> {

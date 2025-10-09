@@ -96,11 +96,16 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated 
     }
   };
 
+  // Prevent wheel event on number inputs to avoid accidental changes
+  const handleWheel = (e: React.WheelEvent<HTMLInputElement>) => {
+    e.currentTarget.blur();
+  };
+
   // Image state
   const [fabricImage, setFabricImage] = useState<string | null>(null);
   const [uploadedImages, setUploadedImages] = useState<File[]>([]);
 
-  // Design options state
+  // Design options state - single selection
   const [fabricOptions, setFabricOptions] = useState<FabricOption[]>([
     { id: 'cotton', label: 'قطن' },
     { id: 'silk', label: 'حرير' },
@@ -109,7 +114,7 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated 
     { id: 'denim', label: 'دنة' },
     { id: 'chiffon', label: 'شيفون' },
   ]);
-  const [selectedFabricOptions, setSelectedFabricOptions] = useState<string[]>([]);
+  const [selectedFabricOption, setSelectedFabricOption] = useState<string>('');
   const [isFabricPopoverOpen, setIsFabricPopoverOpen] = useState(false);
   const [isFabricManagerOpen, setIsFabricManagerOpen] = useState(false);
   const [fabricOptionsDraft, setFabricOptionsDraft] = useState<FabricOption[]>([]);
@@ -118,12 +123,12 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated 
   const [quickAddValue, setQuickAddValue] = useState('');
   const [quickAddError, setQuickAddError] = useState('');
 
-  // Fabric source options
+  // Fabric source options - single selection
   const [fabricSourceOptions, setFabricSourceOptions] = useState<FabricOption[]>([
     { id: 'outside', label: 'خارج المحل' },
     { id: 'inside', label: 'داخل المحل' },
   ]);
-  const [selectedFabricSources, setSelectedFabricSources] = useState<string[]>([]);
+  const [selectedFabricSource, setSelectedFabricSource] = useState<string>('');
   const [isSourcePopoverOpen, setIsSourcePopoverOpen] = useState(false);
   const [isSourceManagerOpen, setIsSourceManagerOpen] = useState(false);
   const [sourceOptionsDraft, setSourceOptionsDraft] = useState<FabricOption[]>([]);
@@ -132,14 +137,14 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated 
   const [sourceQuickAddValue, setSourceQuickAddValue] = useState('');
   const [sourceQuickAddError, setSourceQuickAddError] = useState('');
 
-  // Collar options
+  // Collar options - single selection
   const [collarOptions, setCollarOptions] = useState<FabricOption[]>([
     { id: 'regular', label: 'عادية' },
     { id: 'mandarin', label: 'صينية' },
     { id: 'formal', label: 'رسمية' },
     { id: 'open', label: 'مفتوحة' },
   ]);
-  const [selectedCollarOptions, setSelectedCollarOptions] = useState<string[]>([]);
+  const [selectedCollarOption, setSelectedCollarOption] = useState<string>('');
   const [isCollarPopoverOpen, setIsCollarPopoverOpen] = useState(false);
   const [isCollarManagerOpen, setIsCollarManagerOpen] = useState(false);
   const [collarOptionsDraft, setCollarOptionsDraft] = useState<FabricOption[]>([]);
@@ -148,13 +153,13 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated 
   const [collarQuickAddValue, setCollarQuickAddValue] = useState('');
   const [collarQuickAddError, setCollarQuickAddError] = useState('');
 
-  // Chest style options
+  // Chest style options - single selection
   const [chestStyleOptions, setChestStyleOptions] = useState<FabricOption[]>([
     { id: 'single', label: 'صدر واحد' },
     { id: 'double', label: 'صدر مزدوج' },
     { id: 'open', label: 'صدر مفتوح' },
   ]);
-  const [selectedChestStyleOptions, setSelectedChestStyleOptions] = useState<string[]>([]);
+  const [selectedChestStyleOption, setSelectedChestStyleOption] = useState<string>('');
   const [isChestStylePopoverOpen, setIsChestStylePopoverOpen] = useState(false);
   const [isChestStyleManagerOpen, setIsChestStyleManagerOpen] = useState(false);
   const [chestStyleOptionsDraft, setChestStyleOptionsDraft] = useState<FabricOption[]>([]);
@@ -163,14 +168,14 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated 
   const [chestStyleQuickAddValue, setChestStyleQuickAddValue] = useState('');
   const [chestStyleQuickAddError, setChestStyleQuickAddError] = useState('');
 
-  // Sleeve end options
+  // Sleeve end options - single selection
   const [sleeveEndOptions, setSleeveEndOptions] = useState<FabricOption[]>([
     { id: 'cuff', label: 'كم بحاشية' },
     { id: 'plain', label: 'كم عادي' },
     { id: 'short', label: 'كم قصير' },
     { id: 'long', label: 'كم طويل' },
   ]);
-  const [selectedSleeveEndOptions, setSelectedSleeveEndOptions] = useState<string[]>([]);
+  const [selectedSleeveEndOption, setSelectedSleeveEndOption] = useState<string>('');
   const [isSleeveEndPopoverOpen, setIsSleeveEndPopoverOpen] = useState(false);
   const [isSleeveEndManagerOpen, setIsSleeveEndManagerOpen] = useState(false);
   const [sleeveEndOptionsDraft, setSleeveEndOptionsDraft] = useState<FabricOption[]>([]);
@@ -179,13 +184,13 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated 
   const [sleeveEndQuickAddValue, setSleeveEndQuickAddValue] = useState('');
   const [sleeveEndQuickAddError, setSleeveEndQuickAddError] = useState('');
 
-  // Bunija options
+  // Bunija options - single selection
   const [bunijaOptions, setBunijaOptions] = useState<FabricOption[]>([
     { id: 'single', label: 'بنايج' },
     { id: 'half', label: 'نصف بنيجة' },
     { id: 'double', label: 'بنيجتين' },
   ]);
-  const [selectedBunijaOptions, setSelectedBunijaOptions] = useState<string[]>([]);
+  const [selectedBunijaOption, setSelectedBunijaOption] = useState<string>('');
   const [isBunijaPopoverOpen, setIsBunijaPopoverOpen] = useState(false);
   const [isBunijaManagerOpen, setIsBunijaManagerOpen] = useState(false);
   const [bunijaOptionsDraft, setBunijaOptionsDraft] = useState<FabricOption[]>([]);
@@ -214,12 +219,12 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated 
           chest: 0
         },
         designDetails: {
-          fabricType: fabricOptions.filter(opt => selectedFabricOptions.includes(opt.id)).map(opt => opt.label),
-          fabricSource: fabricSourceOptions.filter(opt => selectedFabricSources.includes(opt.id)).map(opt => opt.label),
-          collarType: collarOptions.filter(opt => selectedCollarOptions.includes(opt.id)).map(opt => opt.label),
-          chestStyle: chestStyleOptions.filter(opt => selectedChestStyleOptions.includes(opt.id)).map(opt => opt.label),
-          sleeveEnd: sleeveEndOptions.filter(opt => selectedSleeveEndOptions.includes(opt.id)).map(opt => opt.label),
-          bunijaType: bunijaOptions.filter(opt => selectedBunijaOptions.includes(opt.id)).map(opt => opt.label).join(', ')
+          fabricType: selectedFabricOption ? [fabricOptions.find(opt => opt.id === selectedFabricOption)?.label || ''] : [],
+          fabricSource: selectedFabricSource ? [fabricSourceOptions.find(opt => opt.id === selectedFabricSource)?.label || ''] : [],
+          collarType: selectedCollarOption ? [collarOptions.find(opt => opt.id === selectedCollarOption)?.label || ''] : [],
+          chestStyle: selectedChestStyleOption ? [chestStyleOptions.find(opt => opt.id === selectedChestStyleOption)?.label || ''] : [],
+          sleeveEnd: selectedSleeveEndOption ? [sleeveEndOptions.find(opt => opt.id === selectedSleeveEndOption)?.label || ''] : [],
+          bunijaType: selectedBunijaOption ? bunijaOptions.find(opt => opt.id === selectedBunijaOption)?.label || '' : ''
         }
       });
       setFabricImage(null);
@@ -231,12 +236,12 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated 
       setPaymentDate('');
       
       // Reset design options
-      setSelectedFabricOptions([]);
-      setSelectedFabricSources([]);
-      setSelectedCollarOptions([]);
-      setSelectedChestStyleOptions([]);
-      setSelectedSleeveEndOptions([]);
-      setSelectedBunijaOptions([]);
+      setSelectedFabricOption('');
+      setSelectedFabricSource('');
+      setSelectedCollarOption('');
+      setSelectedChestStyleOption('');
+      setSelectedSleeveEndOption('');
+      setSelectedBunijaOption('');
       setIsFabricPopoverOpen(false);
       setIsSourcePopoverOpen(false);
       setIsCollarPopoverOpen(false);
@@ -265,21 +270,30 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated 
         return;
       }
 
-      // Create invoice
-      const createdInvoice = await createInvoice(formData);
-      
-      // Upload fabric image if any
+      // Upload fabric image first if any
+      let fabricImageUrl = '';
       if (fabricImage && uploadedImages.length > 0) {
         try {
-            const fabricFile = uploadedImages.find(f => f.name.includes('fabric'));
-            if (fabricFile) {
-              await ImageService.uploadImage(fabricFile, 'invoice');
+          const fabricFile = uploadedImages.find(f => f.name.includes('fabric'));
+          if (fabricFile) {
+            const uploadResult = await ImageService.uploadImage(fabricFile, 'invoice');
+            fabricImageUrl = uploadResult.publicUrl;
           }
         } catch (imageError) {
           console.warn('Failed to upload fabric image:', imageError);
-          // Don't fail the entire operation if image upload fails
+          setSubmitError('فشل في رفع صورة القماش. يرجى المحاولة مرة أخرى.');
+          return;
         }
       }
+
+      // Update form data with fabric image URL
+      const formDataWithImage = {
+        ...formData,
+        fabricImageUrl
+      };
+
+      // Create invoice with image URL
+      await createInvoice(formDataWithImage);
       
       // Close dialog
       onOpenChange(false);
@@ -298,56 +312,32 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated 
   };
 
   // Helper functions for fabric options
-  const selectedFabricLabels = fabricOptions
-    .filter((option) => selectedFabricOptions.includes(option.id))
-    .map((option) => option.label);
+  const selectedFabricLabel = selectedFabricOption 
+    ? fabricOptions.find(option => option.id === selectedFabricOption)?.label || ''
+    : '';
 
-  const toggleFabricOption = (optionId: string) => {
-    setSelectedFabricOptions((previous) =>
-      previous.includes(optionId)
-        ? previous.filter((item) => item !== optionId)
-        : [...previous, optionId],
-    );
+  const selectFabricOption = (optionId: string) => {
+    setSelectedFabricOption(optionId);
   };
 
-  const toggleFabricSource = (sourceId: string) => {
-    setSelectedFabricSources((previous) =>
-      previous.includes(sourceId)
-        ? previous.filter((item) => item !== sourceId)
-        : [...previous, sourceId],
-    );
+  const selectFabricSource = (sourceId: string) => {
+    setSelectedFabricSource(sourceId);
   };
 
-  const toggleCollarOption = (optionId: string) => {
-    setSelectedCollarOptions((previous) =>
-      previous.includes(optionId)
-        ? previous.filter((item) => item !== optionId)
-        : [...previous, optionId],
-    );
+  const selectCollarOption = (optionId: string) => {
+    setSelectedCollarOption(optionId);
   };
 
-  const toggleChestStyleOption = (optionId: string) => {
-    setSelectedChestStyleOptions((previous) =>
-      previous.includes(optionId)
-        ? previous.filter((item) => item !== optionId)
-        : [...previous, optionId],
-    );
+  const selectChestStyleOption = (optionId: string) => {
+    setSelectedChestStyleOption(optionId);
   };
 
-  const toggleSleeveEndOption = (optionId: string) => {
-    setSelectedSleeveEndOptions((previous) =>
-      previous.includes(optionId)
-        ? previous.filter((item) => item !== optionId)
-        : [...previous, optionId],
-    );
+  const selectSleeveEndOption = (optionId: string) => {
+    setSelectedSleeveEndOption(optionId);
   };
 
-  const toggleBunijaOption = (optionId: string) => {
-    setSelectedBunijaOptions((previous) =>
-      previous.includes(optionId)
-        ? previous.filter((item) => item !== optionId)
-        : [...previous, optionId],
-    );
+  const selectBunijaOption = (optionId: string) => {
+    setSelectedBunijaOption(optionId);
   };
 
   // Manager functions for fabric options
@@ -371,9 +361,10 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated 
       return;
     }
     setFabricOptions(cleanedOptions);
-    setSelectedFabricOptions((previous) =>
-      previous.filter((optionId) => cleanedOptions.some((option) => option.id === optionId)),
-    );
+    // Clear selection if the selected option was removed
+    if (selectedFabricOption && !cleanedOptions.some(option => option.id === selectedFabricOption)) {
+      setSelectedFabricOption('');
+    }
     setIsFabricManagerOpen(false);
   };
 
@@ -416,7 +407,7 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated 
       label: trimmedValue,
     };
     setFabricOptions((previous) => [...previous, newOption]);
-    setSelectedFabricOptions((previous) => [...previous, newOption.id]);
+    setSelectedFabricOption(newOption.id);
     handleQuickAddDialogOpenChange(false);
   };
 
@@ -438,7 +429,10 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated 
       return;
     }
     setCollarOptions(cleaned);
-    setSelectedCollarOptions((prev) => prev.filter((id) => cleaned.some((o) => o.id === id)));
+    // Clear selection if the selected option was removed
+    if (selectedCollarOption && !cleaned.some(o => o.id === selectedCollarOption)) {
+      setSelectedCollarOption('');
+    }
     setIsCollarManagerOpen(false);
   };
 
@@ -476,7 +470,7 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated 
     }
     const option = { id: `collar-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, label: value };
     setCollarOptions((prev) => [...prev, option]);
-    setSelectedCollarOptions((prev) => [...prev, option.id]);
+    setSelectedCollarOption(option.id);
     openCollarQuickAdd(false);
   };
 
@@ -498,7 +492,10 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated 
       return;
     }
     setChestStyleOptions(cleaned);
-    setSelectedChestStyleOptions((prev) => prev.filter((id) => cleaned.some((o) => o.id === id)));
+    // Clear selection if the selected option was removed
+    if (selectedChestStyleOption && !cleaned.some(o => o.id === selectedChestStyleOption)) {
+      setSelectedChestStyleOption('');
+    }
     setIsChestStyleManagerOpen(false);
   };
 
@@ -536,7 +533,7 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated 
     }
     const option = { id: `chest-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, label: value };
     setChestStyleOptions((prev) => [...prev, option]);
-    setSelectedChestStyleOptions((prev) => [...prev, option.id]);
+    setSelectedChestStyleOption(option.id);
     openChestStyleQuickAdd(false);
   };
 
@@ -558,7 +555,10 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated 
       return;
     }
     setSleeveEndOptions(cleaned);
-    setSelectedSleeveEndOptions((prev) => prev.filter((id) => cleaned.some((o) => o.id === id)));
+    // Clear selection if the selected option was removed
+    if (selectedSleeveEndOption && !cleaned.some(o => o.id === selectedSleeveEndOption)) {
+      setSelectedSleeveEndOption('');
+    }
     setIsSleeveEndManagerOpen(false);
   };
 
@@ -596,7 +596,7 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated 
     }
     const option = { id: `sleeve-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, label: value };
     setSleeveEndOptions((prev) => [...prev, option]);
-    setSelectedSleeveEndOptions((prev) => [...prev, option.id]);
+    setSelectedSleeveEndOption(option.id);
     openSleeveEndQuickAdd(false);
   };
 
@@ -618,7 +618,10 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated 
       return;
     }
     setFabricSourceOptions(cleaned);
-    setSelectedFabricSources((prev) => prev.filter((id) => cleaned.some((o) => o.id === id)));
+    // Clear selection if the selected option was removed
+    if (selectedFabricSource && !cleaned.some(o => o.id === selectedFabricSource)) {
+      setSelectedFabricSource('');
+    }
     setIsSourceManagerOpen(false);
   };
 
@@ -656,7 +659,7 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated 
     }
     const option = { id: `source-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, label: value };
     setFabricSourceOptions((prev) => [...prev, option]);
-    setSelectedFabricSources((prev) => [...prev, option.id]);
+    setSelectedFabricSource(option.id);
     openSourceQuickAdd(false);
   };
 
@@ -678,7 +681,10 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated 
       return;
     }
     setBunijaOptions(cleaned);
-    setSelectedBunijaOptions((prev) => prev.filter((id) => cleaned.some((o) => o.id === id)));
+    // Clear selection if the selected option was removed
+    if (selectedBunijaOption && !cleaned.some(o => o.id === selectedBunijaOption)) {
+      setSelectedBunijaOption('');
+    }
     setIsBunijaManagerOpen(false);
   };
 
@@ -716,7 +722,7 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated 
     }
     const option = { id: `bunija-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, label: value };
     setBunijaOptions((prev) => [...prev, option]);
-    setSelectedBunijaOptions((prev) => [...prev, option.id]);
+    setSelectedBunijaOption(option.id);
     openBunijaQuickAdd(false);
   };
 
@@ -798,6 +804,7 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated 
                     measurements: { ...prev.measurements!, length: Number(e.target.value) }
                   }))}
                   onFocus={handleFocus}
+                  onWheel={handleWheel}
                 />
               </div>
               <div>
@@ -812,6 +819,7 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated 
                     measurements: { ...prev.measurements!, shoulder: Number(e.target.value) }
                   }))}
                   onFocus={handleFocus}
+                  onWheel={handleWheel}
                 />
               </div>
               <div>
@@ -826,6 +834,7 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated 
                     measurements: { ...prev.measurements!, waist: Number(e.target.value) }
                   }))}
                   onFocus={handleFocus}
+                  onWheel={handleWheel}
                 />
               </div>
               <div>
@@ -840,6 +849,7 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated 
                     measurements: { ...prev.measurements!, chest: Number(e.target.value) }
                   }))}
                   onFocus={handleFocus}
+                  onWheel={handleWheel}
                 />
               </div>
             </CardContent>
@@ -861,6 +871,7 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated 
                   value={formData.total}
                   onChange={(e) => setFormData(prev => ({ ...prev, total: Number(e.target.value) }))}
                   onFocus={handleFocus}
+                  onWheel={handleWheel}
                 />
               </div>
               <div>
@@ -872,6 +883,7 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated 
                   value={formData.paidAmount}
                   onChange={(e) => setFormData(prev => ({ ...prev, paidAmount: Number(e.target.value) }))}
                   onFocus={handleFocus}
+                  onWheel={handleWheel}
                 />
               </div>
               <div>
@@ -944,13 +956,11 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated 
                       variant="outline"
                       className={cn(
                         'w-full justify-between bg-white border-[#C69A72] text-[#155446] arabic-text',
-                        selectedFabricLabels.length === 0 && 'text-muted-foreground',
+                        !selectedFabricLabel && 'text-muted-foreground',
                       )}
                     >
                       <span className="flex-1 text-right truncate">
-                        {selectedFabricLabels.length > 0
-                          ? selectedFabricLabels.join('، ')
-                          : 'اختر نوع القماش'}
+                        {selectedFabricLabel || 'اختر نوع القماش'}
                       </span>
                       <ChevronDown className="ml-2 h-4 w-4 shrink-0" />
                     </Button>
@@ -973,12 +983,15 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated 
                         </CommandItem>
                         <CommandSeparator className="bg-[#C69A72]/50" />
                         {fabricOptions.map((option) => {
-                          const isSelected = selectedFabricOptions.includes(option.id);
+                          const isSelected = selectedFabricOption === option.id;
                           return (
                             <CommandItem
                               key={option.id}
                               value={option.label}
-                              onSelect={() => toggleFabricOption(option.id)}
+                              onSelect={() => {
+                                selectFabricOption(option.id);
+                                setIsFabricPopoverOpen(false);
+                              }}
                               className="flex items-center justify-between gap-2"
                             >
                               <span className="flex-1 text-right">{option.label}</span>
@@ -1019,15 +1032,12 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated 
                       variant="outline"
                       className={cn(
                         'w-full justify-between bg-white border-[#C69A72] text-[#155446] arabic-text',
-                        selectedFabricSources.length === 0 && 'text-muted-foreground',
+                        !selectedFabricSource && 'text-muted-foreground',
                       )}
                     >
                       <span className="flex-1 text-right truncate">
-                        {selectedFabricSources.length > 0
-                          ? fabricSourceOptions
-                              .filter((o) => selectedFabricSources.includes(o.id))
-                              .map((o) => o.label)
-                              .join('، ')
+                        {selectedFabricSource 
+                          ? fabricSourceOptions.find(o => o.id === selectedFabricSource)?.label || ''
                           : 'اختر مصدر القماش'}
                       </span>
                       <ChevronDown className="ml-2 h-4 w-4 shrink-0" />
@@ -1051,12 +1061,15 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated 
                         </CommandItem>
                         <CommandSeparator className="bg-[#C69A72]/50" />
                         {fabricSourceOptions.map((option) => {
-                          const isSelected = selectedFabricSources.includes(option.id);
+                          const isSelected = selectedFabricSource === option.id;
                           return (
                             <CommandItem
                               key={option.id}
                               value={option.label}
-                              onSelect={() => toggleFabricSource(option.id)}
+                              onSelect={() => {
+                                selectFabricSource(option.id);
+                                setIsSourcePopoverOpen(false);
+                              }}
                               className="flex items-center justify-between gap-2"
                             >
                               <span className="flex-1 text-right">{option.label}</span>
@@ -1097,15 +1110,12 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated 
                       variant="outline"
                       className={cn(
                         'w-full justify-between bg-white border-[#C69A72] text-[#155446] arabic-text',
-                        selectedCollarOptions.length === 0 && 'text-muted-foreground',
+                        !selectedCollarOption && 'text-muted-foreground',
                       )}
                     >
                       <span className="flex-1 text-right truncate">
-                        {selectedCollarOptions.length > 0
-                          ? collarOptions
-                              .filter((o) => selectedCollarOptions.includes(o.id))
-                              .map((o) => o.label)
-                              .join('، ')
+                        {selectedCollarOption 
+                          ? collarOptions.find(o => o.id === selectedCollarOption)?.label || ''
                           : 'اختر نوع الياقة'}
                       </span>
                       <ChevronDown className="ml-2 h-4 w-4 shrink-0" />
@@ -1129,12 +1139,15 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated 
                         </CommandItem>
                         <CommandSeparator className="bg-[#C69A72]/50" />
                         {collarOptions.map((option) => {
-                          const isSelected = selectedCollarOptions.includes(option.id);
+                          const isSelected = selectedCollarOption === option.id;
                           return (
                             <CommandItem
                               key={option.id}
                               value={option.label}
-                              onSelect={() => toggleCollarOption(option.id)}
+                              onSelect={() => {
+                                selectCollarOption(option.id);
+                                setIsCollarPopoverOpen(false);
+                              }}
                               className="flex items-center justify-between gap-2"
                             >
                               <span className="flex-1 text-right">{option.label}</span>
@@ -1175,15 +1188,12 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated 
                       variant="outline"
                       className={cn(
                         'w-full justify-between bg-white border-[#C69A72] text-[#155446] arabic-text',
-                        selectedChestStyleOptions.length === 0 && 'text-muted-foreground',
+                        !selectedChestStyleOption && 'text-muted-foreground',
                       )}
                     >
                       <span className="flex-1 text-right truncate">
-                        {selectedChestStyleOptions.length > 0
-                          ? chestStyleOptions
-                              .filter((o) => selectedChestStyleOptions.includes(o.id))
-                              .map((o) => o.label)
-                              .join('، ')
+                        {selectedChestStyleOption 
+                          ? chestStyleOptions.find(o => o.id === selectedChestStyleOption)?.label || ''
                           : 'اختر أسلوب الصدر'}
                       </span>
                       <ChevronDown className="ml-2 h-4 w-4 shrink-0" />
@@ -1207,12 +1217,15 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated 
                         </CommandItem>
                         <CommandSeparator className="bg-[#C69A72]/50" />
                         {chestStyleOptions.map((option) => {
-                          const isSelected = selectedChestStyleOptions.includes(option.id);
+                          const isSelected = selectedChestStyleOption === option.id;
                           return (
                             <CommandItem
                               key={option.id}
                               value={option.label}
-                              onSelect={() => toggleChestStyleOption(option.id)}
+                              onSelect={() => {
+                                selectChestStyleOption(option.id);
+                                setIsChestStylePopoverOpen(false);
+                              }}
                               className="flex items-center justify-between gap-2"
                             >
                               <span className="flex-1 text-right">{option.label}</span>
@@ -1253,15 +1266,12 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated 
                       variant="outline"
                       className={cn(
                         'w-full justify-between bg-white border-[#C69A72] text-[#155446] arabic-text',
-                        selectedSleeveEndOptions.length === 0 && 'text-muted-foreground',
+                        !selectedSleeveEndOption && 'text-muted-foreground',
                       )}
                     >
                       <span className="flex-1 text-right truncate">
-                        {selectedSleeveEndOptions.length > 0
-                          ? sleeveEndOptions
-                              .filter((o) => selectedSleeveEndOptions.includes(o.id))
-                              .map((o) => o.label)
-                              .join('، ')
+                        {selectedSleeveEndOption 
+                          ? sleeveEndOptions.find(o => o.id === selectedSleeveEndOption)?.label || ''
                           : 'اختر نهاية الكم'}
                       </span>
                       <ChevronDown className="ml-2 h-4 w-4 shrink-0" />
@@ -1285,12 +1295,15 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated 
                         </CommandItem>
                         <CommandSeparator className="bg-[#C69A72]/50" />
                         {sleeveEndOptions.map((option) => {
-                          const isSelected = selectedSleeveEndOptions.includes(option.id);
+                          const isSelected = selectedSleeveEndOption === option.id;
                           return (
                             <CommandItem
                               key={option.id}
                               value={option.label}
-                              onSelect={() => toggleSleeveEndOption(option.id)}
+                              onSelect={() => {
+                                selectSleeveEndOption(option.id);
+                                setIsSleeveEndPopoverOpen(false);
+                              }}
                               className="flex items-center justify-between gap-2"
                             >
                               <span className="flex-1 text-right">{option.label}</span>
@@ -1331,15 +1344,12 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated 
                       variant="outline"
                       className={cn(
                         'w-full justify-between bg-white border-[#C69A72] text-[#155446] arabic-text',
-                        selectedBunijaOptions.length === 0 && 'text-muted-foreground',
+                        !selectedBunijaOption && 'text-muted-foreground',
                       )}
                     >
                       <span className="flex-1 text-right truncate">
-                        {selectedBunijaOptions.length > 0
-                          ? bunijaOptions
-                              .filter((o) => selectedBunijaOptions.includes(o.id))
-                              .map((o) => o.label)
-                              .join('، ')
+                        {selectedBunijaOption 
+                          ? bunijaOptions.find(o => o.id === selectedBunijaOption)?.label || ''
                           : 'اختر نوع البنيجة'}
                       </span>
                       <ChevronDown className="ml-2 h-4 w-4 shrink-0" />
@@ -1363,12 +1373,15 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated 
                         </CommandItem>
                         <CommandSeparator className="bg-[#C69A72]/50" />
                         {bunijaOptions.map((option) => {
-                          const isSelected = selectedBunijaOptions.includes(option.id);
+                          const isSelected = selectedBunijaOption === option.id;
                           return (
                             <CommandItem
                               key={option.id}
                               value={option.label}
-                              onSelect={() => toggleBunijaOption(option.id)}
+                              onSelect={() => {
+                                selectBunijaOption(option.id);
+                                setIsBunijaPopoverOpen(false);
+                              }}
                               className="flex items-center justify-between gap-2"
                             >
                               <span className="flex-1 text-right">{option.label}</span>

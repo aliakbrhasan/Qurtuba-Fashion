@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Badge } from './ui/badge';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import {
@@ -15,12 +17,23 @@ import {
   Calendar,
   CreditCard,
   Star,
-  Printer
+  Printer,
+  Filter,
+  Grid3X3,
+  List,
+  MoreVertical,
+  Eye,
+  FilterX,
+  RefreshCw,
+  User,
+  CheckCircle
 } from 'lucide-react';
 import { Customer } from '../types/customer';
 import { openPrintWindow, formatPrintDateTime } from './print/PrintUtils';
 import { formatCurrency, formatDate } from './PrintableInvoice';
 import { databaseService } from '../db/database.service';
+import { usePermissions } from '../hooks/usePermissions';
+import { authService } from '../services/auth.service';
 
 interface CustomersPageProps {
   customers: Customer[];
@@ -29,8 +42,13 @@ interface CustomersPageProps {
 }
 
 export function CustomersPage({ customers, onCustomerSelect, loading = false }: CustomersPageProps) {
+  const [currentUser] = useState(authService.getCurrentUser());
+  const { hasActionPermission } = usePermissions(currentUser);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterLabel, setFilterLabel] = useState('all');
+  const [sortBy, setSortBy] = useState('name');
+  const [viewMode, setViewMode] = useState<'grid' | 'table'>('table');
+  const [showFilters, setShowFilters] = useState(false);
   const [isNewCustomerOpen, setIsNewCustomerOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [newCustomer, setNewCustomer] = useState({
@@ -131,9 +149,15 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false }: 
         address: newCustomer.address,
         label: newCustomer.label,
         totalSpent: 0,
-        lastOrder: null,
-        measurements: {},
-        notes: ''
+        lastOrder: undefined,
+        measurements: {
+          height: 0,
+          shoulder: 0,
+          waist: 0,
+          chest: 0
+        },
+        notes: '',
+        created_at: new Date().toISOString()
       };
 
       await databaseService.createCustomer(customerData);
@@ -156,20 +180,61 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false }: 
     }
   };
 
-  const filteredCustomers = customers.filter(customer => {
-    const matchesSearch = customer.name.includes(searchTerm) ||
-                         customer.phone.includes(searchTerm) ||
-                         customer.address.includes(searchTerm);
-    const matchesFilter = filterLabel === 'all' || customer.label === filterLabel;
-    return matchesSearch && matchesFilter;
-  });
+  // Enhanced filtering and sorting logic
+  const filteredAndSortedCustomers = useMemo(() => {
+    let filtered = customers.filter(customer => {
+      // Search filter
+      const matchesSearch = customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                           customer.phone.includes(searchTerm) ||
+                           customer.address.toLowerCase().includes(searchTerm.toLowerCase());
+      
+      // Label filter
+      const matchesFilter = filterLabel === 'all' || customer.label === filterLabel;
+      
+      return matchesSearch && matchesFilter;
+    });
+
+    // Sort filtered results
+    return [...filtered].sort((a, b) => {
+      switch (sortBy) {
+        case 'name':
+          return a.name.localeCompare(b.name);
+        case 'totalSpent':
+          return b.totalSpent - a.totalSpent;
+        case 'ordersCount':
+          return b.orders.length - a.orders.length;
+        case 'lastOrder':
+          if (!a.lastOrder && !b.lastOrder) return 0;
+          if (!a.lastOrder) return 1;
+          if (!b.lastOrder) return -1;
+          return new Date(b.lastOrder).getTime() - new Date(a.lastOrder).getTime();
+        case 'label':
+          return a.label.localeCompare(b.label);
+        default:
+          return 0;
+      }
+    });
+  }, [customers, searchTerm, filterLabel, sortBy]);
+
+  // Statistics
+  const stats = useMemo(() => {
+    const total = filteredAndSortedCustomers.length;
+    const newCustomers = filteredAndSortedCustomers.filter(c => c.label === 'جديد').length;
+    const regularCustomers = filteredAndSortedCustomers.filter(c => c.label === 'منتظم').length;
+    const loyalCustomers = filteredAndSortedCustomers.filter(c => c.label === 'وفي').length;
+    const goldenCustomers = filteredAndSortedCustomers.filter(c => c.label === 'ذهبي').length;
+    const totalSpent = filteredAndSortedCustomers.reduce((sum, c) => sum + c.totalSpent, 0);
+    const totalOrders = filteredAndSortedCustomers.reduce((sum, c) => sum + c.orders.length, 0);
+    
+    return { total, newCustomers, regularCustomers, loyalCustomers, goldenCustomers, totalSpent, totalOrders };
+  }, [filteredAndSortedCustomers]);
 
   const handlePrintCustomers = () => {
-    const totalCustomers = filteredCustomers.length;
-    const totalOrders = filteredCustomers.reduce((sum, customer) => sum + customer.orders.length, 0);
-    const totalSpent = filteredCustomers.reduce((sum, customer) => sum + customer.totalSpent, 0);
+    const totalCustomers = filteredAndSortedCustomers.length;
+    const totalOrders = filteredAndSortedCustomers.reduce((sum, customer) => sum + customer.orders.length, 0);
+    const totalSpent = filteredAndSortedCustomers.reduce((sum, customer) => sum + customer.totalSpent, 0);
     const averageOrders = totalCustomers > 0 ? (totalOrders / totalCustomers).toFixed(1) : '0';
-    const labelCounts = filteredCustomers.reduce<Record<string, number>>((acc, customer) => {
+    const labelCounts = filteredAndSortedCustomers.reduce<Record<string, number>>((acc, customer) => {
       acc[customer.label] = (acc[customer.label] || 0) + 1;
       return acc;
     }, {});
@@ -231,7 +296,7 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false }: 
                 </tr>
               </thead>
               <tbody>
-                {filteredCustomers.map((customer) => (
+                {filteredAndSortedCustomers.map((customer) => (
                   <tr key={customer.id}>
                     <td>{customer.name}</td>
                     <td>{customer.phone}</td>
@@ -255,7 +320,7 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false }: 
           <h2 className="section-title">تفاصيل الزبائن</h2>
           <p className="section-description">يقدم هذا القسم عرضاً تفصيلياً لتاريخ كل زبون وقياساته والطلبات التي تمت متابعتها.</p>
           <div className="detail-cards">
-            {filteredCustomers.map((customer) => (
+            {filteredAndSortedCustomers.map((customer) => (
               <article className="detail-card" key={`customer-${customer.id}`}>
                 <div className="detail-card-header">
                   <h3 className="detail-title">{customer.name}</h3>
@@ -429,176 +494,407 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false }: 
   );
 
   return (
-    <div className="min-h-screen bg-[#F6E9CA]">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-8">
-        {/* Header */}
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-          <h1 className="text-3xl font-semibold text-[#13312A] arabic-text">إدارة الزبائن</h1>
-          <div className="flex flex-col sm:flex-row gap-3">
-            <Button
-              variant="outline"
-              onClick={handlePrintCustomers}
-              className="border-[#C69A72] text-[#13312A] hover:bg-[#C69A72] hover:border-[#B8886A] h-11 px-6 touch-target focus:ring-2 focus:ring-[#C69A72] focus:ring-offset-2"
-            >
-              <Printer className="w-4 h-4 ml-2" aria-hidden="true" />
-              <span className="arabic-text">طباعة القائمة</span>
-            </Button>
-            <Button 
-              onClick={() => setIsNewCustomerOpen(true)} 
-              className="bg-[#155446] hover:bg-[#13312A] text-[#F6E9CA] h-11 px-6 touch-target focus:ring-2 focus:ring-[#155446] focus:ring-offset-2"
-            >
-              <Plus className="w-4 h-4 ml-2" aria-hidden="true" />
-              <span className="arabic-text">زبون جديد</span>
-            </Button>
+    <div className="min-h-screen bg-gradient-to-br from-[#F6E9CA] to-[#FDFBF7]">
+      <div className="container mx-auto p-4 space-y-6">
+        {/* Header Section */}
+        <div className="bg-white rounded-xl shadow-lg border border-[#C69A72]/20 p-6">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+            <div className="flex-1">
+              <h1 className="text-3xl font-bold text-[#13312A] arabic-text mb-1">إدارة الزبائن</h1>
+              <p className="text-[#155446] arabic-text">إدارة شاملة لبيانات العملاء والزبائن</p>
+            </div>
+            
+            {/* Action Buttons - Same order as Invoices Page */}
+            <div className="flex flex-wrap gap-3">
+              <Button
+                variant="outline"
+                onClick={() => setShowFilters(!showFilters)}
+                className="border-2 border-[#155446] text-[#155446] hover:bg-[#155446] hover:text-white flex items-center gap-2 px-6 py-3 text-lg font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
+              >
+                <Filter className="w-5 h-5" />
+                <span className="arabic-text">تصفية متقدمة</span>
+              </Button>
+              
+              {hasActionPermission('print_customers_list') && (
+                <Button
+                  variant="outline"
+                  onClick={handlePrintCustomers}
+                  className="border-2 border-[#C69A72] text-[#13312A] hover:bg-[#C69A72] hover:text-white flex items-center gap-2 px-6 py-3 text-lg font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
+                >
+                  <Printer className="w-5 h-5" />
+                  <span className="arabic-text">طباعة القائمة</span>
+                </Button>
+              )}
+              
+              {hasActionPermission('create_customer') && (
+                <Button
+                  onClick={() => setIsNewCustomerOpen(true)}
+                  className="bg-[#155446] hover:bg-[#13312A] text-[#F6E9CA] flex items-center gap-2 px-6 py-3 text-lg font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
+                >
+                  <Plus className="w-5 h-5" />
+                  <span className="arabic-text">زبون جديد</span>
+                </Button>
+              )}
+            </div>
           </div>
         </div>
 
-        {/* Search and Filters */}
-        <Card className="bg-white border border-[#C69A72] rounded-2xl shadow-sm">
+        {/* Statistics Cards - Only show if user has permission */}
+        {hasActionPermission('view_financial_reports') && (
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
+            <Card className="bg-gradient-to-br from-[#155446] to-[#13312A] border-0 shadow-xl hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1">
+              <CardContent className="p-6 text-center">
+                <div className="flex items-center justify-center mb-3">
+                  <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
+                    <User className="w-6 h-6 text-white" />
+                  </div>
+                </div>
+                <div className="text-3xl font-bold mb-2 text-black">{stats.total}</div>
+                <div className="text-sm opacity-90 arabic-text text-black">إجمالي الزبائن</div>
+              </CardContent>
+            </Card>
+            
+            <Card className="bg-gradient-to-br from-green-500 to-green-600 border-0 shadow-xl hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1">
+              <CardContent className="p-6 text-center">
+                <div className="flex items-center justify-center mb-3">
+                  <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
+                    <CheckCircle className="w-6 h-6 text-white" />
+                  </div>
+                </div>
+                <div className="text-3xl font-bold mb-2 text-black">{stats.regularCustomers}</div>
+                <div className="text-sm opacity-90 arabic-text text-black">منتظمون</div>
+              </CardContent>
+            </Card>
+            
+            <Card className="bg-gradient-to-br from-yellow-500 to-orange-500 border-0 shadow-xl hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1">
+              <CardContent className="p-6 text-center">
+                <div className="flex items-center justify-center mb-3">
+                  <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
+                    <Star className="w-6 h-6 text-white" />
+                  </div>
+                </div>
+                <div className="text-3xl font-bold mb-2 text-black">{stats.goldenCustomers}</div>
+                <div className="text-sm opacity-90 arabic-text text-black">زبائن ذهبيون</div>
+              </CardContent>
+            </Card>
+            
+            <Card className="bg-gradient-to-br from-[#C69A72] to-[#B8860B] border-0 shadow-xl hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1">
+              <CardContent className="p-6 text-center">
+                <div className="flex items-center justify-center mb-3">
+                  <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
+                    <CreditCard className="w-6 h-6 text-white" />
+                  </div>
+                </div>
+                <div className="text-3xl font-bold mb-2 text-black">{formatCurrency(stats.totalSpent)}</div>
+                <div className="text-sm opacity-90 arabic-text text-black">إجمالي الإنفاق</div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* Search and Basic Filters */}
+        <Card className="bg-white rounded-xl shadow-lg border border-[#C69A72]/20">
           <CardContent className="p-6">
             <div className="flex flex-col lg:flex-row gap-4">
               <div className="flex-1 relative">
-                <Search className="absolute right-4 top-1/2 transform -translate-y-1/2 text-[#155446] w-5 h-5" aria-hidden="true" />
+                <Search className="absolute right-4 top-1/2 transform -translate-y-1/2 text-[#155446] w-5 h-5" />
                 <Input
-                  placeholder="بحث عن الزبائن بالاسم، الهاتف، أو العنوان..."
+                  placeholder="بحث عن الزبائن، الأسماء، أو أرقام الهاتف..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pr-12 h-12 bg-white border-[#C69A72] text-right text-base focus:ring-2 focus:ring-[#155446] focus:border-[#155446] rounded-xl"
-                  aria-label="بحث عن الزبائن"
+                  className="pr-12 pl-4 py-3 bg-white border-2 border-[#C69A72]/30 rounded-xl text-right text-lg focus:border-[#155446] focus:ring-2 focus:ring-[#155446]/20 transition-all duration-300"
                 />
               </div>
-              <div className="lg:w-48">
-                <select
-                  value={filterLabel}
-                  onChange={(e) => setFilterLabel(e.target.value)}
-                  className="w-full h-12 px-4 py-2 border border-[#C69A72] rounded-xl bg-white text-[#13312A] arabic-text touch-target focus:ring-2 focus:ring-[#155446] focus:border-[#155446] text-base"
-                  aria-label="تصفية حسب التصنيف"
+              <div className="flex flex-wrap gap-3">
+                <Select value={sortBy} onValueChange={setSortBy}>
+                  <SelectTrigger className="w-48 border-2 border-[#C69A72]/30 rounded-xl">
+                    <SelectValue placeholder="ترتيب حسب" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="name">الاسم</SelectItem>
+                    <SelectItem value="totalSpent">إجمالي الإنفاق</SelectItem>
+                    <SelectItem value="ordersCount">عدد الطلبات</SelectItem>
+                    <SelectItem value="lastOrder">آخر طلب</SelectItem>
+                    <SelectItem value="label">التصنيف</SelectItem>
+                  </SelectContent>
+                </Select>
+                
+                <div className="flex items-center gap-2 bg-white rounded-xl p-2 border border-[#C69A72]/30">
+                  <Button
+                    variant={viewMode === 'table' ? 'default' : 'ghost'}
+                    size="sm"
+                    onClick={() => setViewMode('table')}
+                    className="flex items-center gap-2"
+                  >
+                    <List className="w-4 h-4" />
+                    <span className="hidden sm:inline arabic-text">جدول</span>
+                  </Button>
+                  <Button
+                    variant={viewMode === 'grid' ? 'default' : 'ghost'}
+                    size="sm"
+                    onClick={() => setViewMode('grid')}
+                    className="flex items-center gap-2"
+                  >
+                    <Grid3X3 className="w-4 h-4" />
+                    <span className="hidden sm:inline arabic-text">شبكة</span>
+                  </Button>
+                </div>
+                
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setSearchTerm('');
+                    setFilterLabel('all');
+                    setSortBy('name');
+                  }}
+                  className="border-2 border-red-300 text-red-600 hover:bg-red-50 flex items-center gap-2 px-4 py-3 rounded-xl"
                 >
-                  <option value="all">جميع التصنيفات</option>
-                  <option value="جديد">جديد</option>
-                  <option value="منتظم">منتظم</option>
-                  <option value="وفي">وفي</option>
-                  <option value="ذهبي">ذهبي</option>
-                </select>
+                  <FilterX className="w-4 h-4" />
+                  <span className="arabic-text">مسح الفلاتر</span>
+                </Button>
               </div>
             </div>
           </CardContent>
         </Card>
 
-        {/* Customer Stats */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
-          {['جديد', 'منتظم', 'وفي', 'ذهبي'].map((label) => {
-            const count = customers.filter(c => c.label === label).length;
-            return (
-              <Card key={label} className="bg-white border border-[#C69A72] rounded-2xl shadow-sm hover:shadow-md transition-shadow">
-                <CardContent className="p-6 text-center h-full flex flex-col justify-center">
-                  <div className="flex items-center justify-center gap-2 mb-3">
-                    {getLabelIcon(label)}
-                    <Badge className={`${getLabelColor(label)} px-3 py-1 text-sm font-medium rounded-full`}>
-                      {label}
-                    </Badge>
-                  </div>
-                  <p className="text-3xl font-bold text-[#13312A] mb-1">{count}</p>
-                  <p className="text-sm text-[#155446] arabic-text">زبون</p>
+        {/* Advanced Filters */}
+        {showFilters && (
+          <Card className="bg-white rounded-xl shadow-lg border border-[#C69A72]/20">
+            <CardContent className="p-6">
+              <h3 className="text-xl font-bold text-[#13312A] arabic-text mb-4">تصفية متقدمة</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div>
+                  <Label className="text-[#155446] arabic-text font-semibold mb-2 block">تصنيف الزبون</Label>
+                  <Select value={filterLabel} onValueChange={setFilterLabel}>
+                    <SelectTrigger className="border-2 border-[#C69A72]/30 rounded-xl">
+                      <SelectValue placeholder="اختر التصنيف" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">جميع التصنيفات</SelectItem>
+                      <SelectItem value="جديد">جديد</SelectItem>
+                      <SelectItem value="منتظم">منتظم</SelectItem>
+                      <SelectItem value="وفي">وفي</SelectItem>
+                      <SelectItem value="ذهبي">ذهبي</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <div className="flex items-end">
+                  <Button
+                    onClick={() => setShowFilters(false)}
+                    className="w-full bg-[#155446] hover:bg-[#13312A] text-white flex items-center gap-2 px-4 py-3 rounded-xl"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                    <span className="arabic-text">تطبيق الفلاتر</span>
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Loading State */}
+        {loading && (
+          <div className="flex items-center justify-center py-16">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#155446] mx-auto mb-4"></div>
+              <div className="text-[#13312A] arabic-text text-lg">جاري تحميل بيانات الزبائن...</div>
+            </div>
+          </div>
+        )}
+
+        {/* Customers Display */}
+        {!loading && (
+          <>
+            {filteredAndSortedCustomers.length === 0 ? (
+              <Card className="bg-white rounded-xl shadow-lg border border-[#C69A72]/20">
+                <CardContent className="p-16 text-center">
+                  <User className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                  <h3 className="text-xl font-semibold text-[#13312A] arabic-text mb-2">لا توجد زبائن</h3>
+                  <p className="text-[#155446] arabic-text mb-6">لم يتم العثور على زبائن تطابق معايير البحث</p>
+                  <Button
+                    onClick={() => setIsNewCustomerOpen(true)}
+                    className="bg-[#155446] hover:bg-[#13312A] text-white px-8 py-3 text-lg rounded-xl"
+                  >
+                    <Plus className="w-5 h-5 ml-2" />
+                    إضافة زبون جديد
+                  </Button>
                 </CardContent>
               </Card>
-            );
-          })}
-        </div>
-
-        {/* Customers List */}
-        <div className="space-y-6">
-          {loading ? (
-            <div className="text-center py-12">
-              <div className="text-lg text-[#13312A] arabic-text">جاري تحميل بيانات الزبائن...</div>
-            </div>
-          ) : filteredCustomers.length === 0 ? (
-            <div className="text-center py-12">
-              <div className="text-lg text-[#13312A] arabic-text mb-4">لا توجد زبائن مسجلة</div>
-              <Button 
-                onClick={() => setIsNewCustomerOpen(true)} 
-                className="bg-[#155446] hover:bg-[#13312A] text-[#F6E9CA] h-11 px-6"
-              >
-                <Plus className="w-4 h-4 ml-2" />
-                <span className="arabic-text">إضافة زبون جديد</span>
-              </Button>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-              {filteredCustomers.map((customer) => {
-                const ordersCount = customer.orders.length;
-                return (
-                  <Card
-                    key={customer.id}
-                    onClick={() => onCustomerSelect(customer)}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter' || event.key === ' ') {
-                        event.preventDefault();
-                        onCustomerSelect(customer);
-                      }
-                    }}
-                    tabIndex={0}
-                    role="button"
-                    aria-label={`عرض تفاصيل ${customer.name}`}
-                    className="bg-white border border-[#C69A72] rounded-2xl shadow-sm hover:shadow-lg transition-all duration-200 cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#155446] focus:ring-offset-2"
-                  >
-                    <CardContent className="p-6">
-                      {/* Header with name and badge */}
-                      <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-lg font-semibold text-[#13312A] arabic-text truncate flex-1">{customer.name}</h3>
-                        <Badge className={`${getLabelColor(customer.label)} flex items-center gap-1 px-3 py-1 text-sm font-medium rounded-full flex-shrink-0`}>
-                          {getLabelIcon(customer.label)}
-                          {customer.label}
-                        </Badge>
-                      </div>
-
-                      {/* Customer details */}
-                      <div className="space-y-3 mb-4">
-                        <div className="flex items-center gap-3 text-[#155446]">
-                          <Phone className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
-                          <span className="text-sm truncate" title={customer.phone}>{customer.phone}</span>
-                        </div>
-                        <div className="flex items-center gap-3 text-[#155446]">
-                          <MapPin className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
-                          <span className="text-sm truncate arabic-text" title={customer.address}>{customer.address}</span>
-                        </div>
-                        <div className="flex items-center gap-3 text-[#155446]">
-                          <Calendar className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
-                          <span className="text-sm arabic-text">آخر طلب: {formatHumanDate(customer.lastOrder)}</span>
-                        </div>
-                        <div className="flex items-center gap-3 text-[#155446]">
-                          <CreditCard className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
-                          <span className="text-sm arabic-text">{customer.totalSpent} دينار عراقي</span>
-                        </div>
-                      </div>
-
-                      {/* Footer with orders count and edit button */}
-                      <div className="flex items-center justify-between pt-4 border-t border-[#C69A72]/20">
-                        <div className="text-center">
-                          <p className="text-2xl font-bold text-[#13312A]">{ordersCount}</p>
-                          <p className="text-xs text-[#155446] arabic-text">طلب</p>
-                        </div>
-
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="border-[#C69A72] text-[#13312A] hover:bg-[#C69A72] hover:border-[#B8886A] h-9 px-4 touch-target focus:ring-2 focus:ring-[#C69A72] focus:ring-offset-2"
-                          onClick={(event: React.MouseEvent) => {
-                            event.stopPropagation();
-                            event.preventDefault();
-                          }}
-                        >
-                          <Edit className="w-4 h-4 ml-1" aria-hidden="true" />
-                          <span className="arabic-text">تعديل</span>
-                        </Button>
-                      </div>
-                    </CardContent>
+            ) : (
+              <>
+                {/* Table View */}
+                {viewMode === 'table' && (
+                  <Card className="bg-white rounded-xl shadow-lg border border-[#C69A72]/20 overflow-hidden">
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="bg-gradient-to-r from-[#13312A] to-[#155446] hover:bg-gradient-to-r hover:from-[#13312A] hover:to-[#155446]">
+                            <TableHead className="text-black arabic-text text-right font-bold text-base">اسم الزبون</TableHead>
+                            <TableHead className="text-black arabic-text text-right font-bold text-base">الهاتف</TableHead>
+                            <TableHead className="text-black arabic-text text-right font-bold text-base">العنوان</TableHead>
+                            <TableHead className="text-black arabic-text text-right font-bold text-base">التصنيف</TableHead>
+                            <TableHead className="text-black arabic-text text-right font-bold text-base">آخر طلب</TableHead>
+                            <TableHead className="text-black arabic-text text-right font-bold text-base">إجمالي الإنفاق</TableHead>
+                            <TableHead className="text-black arabic-text text-right font-bold text-base">عدد الطلبات</TableHead>
+                            <TableHead className="text-black arabic-text text-right font-bold text-base">الإجراءات</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {filteredAndSortedCustomers.map((customer) => (
+                            <TableRow 
+                              key={customer.id} 
+                              className="hover:bg-gradient-to-r hover:from-[#F6E9CA]/50 hover:to-[#FDFBF7] cursor-pointer transition-all duration-300 border-b border-[#C69A72]/20"
+                              onClick={() => onCustomerSelect(customer)}
+                            >
+                              <TableCell className="text-[#13312A] arabic-text font-semibold text-lg">{customer.name}</TableCell>
+                              <TableCell className="text-[#13312A] font-mono">{customer.phone}</TableCell>
+                              <TableCell className="text-[#13312A] arabic-text">{customer.address}</TableCell>
+                              <TableCell>
+                                <Badge className={`${getLabelColor(customer.label)} px-3 py-1 text-sm font-semibold rounded-full flex items-center gap-1 w-fit`}>
+                                  {getLabelIcon(customer.label)}
+                                  {customer.label}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="text-[#13312A] arabic-text">{formatHumanDate(customer.lastOrder)}</TableCell>
+                              <TableCell className="text-[#13312A] font-bold text-lg">{formatCurrency(customer.totalSpent)}</TableCell>
+                              <TableCell className="text-[#13312A] font-bold text-lg">{customer.orders.length}</TableCell>
+                              <TableCell onClick={(e) => e.stopPropagation()}>
+                                <div className="flex items-center gap-2">
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => onCustomerSelect(customer)}
+                                    className="border-[#C69A72] text-[#13312A] hover:bg-[#C69A72] hover:text-white rounded-lg"
+                                    aria-label={`عرض تفاصيل ${customer.name}`}
+                                  >
+                                    <Eye className="w-4 h-4" />
+                                  </Button>
+                                  
+                                  <DropdownMenu>
+                                    <DropdownMenuTrigger className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground h-8 px-3">
+                                      <MoreVertical className="w-4 h-4" />
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end" className="bg-white border-[#C69A72] rounded-xl shadow-lg">
+                                      <DropdownMenuItem onClick={() => onCustomerSelect(customer)} className="arabic-text">
+                                        <Eye className="w-4 h-4 ml-2" />
+                                        عرض التفاصيل
+                                      </DropdownMenuItem>
+                                      {hasActionPermission('edit_customer') && (
+                                        <DropdownMenuItem className="arabic-text">
+                                          <Edit className="w-4 h-4 ml-2" />
+                                          تعديل البيانات
+                                        </DropdownMenuItem>
+                                      )}
+                                      {hasActionPermission('create_invoice') && (
+                                        <DropdownMenuItem className="arabic-text">
+                                          <Plus className="w-4 h-4 ml-2" />
+                                          إضافة طلب جديد
+                                        </DropdownMenuItem>
+                                      )}
+                                    </DropdownMenuContent>
+                                  </DropdownMenu>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
                   </Card>
-                );
-              })}
-            </div>
-          )}
-        </div>
+                )}
+
+                {/* Grid View */}
+                {viewMode === 'grid' && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                    {filteredAndSortedCustomers.map((customer) => (
+                      <Card 
+                        key={customer.id} 
+                        className="bg-white rounded-xl shadow-lg border border-[#C69A72]/20 hover:shadow-xl transition-all duration-300 cursor-pointer group"
+                        onClick={() => onCustomerSelect(customer)}
+                      >
+                        <CardContent className="p-6">
+                          {/* Header with name and badge */}
+                          <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-lg font-semibold text-[#13312A] arabic-text truncate flex-1">{customer.name}</h3>
+                            <Badge className={`${getLabelColor(customer.label)} flex items-center gap-1 px-3 py-1 text-sm font-medium rounded-full flex-shrink-0`}>
+                              {getLabelIcon(customer.label)}
+                              {customer.label}
+                            </Badge>
+                          </div>
+
+                          {/* Customer details */}
+                          <div className="space-y-3 mb-4">
+                            <div className="flex items-center gap-3 text-[#155446]">
+                              <Phone className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
+                              <span className="text-sm truncate" title={customer.phone}>{customer.phone}</span>
+                            </div>
+                            <div className="flex items-center gap-3 text-[#155446]">
+                              <MapPin className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
+                              <span className="text-sm truncate arabic-text" title={customer.address}>{customer.address}</span>
+                            </div>
+                            <div className="flex items-center gap-3 text-[#155446]">
+                              <Calendar className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
+                              <span className="text-sm arabic-text">آخر طلب: {formatHumanDate(customer.lastOrder)}</span>
+                            </div>
+                            <div className="flex items-center gap-3 text-[#155446]">
+                              <CreditCard className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
+                              <span className="text-sm arabic-text">{formatCurrency(customer.totalSpent)}</span>
+                            </div>
+                          </div>
+
+                          {/* Footer with orders count and action buttons */}
+                          <div className="flex items-center justify-between pt-4 border-t border-[#C69A72]/20">
+                            <div className="text-center">
+                              <p className="text-2xl font-bold text-[#13312A]">{customer.orders.length}</p>
+                              <p className="text-xs text-[#155446] arabic-text">طلب</p>
+                            </div>
+
+                            <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => onCustomerSelect(customer)}
+                                className="border-[#C69A72] text-[#13312A] hover:bg-[#C69A72] hover:text-white rounded-lg"
+                              >
+                                <Eye className="w-4 h-4" />
+                              </Button>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button size="sm" variant="outline" className="border-[#C69A72] text-[#13312A] hover:bg-[#C69A72] hover:text-white rounded-lg">
+                                    <MoreVertical className="w-4 h-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="bg-white border-[#C69A72] rounded-xl shadow-lg">
+                                  <DropdownMenuItem onClick={() => onCustomerSelect(customer)} className="arabic-text">
+                                    <Eye className="w-4 h-4 ml-2" />
+                                    عرض التفاصيل
+                                  </DropdownMenuItem>
+                                  {hasActionPermission('edit_customer') && (
+                                    <DropdownMenuItem className="arabic-text">
+                                      <Edit className="w-4 h-4 ml-2" />
+                                      تعديل
+                                    </DropdownMenuItem>
+                                  )}
+                                  {hasActionPermission('create_invoice') && (
+                                    <DropdownMenuItem className="arabic-text">
+                                      <Plus className="w-4 h-4 ml-2" />
+                                      طلب جديد
+                                    </DropdownMenuItem>
+                                  )}
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+          </>
+        )}
       </div>
 
       <NewCustomerDialog />

@@ -6,7 +6,7 @@ import { InvoicesPageWithDB } from './components/InvoicesPageWithDB';
 import { CustomersPage } from './components/CustomersPage';
 import { ReportsPage } from './components/ReportsPage';
 import { FinancialPage } from './components/FinancialPage';
-import { CustomerDetailsPage } from './components/CustomerDetailsPage';
+import { CustomerDetailsPageWithDB } from './components/CustomerDetailsPageWithDB';
 import { InvoiceDetailsPage } from './components/InvoiceDetailsPage';
 import { NewInvoiceDialogWithDB } from './components/NewInvoiceDialogWithDB';
 import { UsersManagementPage } from './components/UsersManagementPage';
@@ -14,7 +14,8 @@ import { RolesManagementPage } from './components/RolesManagementPage';
 import { Toaster } from './components/ui/sonner';
 import { AppProviders } from './app/AppProviders';
 import { Customer } from './types/customer';
-import { databaseService } from './db/database.service';
+import { databaseService, Customer as DatabaseCustomer } from './db/database.service';
+import { authService, User } from './services/auth.service';
 import './db/init'; // Initialize database
 
 const customersData: Customer[] = [
@@ -62,6 +63,7 @@ const customersData: Customer[] = [
       },
     ],
     notes: 'يفضل الأقمشة الفاخرة ذات الألوان الهادئة.',
+    created_at: '2023-10-01T10:00:00.000Z',
   },
   {
     id: 2,
@@ -106,6 +108,7 @@ const customersData: Customer[] = [
         paid: 250,
       },
     ],
+    created_at: '2023-08-01T10:00:00.000Z',
   },
   {
     id: 3,
@@ -150,6 +153,7 @@ const customersData: Customer[] = [
         paid: 120,
       },
     ],
+    created_at: '2023-06-01T10:00:00.000Z',
   },
   {
     id: 4,
@@ -176,6 +180,7 @@ const customersData: Customer[] = [
         paid: 50,
       },
     ],
+    created_at: '2024-01-01T10:00:00.000Z',
   },
   {
     id: 5,
@@ -230,16 +235,19 @@ const customersData: Customer[] = [
       },
     ],
     notes: 'يحب التفاصيل المطرزة حول الياقة والأكمام.',
+    created_at: '2023-09-01T10:00:00.000Z',
   },
 ];
 
 export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [currentPage, setCurrentPage] = useState('dashboard');
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
   const [isNewInvoiceDialogOpen, setIsNewInvoiceDialogOpen] = useState(false);
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [dbCustomers, setDbCustomers] = useState<DatabaseCustomer[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Load customers from database
@@ -247,7 +255,9 @@ export default function App() {
     const loadCustomers = async () => {
       try {
         setLoading(true);
-        const customersData = await databaseService.getCustomers();
+        const dbCustomersData = await databaseService.getCustomers();
+        setDbCustomers(dbCustomersData);
+        // For now, keep using the hardcoded data for the UI
         setCustomers(customersData);
       } catch (error) {
         console.error('Error loading customers:', error);
@@ -263,7 +273,8 @@ export default function App() {
     }
   }, [isLoggedIn]);
 
-  const handleLogin = () => {
+  const handleLogin = (user: User) => {
+    setCurrentUser(user);
     setIsLoggedIn(true);
     setCurrentPage('dashboard');
     setSelectedCustomer(null);
@@ -271,12 +282,19 @@ export default function App() {
     setIsNewInvoiceDialogOpen(false);
   };
 
-  const handleLogout = () => {
-    setIsLoggedIn(false);
-    setCurrentPage('dashboard');
-    setSelectedCustomer(null);
-    setSelectedInvoice(null);
-    setIsNewInvoiceDialogOpen(false);
+  const handleLogout = async () => {
+    try {
+      await authService.logout();
+    } catch (error) {
+      console.error('Logout error:', error);
+    } finally {
+      setCurrentUser(null);
+      setIsLoggedIn(false);
+      setCurrentPage('dashboard');
+      setSelectedCustomer(null);
+      setSelectedInvoice(null);
+      setIsNewInvoiceDialogOpen(false);
+    }
   };
 
   const handleNavigate = (page: string) => {
@@ -343,12 +361,13 @@ export default function App() {
         );
       case 'customerDetails':
         return selectedCustomer ? (
-          <CustomerDetailsPage
+          <CustomerDetailsPageWithDB
             customer={selectedCustomer}
             onBack={() => {
               setSelectedCustomer(null);
               setCurrentPage('customers');
             }}
+            onViewInvoiceDetails={handleViewInvoiceDetails}
           />
         ) : (
           <CustomersPage
@@ -399,6 +418,7 @@ export default function App() {
             onNavigate={handleNavigate}
             isLoggedIn={isLoggedIn}
             onLogout={handleLogout}
+            currentUser={currentUser}
           >
             {renderCurrentPage()}
             <NewInvoiceDialogWithDB

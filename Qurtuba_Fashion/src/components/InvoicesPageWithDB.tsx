@@ -10,6 +10,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { useInvoices } from '@/hooks/useInvoices';
+import { usePermissions } from '@/hooks/usePermissions';
+import { authService } from '@/services/auth.service';
 import {
   Plus,
   Search,
@@ -115,6 +117,8 @@ interface InvoicesPageProps {
 
 export function InvoicesPageWithDB({ onCreateInvoice, onViewInvoiceDetails, onMarkAsPaid }: InvoicesPageProps) {
   const { invoices, loading, error, markAsPaid: markInvoiceAsPaid, loadInvoices } = useInvoices();
+  const [currentUser] = useState(authService.getCurrentUser());
+  const { hasActionPermission } = usePermissions(currentUser);
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState('date');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -677,20 +681,24 @@ export function InvoicesPageWithDB({ onCreateInvoice, onViewInvoiceDetails, onMa
             
             {/* Action Buttons */}
             <div className="flex flex-wrap justify-end gap-2">
-              <Button
-                className="bg-[#13312A] hover:bg-[#155446] text-[#F6E9CA] px-4 py-2 text-sm rounded-md flex items-center gap-2 arabic-text"
-                onClick={handleCreateInvoice}
-              >
-                <Plus className="w-4 h-4" />
-          فاتورة جديدة
-        </Button>
-              <Button
-                className="bg-[#C69A72] hover:bg-[#A87B5A] text-[#13312A] px-4 py-2 text-sm rounded-md flex items-center gap-2 arabic-text"
-                onClick={openPrintDialog}
-              >
-                <Printer className="w-4 h-4" />
-                طباعة القائمة
-              </Button>
+              {hasActionPermission('create_invoice') && (
+                <Button
+                  className="bg-[#13312A] hover:bg-[#155446] text-[#F6E9CA] px-4 py-2 text-sm rounded-md flex items-center gap-2 arabic-text"
+                  onClick={handleCreateInvoice}
+                >
+                  <Plus className="w-4 h-4" />
+                  فاتورة جديدة
+                </Button>
+              )}
+              {hasActionPermission('print_invoices_list') && (
+                <Button
+                  className="bg-[#C69A72] hover:bg-[#A87B5A] text-[#13312A] px-4 py-2 text-sm rounded-md flex items-center gap-2 arabic-text"
+                  onClick={openPrintDialog}
+                >
+                  <Printer className="w-4 h-4" />
+                  طباعة القائمة
+                </Button>
+              )}
               <Button
                 className="bg-[#13312A] hover:bg-[#155446] text-[#F6E9CA] px-4 py-2 text-sm rounded-md flex items-center gap-2 arabic-text"
                 onClick={() => setShowFilters(!showFilters)}
@@ -702,25 +710,27 @@ export function InvoicesPageWithDB({ onCreateInvoice, onViewInvoiceDetails, onMa
           </div>
       </div>
 
-        {/* Statistics Cards - Now in a separate section */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
-          <div className="bg-white text-[#13312A] p-3 rounded-lg text-center border border-[#C69A72]/20 shadow-sm">
-            <div className="text-xl font-bold">{stats.total}</div>
-            <div className="text-xs text-[#155446] arabic-text">إجمالي الفواتير</div>
+        {/* Statistics Cards - Now in a separate section - Only show if user has permission */}
+        {hasActionPermission('view_financial_reports') && (
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+            <div className="bg-white text-[#13312A] p-3 rounded-lg text-center border border-[#C69A72]/20 shadow-sm">
+              <div className="text-xl font-bold">{stats.total}</div>
+              <div className="text-xs text-[#155446] arabic-text">إجمالي الفواتير</div>
+            </div>
+            <div className="bg-white text-[#13312A] p-3 rounded-lg text-center border border-[#C69A72]/20 shadow-sm">
+              <div className="text-xl font-bold">{stats.paid}</div>
+              <div className="text-xs text-[#155446] arabic-text">الفواتير المدفوعة</div>
+            </div>
+            <div className="bg-white text-[#13312A] p-3 rounded-lg text-center border border-[#C69A72]/20 shadow-sm">
+              <div className="text-xl font-bold">{stats.pending}</div>
+              <div className="text-xs text-[#155446] arabic-text">الفواتير المعلقة</div>
+            </div>
+            <div className="bg-white text-[#13312A] p-3 rounded-lg text-center border border-[#C69A72]/20 shadow-sm">
+              <div className="text-xl font-bold">{formatCurrency(stats.totalAmount)}</div>
+              <div className="text-xs text-[#155446] arabic-text">إجمالي المبلغ</div>
+            </div>
           </div>
-          <div className="bg-white text-[#13312A] p-3 rounded-lg text-center border border-[#C69A72]/20 shadow-sm">
-            <div className="text-xl font-bold">{stats.paid}</div>
-            <div className="text-xs text-[#155446] arabic-text">الفواتير المدفوعة</div>
-          </div>
-          <div className="bg-white text-[#13312A] p-3 rounded-lg text-center border border-[#C69A72]/20 shadow-sm">
-            <div className="text-xl font-bold">{stats.pending}</div>
-            <div className="text-xs text-[#155446] arabic-text">الفواتير المعلقة</div>
-          </div>
-          <div className="bg-white text-[#13312A] p-3 rounded-lg text-center border border-[#C69A72]/20 shadow-sm">
-            <div className="text-xl font-bold">{formatCurrency(stats.totalAmount)}</div>
-            <div className="text-xs text-[#155446] arabic-text">إجمالي المبلغ</div>
-          </div>
-        </div>
+        )}
 
         {/* Search and Basic Filters */}
         <Card className="bg-white rounded-xl shadow-lg border border-[#C69A72]/20">
@@ -997,17 +1007,19 @@ export function InvoicesPageWithDB({ onCreateInvoice, onViewInvoiceDetails, onMa
                            style={{ width: `${columnWidths.actions}px` }}
                          >
                           <div className="flex items-center gap-2">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handlePrintInvoice(invoice)}
-                              className="border-[#C69A72] text-[#13312A] hover:bg-[#C69A72] hover:text-white rounded-lg transition-all duration-200 hover:scale-105"
-                              aria-label={`طباعة فاتورة ${invoice.customer_name}`}
-                            >
-                              <Printer className="w-4 h-4" />
-                            </Button>
+                            {hasActionPermission('print_invoice') && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handlePrintInvoice(invoice)}
+                                className="border-[#C69A72] text-[#13312A] hover:bg-[#C69A72] hover:text-white rounded-lg transition-all duration-200 hover:scale-105"
+                                aria-label={`طباعة فاتورة ${invoice.customer_name}`}
+                              >
+                                <Printer className="w-4 h-4" />
+                              </Button>
+                            )}
                             
-                            {canMarkAsPaid(invoice) && (
+                            {canMarkAsPaid(invoice) && hasActionPermission('mark_invoice_paid') && (
                               <Button
                                 size="sm"
                                 onClick={() => handleMarkAsPaid(invoice.id)}
@@ -1025,20 +1037,26 @@ export function InvoicesPageWithDB({ onCreateInvoice, onViewInvoiceDetails, onMa
                               <DropdownMenuContent align="end" className="bg-white border-[#C69A72] rounded-xl shadow-lg">
                                 <DropdownMenuItem onClick={() => handleViewDetails(invoice)} className="arabic-text">
                                   <Eye className="w-4 h-4 ml-2" />
-                            عرض التفاصيل
-                          </DropdownMenuItem>
-                                <DropdownMenuItem className="arabic-text">
-                                  <Edit className="w-4 h-4 ml-2" />
-                                  تعديل الفاتورة
-                          </DropdownMenuItem>
-                                <DropdownMenuItem className="arabic-text">
-                                  <Copy className="w-4 h-4 ml-2" />
-                                  تكرار الفاتورة
-                          </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => handlePrintInvoice(invoice)} className="arabic-text">
-                                  <Download className="w-4 h-4 ml-2" />
-                                  تصدير إلى PDF
-                            </DropdownMenuItem>
+                                  عرض التفاصيل
+                                </DropdownMenuItem>
+                                {hasActionPermission('edit_invoice') && (
+                                  <DropdownMenuItem className="arabic-text">
+                                    <Edit className="w-4 h-4 ml-2" />
+                                    تعديل الفاتورة
+                                  </DropdownMenuItem>
+                                )}
+                                {hasActionPermission('create_invoice') && (
+                                  <DropdownMenuItem className="arabic-text">
+                                    <Copy className="w-4 h-4 ml-2" />
+                                    تكرار الفاتورة
+                                  </DropdownMenuItem>
+                                )}
+                                {hasActionPermission('print_invoice') && (
+                                  <DropdownMenuItem onClick={() => handlePrintInvoice(invoice)} className="arabic-text">
+                                    <Download className="w-4 h-4 ml-2" />
+                                    تصدير إلى PDF
+                                  </DropdownMenuItem>
+                                )}
                         </DropdownMenuContent>
                       </DropdownMenu>
                           </div>
