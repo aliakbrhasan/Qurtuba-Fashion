@@ -170,3 +170,4 @@ If you're still having issues:
 
 The application is designed to work with both Supabase and local fallback, so it should function even if there are connection issues.
 
+

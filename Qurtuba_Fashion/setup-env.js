@@ -42,3 +42,4 @@ try {
   console.log('VITE_SUPABASE_ANON_KEY=your-actual-anon-key-here');
 }
 
+

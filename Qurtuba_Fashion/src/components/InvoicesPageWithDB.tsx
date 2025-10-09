@@ -25,7 +25,6 @@ import {
   FilterX,
   RefreshCw,
 } from 'lucide-react';
-import { NewInvoiceDialogWithDB } from './NewInvoiceDialogWithDB';
 import { InvoiceDetailsDialog } from './InvoiceDetailsDialog';
 import {
   PrintableInvoice,
@@ -122,7 +121,6 @@ export function InvoicesPageWithDB({ onCreateInvoice, onViewInvoiceDetails, onMa
   const [dateFilter, setDateFilter] = useState<string>('all');
   const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
   const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false);
-  const [isNewInvoiceOpen, setIsNewInvoiceOpen] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
 
   // Auto-refresh data every 30 seconds
@@ -317,21 +315,14 @@ export function InvoicesPageWithDB({ onCreateInvoice, onViewInvoiceDetails, onMa
     }
   };
 
-  // Handle create new invoice
+  // Handle create new invoice - delegate to parent to open the global dialog
   const handleCreateInvoice = () => {
-    setIsNewInvoiceOpen(true);
     if (onCreateInvoice) {
       onCreateInvoice();
     }
   };
 
-  // Handle invoice created callback
-  const handleInvoiceCreated = async () => {
-    // Refresh data immediately after creating invoice
-    if (loadInvoices) {
-      await loadInvoices();
-    }
-  };
+  // Note: invoice creation dialog is handled globally in App
 
   // Print functions
   const openPrintDialog = () => {
@@ -1200,13 +1191,6 @@ export function InvoicesPageWithDB({ onCreateInvoice, onViewInvoiceDetails, onMa
             </DialogFooter>
           </DialogContent>
         </Dialog>
-
-      {/* New Invoice Dialog */}
-      <NewInvoiceDialogWithDB 
-        isOpen={isNewInvoiceOpen} 
-        onOpenChange={setIsNewInvoiceOpen}
-        onInvoiceCreated={handleInvoiceCreated}
-      />
 
       {/* Invoice Details Dialog */}
       {selectedInvoice && (
