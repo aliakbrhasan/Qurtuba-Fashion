@@ -185,8 +185,14 @@ class RolesService {
       if (error) throw error;
       // Sanitize Arabic on every load to avoid mojibake after refresh
       const mapped = (data || []).map(role => this.mapSupabaseRoleToRole(role));
-      this.writeCache(this.ROLES_CACHE_KEY, mapped);
-      return mapped;
+      // Local-first: don't overwrite cache with empty remote result
+      if (mapped.length > 0) {
+        this.writeCache(this.ROLES_CACHE_KEY, mapped);
+        return mapped;
+      }
+      const cached = this.readCache<Role[]>(this.ROLES_CACHE_KEY, []);
+      if (cached.length) return cached.map(r => sanitizeRole(r));
+      return this.localData.roles;
     } catch (error) {
       console.warn('Supabase error, using cached/local roles:', error);
       const cached = this.readCache<Role[]>(this.ROLES_CACHE_KEY, []);
@@ -397,8 +403,13 @@ class RolesService {
 
       if (error) throw error;
       const mapped = (data || []).map((p: any) => sanitizePage(p));
-      this.writeCache(this.PAGES_CACHE_KEY, mapped);
-      return mapped;
+      if (mapped.length > 0) {
+        this.writeCache(this.PAGES_CACHE_KEY, mapped);
+        return mapped;
+      }
+      const cached = this.readCache<Page[]>(this.PAGES_CACHE_KEY, []);
+      if (cached.length) return cached.map(p => sanitizePage(p));
+      return this.localData.pages;
     } catch (error) {
       console.warn('Supabase error, using cached/local pages:', error);
       const cached = this.readCache<Page[]>(this.PAGES_CACHE_KEY, []);
@@ -419,8 +430,13 @@ class RolesService {
 
       if (error) throw error;
       const mapped = (data || []).map((a: any) => sanitizeAction(a));
-      this.writeCache(this.ACTIONS_CACHE_KEY, mapped);
-      return mapped;
+      if (mapped.length > 0) {
+        this.writeCache(this.ACTIONS_CACHE_KEY, mapped);
+        return mapped;
+      }
+      const cached = this.readCache<Action[]>(this.ACTIONS_CACHE_KEY, []);
+      if (cached.length) return cached.map(a => sanitizeAction(a));
+      return this.localData.actions;
     } catch (error) {
       console.warn('Supabase error, using cached/local actions:', error);
       const cached = this.readCache<Action[]>(this.ACTIONS_CACHE_KEY, []);

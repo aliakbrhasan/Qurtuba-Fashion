@@ -219,6 +219,16 @@ export class DatabaseService {
     }
   }
 
+  // Replace local cache only when remote returns non-empty data
+  private replaceIfNonEmpty<T>(incoming: T[] | null | undefined, assign: (arr: T[]) => void): T[] | null {
+    if (Array.isArray(incoming) && incoming.length > 0) {
+      assign(incoming);
+      this.persistAllToStorage();
+      return incoming;
+    }
+    return null;
+  }
+
   // Users operations
   async getUsers(): Promise<User[]> {
     try {

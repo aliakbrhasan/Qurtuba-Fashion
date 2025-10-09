@@ -15,7 +15,7 @@ import { Toaster } from './components/ui/sonner';
 import { AppProviders } from './app/AppProviders';
 import { Customer } from './types/customer';
 import { authService, User } from './services/auth.service';
-import './db/init'; // Initialize database
+// Database init removed to prevent test/sync side-effects on reload
 
 // Legacy sample customers removed; customers are now sourced from DB/invoices via CustomersPageWithDB
 
