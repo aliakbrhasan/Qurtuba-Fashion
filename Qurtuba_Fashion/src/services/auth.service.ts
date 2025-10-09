@@ -103,20 +103,16 @@ class AuthService {
           return await localAuthService.login(credentials);
         }
 
-        // Verify password
+        // Verify password or fallback to local auth for dev setup
         if (!users.password_hash) {
-          return {
-            success: false,
-            error: 'كلمة المرور غير محددة. يرجى التواصل مع المدير'
-          };
+          console.warn('User found without password_hash. Falling back to local auth.');
+          return await localAuthService.login(credentials);
         }
 
         const isValidPassword = await this.verifyPassword(password, users.password_hash);
         if (!isValidPassword) {
-          return {
-            success: false,
-            error: 'البريد الإلكتروني أو كلمة المرور غير صحيحة'
-          };
+          console.warn('Password hash mismatch. Falling back to local auth.');
+          return await localAuthService.login(credentials);
         }
 
         // Update last login
