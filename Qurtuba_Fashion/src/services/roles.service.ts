@@ -1,4 +1,5 @@
 import { supabase } from '../db/client';
+import { sanitizeAction, sanitizePage, sanitizeRole, sanitizeArabicText } from '../utils/encoding';
 
 export interface Role {
   id: string;
@@ -40,8 +41,28 @@ class RolesService {
     actions: []
   };
 
+  // Simple persistent cache to keep UI consistent when DB is unreachable
+  private readonly ROLES_CACHE_KEY = 'qurtuba_roles_cache';
+  private readonly PAGES_CACHE_KEY = 'qurtuba_pages_cache';
+  private readonly ACTIONS_CACHE_KEY = 'qurtuba_actions_cache';
+
   private constructor() {
     this.initializeLocalData();
+  }
+
+  private async getRoleIdByName(roleName: string): Promise<string | null> {
+    try {
+      const name = sanitizeArabicText(roleName);
+      const { data, error } = await supabase
+        .from('roles')
+        .select('id')
+        .eq('name', name)
+        .single();
+      if (error || !data) return null;
+      return (data as any).id as string;
+    } catch {
+      return null;
+    }
   }
 
   public static getInstance(): RolesService {
@@ -51,6 +72,10 @@ class RolesService {
     return RolesService.instance;
   }
 
+  private isUuid(id: string): boolean {
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+  }
+
   private initializeLocalData(): void {
     // Default pages
     this.localData.pages = [
@@ -58,7 +83,6 @@ class RolesService {
       { id: 'invoices', name: 'الفواتير', description: 'إدارة الفواتير', category: 'المبيعات', isActive: true },
       { id: 'customers', name: 'الزبائن', description: 'إدارة العملاء', category: 'المبيعات', isActive: true },
       { id: 'financial', name: 'المالية', description: 'الإدارة المالية', category: 'المالية', isActive: true },
-      { id: 'reports', name: 'التقارير', description: 'تقارير النظام', category: 'التقارير', isActive: true },
       { id: 'users', name: 'إدارة المستخدمين', description: 'إدارة المستخدمين والأدوار', category: 'الإدارة', isActive: true }
     ];
 
@@ -103,7 +127,7 @@ class RolesService {
         name: 'مدير النظام',
         description: 'صلاحيات كاملة في النظام',
         permissions: ['إدارة المستخدمين', 'إدارة الفواتير', 'إدارة العملاء', 'التقارير', 'الإعدادات'],
-        allowedPages: ['dashboard', 'invoices', 'customers', 'financial', 'reports', 'users'],
+        allowedPages: ['dashboard', 'invoices', 'customers', 'financial', 'users'],
         allowedActions: ['create_invoice', 'edit_invoice', 'delete_invoice', 'change_invoice_status', 'mark_invoice_paid', 'print_invoice', 'print_invoices_list', 'create_customer', 'edit_customer', 'delete_customer', 'view_customer_details', 'print_customers_list', 'view_financial_reports', 'manage_payments', 'view_income_statement', 'generate_sales_report', 'generate_customer_report', 'generate_financial_report', 'manage_users', 'manage_roles', 'system_settings'],
         isActive: true,
         created_at: new Date().toISOString()
@@ -113,7 +137,7 @@ class RolesService {
         name: 'مندوب مبيعات',
         description: 'إدارة المبيعات والعملاء',
         permissions: ['إدارة العملاء', 'إنشاء الفواتير', 'عرض التقارير'],
-        allowedPages: ['dashboard', 'invoices', 'customers', 'reports'],
+        allowedPages: ['dashboard', 'invoices', 'customers'],
         allowedActions: ['create_invoice', 'edit_invoice', 'change_invoice_status', 'print_invoice', 'print_invoices_list', 'create_customer', 'edit_customer', 'view_customer_details', 'print_customers_list', 'generate_sales_report', 'generate_customer_report'],
         isActive: true,
         created_at: new Date().toISOString()
@@ -123,12 +147,30 @@ class RolesService {
         name: 'محاسب رئيسي',
         description: 'إدارة الحسابات والمالية',
         permissions: ['إدارة الفواتير', 'التقارير المالية', 'إدارة المدفوعات'],
-        allowedPages: ['dashboard', 'invoices', 'financial', 'reports'],
+        allowedPages: ['dashboard', 'invoices', 'financial'],
         allowedActions: ['create_invoice', 'edit_invoice', 'delete_invoice', 'change_invoice_status', 'mark_invoice_paid', 'print_invoice', 'print_invoices_list', 'view_financial_reports', 'manage_payments', 'view_income_statement', 'generate_sales_report', 'generate_financial_report'],
         isActive: true,
         created_at: new Date().toISOString()
       }
     ];
+  }
+
+  private readCache<T>(key: string, fallback: T): T {
+    try {
+      const raw = localStorage.getItem(key);
+      if (!raw) return fallback;
+      return JSON.parse(raw) as T;
+    } catch {
+      return fallback;
+    }
+  }
+
+  private writeCache<T>(key: string, value: T): void {
+    try {
+      localStorage.setItem(key, JSON.stringify(value));
+    } catch {
+      // ignore
+    }
   }
 
   // Get all roles
@@ -141,9 +183,20 @@ class RolesService {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      return (data || []).map(role => this.mapSupabaseRoleToRole(role));
+      // Sanitize Arabic on every load to avoid mojibake after refresh
+      const mapped = (data || []).map(role => this.mapSupabaseRoleToRole(role));
+      // Local-first: don't overwrite cache with empty remote result
+      if (mapped.length > 0) {
+        this.writeCache(this.ROLES_CACHE_KEY, mapped);
+        return mapped;
+      }
+      const cached = this.readCache<Role[]>(this.ROLES_CACHE_KEY, []);
+      if (cached.length) return cached.map(r => sanitizeRole(r));
+      return this.localData.roles;
     } catch (error) {
-      console.warn('Supabase error, using local data:', error);
+      console.warn('Supabase error, using cached/local roles:', error);
+      const cached = this.readCache<Role[]>(this.ROLES_CACHE_KEY, []);
+      if (cached.length) return cached.map(r => sanitizeRole(r));
       return this.localData.roles;
     }
   }
@@ -151,6 +204,11 @@ class RolesService {
   // Get role by ID
   async getRoleById(id: string): Promise<Role | null> {
     try {
+      // If id is not a UUID, prefer local seed roles
+      if (!this.isUuid(id)) {
+        const localRole = this.localData.roles.find(role => role.id === id) || null;
+        return localRole ? sanitizeRole(localRole) : null;
+      }
       const { data, error } = await supabase
         .from('roles')
         .select('*')
@@ -171,8 +229,8 @@ class RolesService {
       const { data, error } = await supabase
         .from('roles')
         .insert([{
-          name: role.name,
-          description: role.description,
+          name: sanitizeArabicText(role.name),
+          description: sanitizeArabicText(role.description),
           permissions: role.permissions,
           allowed_pages: role.allowedPages,
           allowed_actions: role.allowedActions,
@@ -182,15 +240,20 @@ class RolesService {
         .single();
 
       if (error) throw error;
-      return this.mapSupabaseRoleToRole(data);
+      const created = this.mapSupabaseRoleToRole(data);
+      const current = this.readCache<Role[]>(this.ROLES_CACHE_KEY, []);
+      this.writeCache(this.ROLES_CACHE_KEY, [created, ...current]);
+      return created;
     } catch (error) {
-      console.warn('Supabase error, using local data:', error);
-      const newRole: Role = {
+      console.warn('Supabase createRole error, persisting to cache:', error);
+      const newRole: Role = sanitizeRole({
         ...role,
-        id: Date.now().toString(),
-        created_at: new Date().toISOString()
-      };
-      this.localData.roles.push(newRole);
+        id: `local-${Date.now()}`,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      } as Role);
+      const current = this.readCache<Role[]>(this.ROLES_CACHE_KEY, []);
+      this.writeCache(this.ROLES_CACHE_KEY, [newRole, ...current]);
       return newRole;
     }
   }
@@ -198,11 +261,71 @@ class RolesService {
   // Update role
   async updateRole(id: string, updates: Partial<Role>): Promise<Role> {
     try {
+      const sanitizedName = updates.name !== undefined ? sanitizeArabicText(updates.name) : undefined;
+      const sanitizedDesc = updates.description !== undefined ? sanitizeArabicText(updates.description) : undefined;
+
+      // If non-UUID (seed/local) try to resolve by name and then update or insert
+      if (!this.isUuid(id)) {
+        const localIdx = this.localData.roles.findIndex(r => r.id === id);
+        const currentLocal = localIdx !== -1 ? this.localData.roles[localIdx] : null;
+        const targetName = sanitizedName ?? currentLocal?.name ?? '';
+        const resolvedId = targetName ? await this.getRoleIdByName(targetName) : null;
+
+        if (resolvedId) {
+          const { data, error } = await supabase
+            .from('roles')
+            .update({
+              name: sanitizedName ?? currentLocal!.name,
+              description: sanitizedDesc ?? currentLocal!.description,
+              permissions: updates.permissions ?? currentLocal!.permissions,
+              allowed_pages: updates.allowedPages ?? currentLocal!.allowedPages,
+              allowed_actions: updates.allowedActions ?? currentLocal!.allowedActions,
+              is_active: updates.isActive ?? currentLocal!.isActive,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', resolvedId)
+            .select()
+            .single();
+          if (error) throw error;
+          const updated = this.mapSupabaseRoleToRole(data);
+          const cached = this.readCache<Role[]>(this.ROLES_CACHE_KEY, []);
+          const next = cached.map(r => (r.id === resolvedId ? updated : r));
+          this.writeCache(this.ROLES_CACHE_KEY, next);
+          // Mirror into local default for consistency
+          if (currentLocal) {
+            this.localData.roles[localIdx] = sanitizeRole({ ...currentLocal, ...updated });
+          }
+          return updated;
+        } else if (currentLocal) {
+          // Insert a new role if none exists in cloud
+          const { data, error } = await supabase
+            .from('roles')
+            .insert({
+              name: sanitizedName ?? currentLocal.name,
+              description: sanitizedDesc ?? currentLocal.description,
+              permissions: updates.permissions ?? currentLocal.permissions,
+              allowed_pages: updates.allowedPages ?? currentLocal.allowedPages,
+              allowed_actions: updates.allowedActions ?? currentLocal.allowedActions,
+              is_active: updates.isActive ?? currentLocal.isActive
+            })
+            .select()
+            .single();
+          if (error) throw error;
+          const created = this.mapSupabaseRoleToRole(data);
+          const cached = this.readCache<Role[]>(this.ROLES_CACHE_KEY, []);
+          this.writeCache(this.ROLES_CACHE_KEY, [created, ...cached]);
+          // Update local copy
+          this.localData.roles[localIdx] = sanitizeRole({ ...currentLocal, ...created });
+          return created;
+        }
+      }
+
+      // UUID path: direct update by id
       const { data, error } = await supabase
         .from('roles')
         .update({
-          name: updates.name,
-          description: updates.description,
+          name: sanitizedName,
+          description: sanitizedDesc,
           permissions: updates.permissions,
           allowed_pages: updates.allowedPages,
           allowed_actions: updates.allowedActions,
@@ -214,19 +337,41 @@ class RolesService {
         .single();
 
       if (error) throw error;
-      return this.mapSupabaseRoleToRole(data);
+      const updated = this.mapSupabaseRoleToRole(data);
+      const cached = this.readCache<Role[]>(this.ROLES_CACHE_KEY, []);
+      const next = cached.map(r => (r.id === id ? updated : r));
+      this.writeCache(this.ROLES_CACHE_KEY, next);
+      return updated;
     } catch (error) {
-      console.warn('Supabase error, using local data:', error);
-      const roleIndex = this.localData.roles.findIndex(r => r.id === id);
-      if (roleIndex !== -1) {
-        this.localData.roles[roleIndex] = { 
-          ...this.localData.roles[roleIndex], 
+      console.warn('Supabase updateRole error, updating cached role:', error);
+      const cached = this.readCache<Role[]>(this.ROLES_CACHE_KEY, []);
+      const idx = cached.findIndex(r => r.id === id);
+      if (idx !== -1) {
+        const nextRole: Role = sanitizeRole({
+          ...cached[idx],
           ...updates,
+          name: sanitizeArabicText(updates.name ?? cached[idx].name),
+          description: sanitizeArabicText(updates.description ?? cached[idx].description),
           updated_at: new Date().toISOString()
-        };
-        return this.localData.roles[roleIndex];
+        } as Role);
+        cached[idx] = nextRole;
+        this.writeCache(this.ROLES_CACHE_KEY, [...cached]);
+        return nextRole;
       }
-      throw new Error('Role not found');
+      // If not found, treat as create into cache
+      const synthesized: Role = sanitizeRole({
+        id,
+        name: sanitizeArabicText(updates.name || 'دور بدون اسم'),
+        description: sanitizeArabicText(updates.description || ''),
+        permissions: updates.permissions || [],
+        allowedPages: updates.allowedPages || [],
+        allowedActions: updates.allowedActions || [],
+        isActive: updates.isActive ?? true,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      } as Role);
+      this.writeCache(this.ROLES_CACHE_KEY, [synthesized, ...cached]);
+      return synthesized;
     }
   }
 
@@ -240,8 +385,10 @@ class RolesService {
 
       if (error) throw error;
     } catch (error) {
-      console.warn('Supabase error, using local data:', error);
-      this.localData.roles = this.localData.roles.filter(r => r.id !== id);
+      console.warn('Supabase deleteRole error, updating cached roles:', error);
+      const cached = this.readCache<Role[]>(this.ROLES_CACHE_KEY, []);
+      const next = cached.filter(r => r.id !== id);
+      this.writeCache(this.ROLES_CACHE_KEY, next);
     }
   }
 
@@ -255,9 +402,18 @@ class RolesService {
         .order('name');
 
       if (error) throw error;
-      return data || [];
+      const mapped = (data || []).map((p: any) => sanitizePage(p));
+      if (mapped.length > 0) {
+        this.writeCache(this.PAGES_CACHE_KEY, mapped);
+        return mapped;
+      }
+      const cached = this.readCache<Page[]>(this.PAGES_CACHE_KEY, []);
+      if (cached.length) return cached.map(p => sanitizePage(p));
+      return this.localData.pages;
     } catch (error) {
-      console.warn('Supabase error, using local data:', error);
+      console.warn('Supabase error, using cached/local pages:', error);
+      const cached = this.readCache<Page[]>(this.PAGES_CACHE_KEY, []);
+      if (cached.length) return cached.map(p => sanitizePage(p));
       return this.localData.pages;
     }
   }
@@ -273,9 +429,18 @@ class RolesService {
         .order('name');
 
       if (error) throw error;
-      return data || [];
+      const mapped = (data || []).map((a: any) => sanitizeAction(a));
+      if (mapped.length > 0) {
+        this.writeCache(this.ACTIONS_CACHE_KEY, mapped);
+        return mapped;
+      }
+      const cached = this.readCache<Action[]>(this.ACTIONS_CACHE_KEY, []);
+      if (cached.length) return cached.map(a => sanitizeAction(a));
+      return this.localData.actions;
     } catch (error) {
-      console.warn('Supabase error, using local data:', error);
+      console.warn('Supabase error, using cached/local actions:', error);
+      const cached = this.readCache<Action[]>(this.ACTIONS_CACHE_KEY, []);
+      if (cached.length) return cached.map(a => sanitizeAction(a));
       return this.localData.actions;
     }
   }
@@ -326,10 +491,10 @@ class RolesService {
 
   // Map Supabase role to Role interface
   private mapSupabaseRoleToRole(data: any): Role {
-    return {
+    const role: Role = {
       id: data.id,
-      name: data.name,
-      description: data.description,
+      name: sanitizeArabicText(data.name),
+      description: sanitizeArabicText(data.description),
       permissions: data.permissions || [],
       allowedPages: data.allowed_pages || [],
       allowedActions: data.allowed_actions || [],
@@ -337,6 +502,7 @@ class RolesService {
       created_at: data.created_at,
       updated_at: data.updated_at
     };
+    return sanitizeRole(role);
   }
 }
 

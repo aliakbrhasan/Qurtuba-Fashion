@@ -4,6 +4,7 @@
   import "./index.css";
   import "./styles/browser-compatibility.css";
   import "./styles/tailwind-compatibility.css";
+  import "./sync";
 
   createRoot(document.getElementById("root")!).render(<App />);
   

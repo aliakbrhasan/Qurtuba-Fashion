@@ -7,6 +7,7 @@ import { Label } from './ui/label';
 import { Badge } from './ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
 import { rolesService, Role, Page, Action } from '../services/roles.service';
+import { sanitizeRole, sanitizePage, sanitizeAction, sanitizeArabicText } from '../utils/encoding';
 import { toast } from 'sonner';
 
 // This will be loaded from the service
@@ -47,9 +48,10 @@ export function RolesManagementPage({ onBack }: RolesManagementPageProps) {
         rolesService.getActions()
       ]);
       
-      setRoles(rolesData);
-      setAvailablePages(pagesData);
-      setAvailableActions(actionsData);
+      // Extra UI-level sanitization to ensure Arabic displays correctly
+      setRoles(rolesData.map(r => sanitizeRole(r)));
+      setAvailablePages(pagesData.map(p => sanitizePage(p)));
+      setAvailableActions(actionsData.map(a => sanitizeAction(a)));
     } catch (error) {
       console.error('Error loading data:', error);
       toast.error('حدث خطأ في تحميل البيانات');
@@ -81,8 +83,8 @@ export function RolesManagementPage({ onBack }: RolesManagementPageProps) {
     try {
       setSaving(true);
       const roleData = {
-        name: newRole.name.trim(),
-        description: newRole.description.trim(),
+        name: sanitizeArabicText(newRole.name.trim()),
+        description: sanitizeArabicText(newRole.description.trim()),
         permissions: newRole.permissions || [],
         allowedPages: newRole.allowedPages || [],
         allowedActions: newRole.allowedActions || [],
@@ -141,8 +143,8 @@ export function RolesManagementPage({ onBack }: RolesManagementPageProps) {
       setSaving(true);
       const updatedRoleData = {
         ...editingRole,
-        name: editingRole.name.trim(),
-        description: editingRole.description.trim()
+        name: sanitizeArabicText(editingRole.name.trim()),
+        description: sanitizeArabicText(editingRole.description.trim())
       };
       
       const updatedRole = await rolesService.updateRole(editingRole.id, updatedRoleData);
@@ -183,7 +185,7 @@ export function RolesManagementPage({ onBack }: RolesManagementPageProps) {
     }
   };
 
-  const handleTogglePage = (roleId: string, pageId: string) => {
+  const handleTogglePage = (_roleId: string, pageId: string) => {
     setEditingRole(prevRole => {
       if (!prevRole) return null;
       const currentPages = prevRole.allowedPages || [];
@@ -194,7 +196,7 @@ export function RolesManagementPage({ onBack }: RolesManagementPageProps) {
     });
   };
 
-  const handleToggleAction = (roleId: string, actionId: string) => {
+  const handleToggleAction = (_roleId: string, actionId: string) => {
     setEditingRole(prevRole => {
       if (!prevRole) return null;
       const currentActions = prevRole.allowedActions || [];

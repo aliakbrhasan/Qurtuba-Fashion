@@ -1,5 +1,5 @@
 import React from 'react';
-import { Home, FileText, Receipt, Users, Menu, Settings, User, LogOut, DollarSign } from 'lucide-react';
+import { Home, Receipt, Users, Menu, Settings, User, LogOut, DollarSign } from 'lucide-react';
 import { Button } from './ui/button';
 import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle, SheetDescription } from './ui/sheet';
 import { User as UserType } from '../services/auth.service';
@@ -15,7 +15,7 @@ interface LayoutProps {
 }
 
 export function Layout({ children, currentPage, onNavigate, isLoggedIn, onLogout, currentUser }: LayoutProps) {
-  const { allowedPages, hasPagePermission } = usePermissions(currentUser);
+  const { hasPagePermission } = usePermissions(currentUser ?? null);
 
   // All possible navigation items
   const allNavigationItems = [
@@ -23,8 +23,6 @@ export function Layout({ children, currentPage, onNavigate, isLoggedIn, onLogout
     { id: 'invoices', label: 'الفواتير', icon: Receipt },
     { id: 'customers', label: 'الزبائن', icon: Users },
     { id: 'financial', label: 'المالية', icon: DollarSign },
-    { id: 'reports', label: 'التقارير', icon: FileText },
-    { id: 'users', label: 'إدارة المستخدمين', icon: Settings },
   ];
 
   // Filter navigation items based on user permissions
@@ -85,16 +83,6 @@ export function Layout({ children, currentPage, onNavigate, isLoggedIn, onLogout
             
             <div className="flex flex-col gap-4 mt-4">
               {/* Show additional pages based on permissions */}
-              {hasPagePermission('reports') && (
-                <Button
-                  variant="ghost"
-                  onClick={() => onNavigate('reports')}
-                  className="flex items-center gap-3 justify-start text-[#F6E9CA] hover:bg-[#155446] p-4 touch-target"
-                >
-                  <FileText size={20} />
-                  <span className="arabic-text">التقارير</span>
-                </Button>
-              )}
               {hasPagePermission('users') && (
                 <Button
                   variant="ghost"
@@ -152,20 +140,7 @@ export function Layout({ children, currentPage, onNavigate, isLoggedIn, onLogout
                   </Button>
                 );
               })}
-              {hasPagePermission('reports') && (
-                <Button
-                  variant="ghost"
-                  onClick={() => onNavigate('reports')}
-                  className={`flex items-center gap-2 px-4 py-2 touch-target ${
-                    activePage === 'reports'
-                      ? 'text-[#F6E9CA] bg-[#155446]'
-                      : 'text-[#C69A72] hover:text-[#F6E9CA] hover:bg-[#155446]'
-                  }`}
-                >
-                  <FileText size={18} />
-                  <span className="arabic-text">التقارير</span>
-                </Button>
-              )}
+              
             </nav>
           </div>
           

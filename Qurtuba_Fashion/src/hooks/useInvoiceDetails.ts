@@ -32,10 +32,8 @@ export function useInvoiceDetails(invoiceId: string | null) {
       if (!invoiceId) return null;
       
       try {
-        // جلب بيانات الفاتورة
-        const invoices = await databaseService.getInvoices();
-        const invoice = invoices.find(inv => inv.id === invoiceId);
-        
+        // جلب بيانات الفاتورة مباشرة عبر المعرف لتفادي مشاكل التطابق أو التأخير
+        const invoice = await databaseService.getInvoiceById(invoiceId);
         if (!invoice) {
           throw new Error('الفاتورة غير موجودة');
         }
@@ -44,13 +42,13 @@ export function useInvoiceDetails(invoiceId: string | null) {
         const items = await databaseService.getInvoiceItems(invoiceId);
 
         // جلب القياسات الفعلية للزبون
-        let measurements = null;
+        let measurements: { length?: number; shoulder?: number; waist?: number; chest?: number } | undefined = undefined;
         if (invoice.customer_id) {
           try {
             const customerMeasurements = await databaseService.getCustomerMeasurements(parseInt(invoice.customer_id));
             if (customerMeasurements && customerMeasurements.length > 0) {
               const latestMeasurement = customerMeasurements[0];
-              measurements = {
+            measurements = {
                 length: latestMeasurement.height,
                 shoulder: latestMeasurement.shoulder,
                 waist: latestMeasurement.waist,

@@ -53,7 +53,7 @@ export function usePermissions(currentUser: User | null): UsePermissionsResult {
       setError('حدث خطأ في تحميل الصلاحيات');
       // Fallback to admin permissions for admin users
       if (currentUser.status === 'ادمن' || currentUser.role === 'مدير النظام') {
-        setAllowedPages(['dashboard', 'invoices', 'customers', 'financial', 'reports', 'users']);
+        setAllowedPages(['dashboard', 'invoices', 'customers', 'financial', 'users']);
         setAllowedActions([
           'create_invoice', 'edit_invoice', 'delete_invoice', 'change_invoice_status', 
           'mark_invoice_paid', 'print_invoice', 'print_invoices_list', 'create_customer', 

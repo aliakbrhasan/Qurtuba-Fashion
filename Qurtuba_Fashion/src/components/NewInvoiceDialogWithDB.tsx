@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter, DialogOverlay } from './ui/dialog';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Label } from './ui/label';
@@ -6,7 +6,7 @@ import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Button } from './ui/button';
-import { X, Plus, Pencil, Trash2, Check, ChevronDown } from 'lucide-react';
+import { X, Plus, Pencil, Trash2, Check, ChevronDown, Camera } from 'lucide-react';
 import { InvoiceService, InvoiceFormData } from '@/services/invoice.service';
 import { useInvoices } from '@/hooks/useInvoices';
 import { ImageUpload } from './ui/ImageUpload';
@@ -103,7 +103,52 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated 
 
   // Image state
   const [fabricImage, setFabricImage] = useState<string | null>(null);
-  const [uploadedImages, setUploadedImages] = useState<File[]>([]);
+  const [fabricImageFile, setFabricImageFile] = useState<File | null>(null);
+
+  // Camera capture state
+  const [isCameraOpen, setIsCameraOpen] = useState(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const [isCapturing, setIsCapturing] = useState(false);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  // Stop camera helper
+  const stopCameraStream = () => {
+    const stream = videoRef.current?.srcObject as MediaStream | undefined;
+    stream?.getTracks().forEach(t => t.stop());
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+  };
+
+  // Map getUserMedia error to friendly message
+  const getCameraErrorMessage = (err: any): string => {
+    const name = err?.name || '';
+    if (name === 'NotAllowedError' || name === 'SecurityError' || name === 'PermissionDeniedError') {
+      return 'تم رفض إذن الوصول للكاميرا. امنح الإذن من المتصفح وإعدادات Windows > الخصوصية والأمان > الكاميرا.';
+    }
+    if (name === 'NotFoundError' || name === 'OverconstrainedError') {
+      return 'لا توجد كاميرا متاحة أو لا يمكن العثور عليها.';
+    }
+    if (name === 'NotReadableError' || name === 'TrackStartError') {
+      return 'الكاميرا قيد الاستخدام من تطبيق آخر. أغلقه وحاول مجدداً.';
+    }
+    if (name === 'AbortError') {
+      return 'تم إلغاء الوصول للكاميرا بشكل غير متوقع. حاول مرة أخرى.';
+    }
+    if (name === 'TypeError') {
+      return 'لا يمكن فتح الكاميرا على هذه الصفحة. تأكد من استخدام Localhost أو HTTPS.';
+    }
+    return 'تعذر فتح الكاميرا. تحقق من الأذونات ثم حاول مجدداً.';
+  };
+
+  // Cleanup when dialog closes or component unmounts
+  useEffect(() => {
+    if (!isCameraOpen) return;
+    return () => {
+      stopCameraStream();
+    };
+  }, [isCameraOpen]);
 
   // Design options state - single selection
   const [fabricOptions, setFabricOptions] = useState<FabricOption[]>([
@@ -228,7 +273,7 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated 
         }
       });
       setFabricImage(null);
-      setUploadedImages([]);
+      setFabricImageFile(null);
       setSubmitError(null);
       
       // Reset payment states
@@ -272,17 +317,13 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated 
 
       // Upload fabric image first if any
       let fabricImageUrl = '';
-      if (fabricImage && uploadedImages.length > 0) {
+      if (fabricImage && fabricImageFile) {
         try {
-          const fabricFile = uploadedImages.find(f => f.name.includes('fabric'));
-          if (fabricFile) {
-            const uploadResult = await ImageService.uploadImage(fabricFile, 'invoice');
-            fabricImageUrl = uploadResult.publicUrl;
-          }
+          const uploadResult = await ImageService.uploadImage(fabricImageFile, 'invoice');
+          fabricImageUrl = uploadResult.publicUrl;
         } catch (imageError) {
-          console.warn('Failed to upload fabric image:', imageError);
-          setSubmitError('فشل في رفع صورة القماش. يرجى المحاولة مرة أخرى.');
-          return;
+          console.warn('Failed to upload fabric image, continuing without image:', imageError);
+          // Continue without image URL; invoice will still be saved (Supabase or local fallback)
         }
       }
 
@@ -1428,9 +1469,12 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated 
                 <ImageUpload
                   onImageChange={(imageData, file) => {
                     setFabricImage(imageData);
-                    if (file) {
-                      setUploadedImages(prev => [...prev.filter(f => f.name !== 'fabric'), file]);
-                    }
+                  if (file) {
+                    const renamed = new File([file], 'fabric.jpg', { type: file.type || 'image/jpeg' });
+                    setFabricImageFile(renamed);
+                  } else {
+                    setFabricImageFile(null);
+                  }
                   }}
                   currentImage={fabricImage}
                   maxSize={2}
@@ -1438,6 +1482,41 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated 
                   maxHeight={600}
                   quality={0.8}
                 />
+              <div className="mt-3 flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setCameraError(null);
+                    setIsCameraOpen(true);
+                    // Start camera stream
+                    setTimeout(async () => {
+                      try {
+                        if (!('mediaDevices' in navigator) || !navigator.mediaDevices?.getUserMedia) {
+                          setCameraError('المتصفح لا يدعم الوصول للكاميرا.');
+                          return;
+                        }
+                        const constraints: MediaStreamConstraints = {
+                          video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
+                          audio: false,
+                        };
+                        const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                        if (videoRef.current) {
+                          videoRef.current.srcObject = stream as any;
+                          await videoRef.current.play();
+                        }
+                      } catch (err) {
+                        setCameraError(getCameraErrorMessage(err));
+                      }
+                    }, 0);
+                  }}
+                  className="border-[#C69A72] text-[#13312A] hover:bg-[#C69A72]"
+                >
+                  <Camera className="h-4 w-4" />
+                  <span className="arabic-text">فتح الكاميرا</span>
+                </Button>
+              </div>
               </div>
             </CardContent>
           </Card>
@@ -1498,6 +1577,87 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated 
             </Button>
           </DialogFooter>
       </DialogContent>
+
+      {/* Camera Capture Dialog */}
+      <Dialog open={isCameraOpen} onOpenChange={(open: boolean) => {
+        setIsCameraOpen(open);
+        if (!open) {
+          // Stop camera tracks when closing
+          stopCameraStream();
+        }
+      }}>
+        <DialogOverlay className="fixed inset-0 z-[1100] bg-black/50 backdrop-blur-sm" />
+        <DialogContent className="max-w-md bg-[#F6E9CA] border-[#C69A72] rounded-xl shadow-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-[#13312A] arabic-text">التقاط صورة القماش</DialogTitle>
+            <DialogDescription className="text-[#155446] arabic-text">اسمح للكاميرا ثم التقط الصورة</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            {cameraError && (
+              <div className="text-red-600 text-sm arabic-text">{cameraError}</div>
+            )}
+            <div className="w-full aspect-video bg-black/30 rounded-lg overflow-hidden flex items-center justify-center">
+              <video ref={videoRef} playsInline className="w-full h-full object-contain" />
+              <canvas ref={canvasRef} className="hidden" />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsCameraOpen(false)}
+                className="border-[#C69A72] text-[#13312A] hover:bg-[#C69A72]"
+              >
+                إلغاء
+              </Button>
+              <Button
+                type="button"
+                disabled={isCapturing}
+                onClick={async () => {
+                  if (!videoRef.current) return;
+                  try {
+                    setIsCapturing(true);
+                    const video = videoRef.current;
+                    const width = video.videoWidth || 800;
+                    const height = video.videoHeight || 600;
+                    if (canvasRef.current) {
+                      const canvas = canvasRef.current;
+                      canvas.width = width;
+                      canvas.height = height;
+                      const ctx = canvas.getContext('2d');
+                      ctx?.drawImage(video, 0, 0, width, height);
+                      canvas.toBlob(async (blob) => {
+                        if (!blob) {
+                          setCameraError('فشل التقاط الصورة.');
+                          setIsCapturing(false);
+                          return;
+                        }
+                        const file = new File([blob], 'fabric-camera.jpg', { type: 'image/jpeg' });
+                        const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+                        setFabricImage(dataUrl);
+                        setFabricImageFile(file);
+                        setIsCameraOpen(false);
+                        // Stop tracks
+                        const stream = videoRef.current?.srcObject as MediaStream | undefined;
+                        stream?.getTracks().forEach(t => t.stop());
+                        if (videoRef.current) {
+                          videoRef.current.srcObject = null;
+                        }
+                        setIsCapturing(false);
+                      }, 'image/jpeg', 0.9);
+                    }
+                  } catch (err) {
+                    setCameraError('حدث خطأ أثناء الالتقاط.');
+                    setIsCapturing(false);
+                  }
+                }}
+                className="bg-[#155446] hover:bg-[#13312A] text-[#F6E9CA]"
+              >
+                {isCapturing ? 'جاري الالتقاط...' : 'التقاط الصورة'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Fabric Manager Dialog - Compact */}
       <Dialog open={isFabricManagerOpen} onOpenChange={handleFabricManagerOpenChange}>
