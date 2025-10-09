@@ -31,7 +31,7 @@ const createWindow = (): void => {
       spellcheck: false,
       preload: join(__dirname, 'preload.js'),
     },
-    icon: join(__dirname, '../assets/icon.png'), // Optional: add app icon
+    icon: join(process.resourcesPath || __dirname, 'icon.ico'),
     titleBarStyle: 'default',
     show: false, // Don't show until ready
   });
@@ -321,8 +321,8 @@ app.setAsDefaultProtocolClient('qurtuba-fashion');
 
 // Create system tray
 const createTray = (): void => {
-  const iconPath = join(__dirname, '../assets/tray-icon.png');
-  tray = new Tray(nativeImage.createFromPath(iconPath));
+  const trayIconPath = join(process.resourcesPath || __dirname, 'icon.ico');
+  tray = new Tray(nativeImage.createFromPath(trayIconPath));
   
   const contextMenu = Menu.buildFromTemplate([
     {

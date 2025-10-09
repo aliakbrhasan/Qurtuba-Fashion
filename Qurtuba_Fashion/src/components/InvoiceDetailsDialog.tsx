@@ -1,9 +1,8 @@
-// React import not required with modern JSX transform
+import React from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from './ui/dialog';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
-// import { Separator } from './ui/separator';
 import { 
   Printer, 
   Share2, 
@@ -20,7 +19,7 @@ import {
   MessageCircle,
   X
 } from 'lucide-react';
-import { formatCurrency, formatDate, PrintableInvoiceData, PrintableInvoice, receiptStyles } from './PrintableInvoice';
+import PrintableInvoice, { formatCurrency, formatDate, PrintableInvoiceData } from './PrintableInvoice';
 import { openPrintWindow } from './print/PrintUtils';
 
 interface InvoiceDetailsDialogProps {
@@ -49,7 +48,7 @@ export function InvoiceDetailsDialog({ isOpen, onOpenChange, invoice }: InvoiceD
   const remaining = Math.max(invoice.total - invoice.paid, 0);
 
   const handlePrint = () => {
-    openPrintWindow(`فاتورة ${invoice.id}`, <PrintableInvoice invoice={invoice} />, receiptStyles);
+    openPrintWindow(`فاتورة ${invoice.id}`, <PrintableInvoice invoice={invoice} />);
   };
 
   const handleShare = async () => {
@@ -245,7 +244,7 @@ export function InvoiceDetailsDialog({ isOpen, onOpenChange, invoice }: InvoiceD
                         <div>
                           <div className="text-[#155446] arabic-text text-sm font-medium mb-2">نوع القماش</div>
                           <div className="flex flex-wrap gap-2">
-                            {invoice.designDetails.fabricType.map((type, index) => (
+                            {invoice.designDetails.fabricType.map((type: string, index: number) => (
                               <Badge key={index} variant="secondary" className="bg-[#F6E9CA] text-[#13312A] border-[#C69A72]">
                                 {type}
                               </Badge>
@@ -257,7 +256,7 @@ export function InvoiceDetailsDialog({ isOpen, onOpenChange, invoice }: InvoiceD
                         <div>
                           <div className="text-[#155446] arabic-text text-sm font-medium mb-2">مصدر القماش</div>
                           <div className="flex flex-wrap gap-2">
-                            {invoice.designDetails.fabricSource.map((source, index) => (
+                            {invoice.designDetails.fabricSource.map((source: string, index: number) => (
                               <Badge key={index} variant="secondary" className="bg-[#F6E9CA] text-[#13312A] border-[#C69A72]">
                                 {source}
                               </Badge>
@@ -269,7 +268,7 @@ export function InvoiceDetailsDialog({ isOpen, onOpenChange, invoice }: InvoiceD
                         <div>
                           <div className="text-[#155446] arabic-text text-sm font-medium mb-2">نوع الياقة</div>
                           <div className="flex flex-wrap gap-2">
-                            {invoice.designDetails.collarType.map((type, index) => (
+                            {invoice.designDetails.collarType.map((type: string, index: number) => (
                               <Badge key={index} variant="secondary" className="bg-[#F6E9CA] text-[#13312A] border-[#C69A72]">
                                 {type}
                               </Badge>
@@ -281,7 +280,7 @@ export function InvoiceDetailsDialog({ isOpen, onOpenChange, invoice }: InvoiceD
                         <div>
                           <div className="text-[#155446] arabic-text text-sm font-medium mb-2">أسلوب الصدر</div>
                           <div className="flex flex-wrap gap-2">
-                            {invoice.designDetails.chestStyle.map((style, index) => (
+                            {invoice.designDetails.chestStyle.map((style: string, index: number) => (
                               <Badge key={index} variant="secondary" className="bg-[#F6E9CA] text-[#13312A] border-[#C69A72]">
                                 {style}
                               </Badge>
@@ -293,7 +292,7 @@ export function InvoiceDetailsDialog({ isOpen, onOpenChange, invoice }: InvoiceD
                         <div>
                           <div className="text-[#155446] arabic-text text-sm font-medium mb-2">نهاية الكم</div>
                           <div className="flex flex-wrap gap-2">
-                            {invoice.designDetails.sleeveEnd.map((end, index) => (
+                            {invoice.designDetails.sleeveEnd.map((end: string, index: number) => (
                               <Badge key={index} variant="secondary" className="bg-[#F6E9CA] text-[#13312A] border-[#C69A72]">
                                 {end}
                               </Badge>

@@ -63,6 +63,7 @@
             "@vitejs/plugin-react-swc": "^3.10.2",
             "concurrently": "^8.2.2",
             "electron": "^32.0.0",
+            "electron-rebuild": "^3.7.0",
             "electron-builder": "^24.13.3",
             "jsdom": "^27.0.0",
             
@@ -74,6 +75,7 @@
       "scripts": {
             "dev": "vite",
             "build": "vite build",
+            "build:electron": "tsc -p electron/tsconfig.json",
             "test": "vitest",
             "test:ui": "vitest --ui",
             "test:customers": "vitest src/tests/CustomersPage.test.tsx src/tests/CustomersPagePerformance.test.tsx src/tests/CustomersPageIntegration.test.tsx",
@@ -84,12 +86,15 @@
             "lint": "eslint src --ext .ts,.tsx",
             "lint:fix": "eslint src --ext .ts,.tsx --fix",
             "typecheck": "tsc --noEmit",
-            "electron:dev": "concurrently \"npm run dev\" \"wait-on http://localhost:3000 && (npx tsc -p electron/tsconfig.json && electron dist-electron/main.js)\"",
-            "electron:build": "npm run build && electron-builder",
-            "electron:build:win": "npm run build && electron-builder --win",
+            "rebuild:electron": "electron-rebuild -f -w better-sqlite3",
+            "electron:dev": "concurrently \"npm run dev\" \"wait-on http://localhost:3000 && (npx tsc -p electron/tsconfig.json && npm run rebuild:electron && electron dist-electron/main.js)\"",
+            "postinstall": "electron-rebuild -f -w better-sqlite3",
+            "electron:build": "npm run build && npm run build:electron && electron-builder",
+            "electron:build:win": "npm run build && npm run build:electron && electron-builder --win nsis",
             "electron:build:mac": "npm run build && electron-builder --mac",
             "electron:build:linux": "npm run build && electron-builder --linux",
-            "electron:pack": "npm run build && electron-builder --dir"
+            "electron:pack": "npm run build && npm run build:electron && electron-builder --dir",
+            "dist:win": "npm run build && npm run build:electron && electron-builder --win nsis"
       },
-      "main": "electron/main.js"
+      "main": "dist-electron/main.js"
 }

@@ -31,12 +31,16 @@ import { ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
 import { InvoiceDetailsDialog } from './InvoiceDetailsDialog';
 import {
   PrintableInvoice,
-  receiptStyles,
   formatCurrency,
   formatDate,
   PrintableInvoiceData,
 } from './PrintableInvoice';
 import { openPrintWindow, formatPrintDateTime } from './print/PrintUtils';
+
+const RECEIPT_A5_STYLES = `
+  @page { size: A5 landscape; margin: 0.5cm; }
+  @media print { * { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+`;
 
 type DateParts = {
   year: string;
@@ -380,9 +384,9 @@ export function InvoicesPageWithDB({ onCreateInvoice, onViewInvoiceDetails, onMa
       address: invoice.customer_address || '',
       total: invoice.total,
       paid: invoice.paid_amount,
-      paymentDate: (invoice.paid_amount || 0) > 0 ? (invoice.updated_at || invoice.invoice_date || invoice.created_at) : undefined,
       receivedDate: invoice.invoice_date || invoice.created_at || new Date().toISOString(),
       deliveryDate: invoice.due_date || invoice.invoice_date || invoice.created_at || new Date().toISOString(),
+      paymentDate: invoice.paid_at || undefined,
       notes: invoice.notes || ''
     };
 
@@ -396,7 +400,7 @@ export function InvoicesPageWithDB({ onCreateInvoice, onViewInvoiceDetails, onMa
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
     <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet" />
-    <style>${receiptStyles}</style>
+    <style>${RECEIPT_A5_STYLES}</style>
   </head>
   <body>
     ${markup}

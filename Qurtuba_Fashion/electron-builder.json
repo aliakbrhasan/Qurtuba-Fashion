@@ -2,25 +2,24 @@
   "appId": "com.qurtuba.fashion",
   "productName": "أزياء قرطبة",
   "directories": {
-    "output": "dist-electron"
+    "output": "dist",
+    "buildResources": "build"
   },
   "files": [
     "build/**/*",
-    "electron/**/*",
-    "node_modules/**/*",
-    "package.json"
+    "dist-electron/**/*"
   ],
+  "extraResources": [
+    { "from": "build/fonts", "to": "fonts" },
+    { "from": "resources", "to": "resources", "filter": ["**/*"] },
+    { "from": "build/icon.ico", "to": "icon.ico" }
+  ],
+  "asar": true,
   "win": {
     "target": [
-      {
-        "target": "nsis",
-        "arch": ["x64", "ia32"]
-      },
-      {
-        "target": "portable",
-        "arch": ["x64"]
-      }
+      { "target": "nsis", "arch": ["x64"] }
     ],
+    "icon": "build/icon.ico",
     "requestedExecutionLevel": "asInvoker",
     "forceCodeSigning": false
   },
@@ -56,10 +55,13 @@
   },
   "nsis": {
     "oneClick": false,
+    "perMachine": false,
     "allowToChangeInstallationDirectory": true,
     "createDesktopShortcut": true,
     "createStartMenuShortcut": true,
-    "shortcutName": "أزياء قرطبة"
+    "shortcutName": "أزياء قرطبة",
+    "allowElevation": true,
+    "include": "build/nsis/install-fonts.nsh"
   },
   "dmg": {
     "title": "أزياء قرطبة",
@@ -76,10 +78,6 @@
       }
     ]
   },
-  "publish": {
-    "provider": "github",
-    "owner": "your-username",
-    "repo": "qurtuba-fashion"
-  },
+  "publish": null,
   "copyright": "Copyright © 2024 أزياء قرطبة"
 }

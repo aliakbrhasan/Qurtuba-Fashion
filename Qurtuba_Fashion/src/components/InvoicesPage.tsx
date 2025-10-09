@@ -37,12 +37,16 @@ import { ArrowUp, ArrowDown } from 'lucide-react';
 import { ImageWithFallback } from './figma/ImageWithFallback';
 import {
   PrintableInvoice,
-  receiptStyles,
   formatCurrency,
   formatDate,
   PrintableInvoiceData,
 } from './PrintableInvoice';
 import { openPrintWindow, formatPrintDateTime } from './print/PrintUtils';
+
+const RECEIPT_A5_STYLES = `
+  @page { size: A5 landscape; margin: 0.5cm; }
+  @media print { * { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+`;
 // import { InvoiceDetailsPage } from './InvoiceDetailsPage';
 import { InvoiceDetailsDialog } from './InvoiceDetailsDialog';
 
@@ -173,9 +177,9 @@ export function InvoicesPage({ onCreateInvoice, onViewInvoiceDetails, onMarkAsPa
     address: invoice.customer_address || '',
     total: invoice.total,
     paid: invoice.paid_amount,
-    paymentDate: (invoice.paid_amount || 0) > 0 ? (invoice.updated_at || invoice.invoice_date || invoice.created_at) : undefined,
     receivedDate: invoice.invoice_date,
     deliveryDate: invoice.due_date || invoice.invoice_date,
+    paymentDate: invoice.paid_at || undefined,
     status: invoice.status,
     notes: invoice.notes || '',
     fabricImage: 'https://images.unsplash.com/photo-1642683497706-77a72ea549bb?q=80&w=1740&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D=100&fit=crop',
@@ -630,7 +634,7 @@ export function InvoicesPage({ onCreateInvoice, onViewInvoiceDetails, onMarkAsPa
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
     <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet" />
-    <style>${receiptStyles}</style>
+    <style>${RECEIPT_A5_STYLES}</style>
   </head>
   <body>
     ${markup}
@@ -663,7 +667,7 @@ export function InvoicesPage({ onCreateInvoice, onViewInvoiceDetails, onMarkAsPa
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
     <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet" />
-    <style>${receiptStyles}</style>
+    <style>${RECEIPT_A5_STYLES}</style>
   </head>
   <body>
     ${markup}
