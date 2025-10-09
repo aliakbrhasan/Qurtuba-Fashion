@@ -163,7 +163,7 @@ export function InvoicesPage({ onCreateInvoice, onViewInvoiceDetails, onMarkAsPa
   const [showFilters, setShowFilters] = useState(false);
   
   // Use the database hook
-  const { invoices: dbInvoices, loading, error, markAsPaid: markInvoiceAsPaid } = useInvoices();
+  const { invoices: dbInvoices, loading, error, markAsPaid: markInvoiceAsPaid, loadInvoices } = useInvoices();
 
   // Transform database invoices to match the expected format
   const invoices: Invoice[] = dbInvoices.map(invoice => ({
@@ -711,6 +711,9 @@ export function InvoicesPage({ onCreateInvoice, onViewInvoiceDetails, onMarkAsPa
   const handleMarkAsPaid = async (invoice: Invoice) => {
     try {
       await markInvoiceAsPaid(invoice.id);
+      if (loadInvoices) {
+        await loadInvoices();
+      }
       if (onMarkAsPaid) {
         onMarkAsPaid(invoice.id);
       }

@@ -50,6 +50,21 @@ class RolesService {
     this.initializeLocalData();
   }
 
+  private async getRoleIdByName(roleName: string): Promise<string | null> {
+    try {
+      const name = sanitizeArabicText(roleName);
+      const { data, error } = await supabase
+        .from('roles')
+        .select('id')
+        .eq('name', name)
+        .single();
+      if (error || !data) return null;
+      return (data as any).id as string;
+    } catch {
+      return null;
+    }
+  }
+
   public static getInstance(): RolesService {
     if (!RolesService.instance) {
       RolesService.instance = new RolesService();
@@ -208,8 +223,8 @@ class RolesService {
       const { data, error } = await supabase
         .from('roles')
         .insert([{
-          name: role.name,
-          description: role.description,
+          name: sanitizeArabicText(role.name),
+          description: sanitizeArabicText(role.description),
           permissions: role.permissions,
           allowed_pages: role.allowedPages,
           allowed_actions: role.allowedActions,
@@ -240,25 +255,71 @@ class RolesService {
   // Update role
   async updateRole(id: string, updates: Partial<Role>): Promise<Role> {
     try {
-      // Update local default roles (non-UUID) without hitting Supabase
+      const sanitizedName = updates.name !== undefined ? sanitizeArabicText(updates.name) : undefined;
+      const sanitizedDesc = updates.description !== undefined ? sanitizeArabicText(updates.description) : undefined;
+
+      // If non-UUID (seed/local) try to resolve by name and then update or insert
       if (!this.isUuid(id)) {
-        const idx = this.localData.roles.findIndex(r => r.id === id);
-        if (idx !== -1) {
-          this.localData.roles[idx] = {
-            ...this.localData.roles[idx],
-            ...updates,
-            name: sanitizeArabicText(updates.name ?? this.localData.roles[idx].name),
-            description: sanitizeArabicText(updates.description ?? this.localData.roles[idx].description),
-            updated_at: new Date().toISOString()
-          };
-          return sanitizeRole(this.localData.roles[idx]);
+        const localIdx = this.localData.roles.findIndex(r => r.id === id);
+        const currentLocal = localIdx !== -1 ? this.localData.roles[localIdx] : null;
+        const targetName = sanitizedName ?? currentLocal?.name ?? '';
+        const resolvedId = targetName ? await this.getRoleIdByName(targetName) : null;
+
+        if (resolvedId) {
+          const { data, error } = await supabase
+            .from('roles')
+            .update({
+              name: sanitizedName ?? currentLocal!.name,
+              description: sanitizedDesc ?? currentLocal!.description,
+              permissions: updates.permissions ?? currentLocal!.permissions,
+              allowed_pages: updates.allowedPages ?? currentLocal!.allowedPages,
+              allowed_actions: updates.allowedActions ?? currentLocal!.allowedActions,
+              is_active: updates.isActive ?? currentLocal!.isActive,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', resolvedId)
+            .select()
+            .single();
+          if (error) throw error;
+          const updated = this.mapSupabaseRoleToRole(data);
+          const cached = this.readCache<Role[]>(this.ROLES_CACHE_KEY, []);
+          const next = cached.map(r => (r.id === resolvedId ? updated : r));
+          this.writeCache(this.ROLES_CACHE_KEY, next);
+          // Mirror into local default for consistency
+          if (currentLocal) {
+            this.localData.roles[localIdx] = sanitizeRole({ ...currentLocal, ...updated });
+          }
+          return updated;
+        } else if (currentLocal) {
+          // Insert a new role if none exists in cloud
+          const { data, error } = await supabase
+            .from('roles')
+            .insert({
+              name: sanitizedName ?? currentLocal.name,
+              description: sanitizedDesc ?? currentLocal.description,
+              permissions: updates.permissions ?? currentLocal.permissions,
+              allowed_pages: updates.allowedPages ?? currentLocal.allowedPages,
+              allowed_actions: updates.allowedActions ?? currentLocal.allowedActions,
+              is_active: updates.isActive ?? currentLocal.isActive
+            })
+            .select()
+            .single();
+          if (error) throw error;
+          const created = this.mapSupabaseRoleToRole(data);
+          const cached = this.readCache<Role[]>(this.ROLES_CACHE_KEY, []);
+          this.writeCache(this.ROLES_CACHE_KEY, [created, ...cached]);
+          // Update local copy
+          this.localData.roles[localIdx] = sanitizeRole({ ...currentLocal, ...created });
+          return created;
         }
       }
+
+      // UUID path: direct update by id
       const { data, error } = await supabase
         .from('roles')
         .update({
-          name: updates.name,
-          description: updates.description,
+          name: sanitizedName,
+          description: sanitizedDesc,
           permissions: updates.permissions,
           allowed_pages: updates.allowedPages,
           allowed_actions: updates.allowedActions,

@@ -1,4 +1,6 @@
 import { supabase } from './client';
+import { storage } from '@/storage';
+import { syncEngine } from '@/sync';
 import type { User, Role } from '../types/user';
 import type { Order, NewOrder } from '../ports/orders';
 
@@ -86,9 +88,11 @@ export class DatabaseService {
   // Local persistence keys for browser fallback
   private readonly LOCAL_INVOICES_KEY = 'qf_local_invoices';
   private readonly LOCAL_INVOICE_ITEMS_KEY = 'qf_local_invoice_items';
+  private readonly LOCAL_DB_CACHE_KEY = 'qf_local_db_cache_v1';
 
   private constructor() {
     this.initializeLocalData();
+    this.loadAllFromStorage();
   }
 
   // Helper function to ensure proper UTF-8 encoding for Arabic text
@@ -187,14 +191,31 @@ export class DatabaseService {
     }
   }
 
-  private persistInvoicesToStorage() {
+  private loadAllFromStorage() {
     try {
-      if (typeof window !== 'undefined' && window.localStorage) {
-        window.localStorage.setItem(this.LOCAL_INVOICES_KEY, JSON.stringify(this.localData.invoices));
-        window.localStorage.setItem(this.LOCAL_INVOICE_ITEMS_KEY, JSON.stringify(this.localData.invoiceItems));
+      if (typeof window === 'undefined' || !window.localStorage) return;
+      const raw = window.localStorage.getItem(this.LOCAL_DB_CACHE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') {
+        this.localData.users = Array.isArray(parsed.users) ? parsed.users : this.localData.users;
+        this.localData.roles = Array.isArray(parsed.roles) ? parsed.roles : this.localData.roles;
+        this.localData.customers = Array.isArray(parsed.customers) ? parsed.customers : this.localData.customers;
+        this.localData.orders = Array.isArray(parsed.orders) ? parsed.orders : this.localData.orders;
+        this.localData.invoices = Array.isArray(parsed.invoices) ? parsed.invoices : this.localData.invoices;
+        this.localData.invoiceItems = Array.isArray(parsed.invoiceItems) ? parsed.invoiceItems : this.localData.invoiceItems;
       }
     } catch (error) {
-      console.warn('Failed to persist invoices to storage:', error);
+      console.warn('Failed to load local DB cache:', error);
+    }
+  }
+
+  private persistAllToStorage() {
+    try {
+      if (typeof window === 'undefined' || !window.localStorage) return;
+      window.localStorage.setItem(this.LOCAL_DB_CACHE_KEY, JSON.stringify(this.localData));
+    } catch (error) {
+      console.warn('Failed to persist local DB cache:', error);
     }
   }
 
@@ -207,7 +228,10 @@ export class DatabaseService {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      return data || [];
+      const mapped = (data || []).map((u: any) => this.mapSupabaseUserToUser(u));
+      this.localData.users = mapped;
+      this.persistAllToStorage();
+      return mapped;
     } catch (error) {
       console.warn('Supabase error, using local data:', error);
       return this.localData.users;
@@ -232,7 +256,10 @@ export class DatabaseService {
         .single();
 
       if (error) throw error;
-      return this.mapSupabaseUserToUser(data);
+      const created = this.mapSupabaseUserToUser(data);
+      this.localData.users = [created, ...this.localData.users];
+      this.persistAllToStorage();
+      return created;
     } catch (error) {
       console.warn('Supabase error, using local data:', error);
       const newUser: User = {
@@ -241,6 +268,7 @@ export class DatabaseService {
         createdAt: new Date().toISOString()
       };
       this.localData.users.push(newUser);
+      this.persistAllToStorage();
       return newUser;
     }
   }
@@ -264,12 +292,17 @@ export class DatabaseService {
         .single();
 
       if (error) throw error;
-      return this.mapSupabaseUserToUser(data);
+      const updated = this.mapSupabaseUserToUser(data);
+      const idx = this.localData.users.findIndex(u => u.id === id);
+      if (idx !== -1) this.localData.users[idx] = updated;
+      this.persistAllToStorage();
+      return updated;
     } catch (error) {
       console.warn('Supabase error, using local data:', error);
       const userIndex = this.localData.users.findIndex(u => u.id === id);
       if (userIndex !== -1) {
         this.localData.users[userIndex] = { ...this.localData.users[userIndex], ...updates };
+        this.persistAllToStorage();
         return this.localData.users[userIndex];
       }
       throw new Error('User not found');
@@ -287,6 +320,7 @@ export class DatabaseService {
     } catch (error) {
       console.warn('Supabase error, using local data:', error);
       this.localData.users = this.localData.users.filter(u => u.id !== id);
+      this.persistAllToStorage();
     }
   }
 
@@ -299,424 +333,93 @@ export class DatabaseService {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      return data || [];
+      const rows = data || [];
+      this.localData.roles = rows as any;
+      this.persistAllToStorage();
+      return rows as any;
     } catch (error) {
       console.warn('Supabase error, using local data:', error);
       return this.localData.roles;
     }
   }
 
-  // Customers operations
+  // Customers operations (local-first)
   async getCustomers(): Promise<Customer[]> {
     try {
-      const { data, error } = await supabase
-        .from('customers')
-        .select(`
-          *,
-          customer_measurements(*)
-        `)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      return (data || []).map(this.mapSupabaseCustomerToCustomer);
+      const locals = await storage.getCustomers();
+      this.localData.customers = locals;
+      this.persistAllToStorage();
+      return locals;
     } catch (error) {
-      console.warn('Supabase error, using local data:', error);
+      console.warn('Local storage error:', error);
       return this.localData.customers;
     }
   }
 
   async createCustomer(customer: Omit<Customer, 'id'>): Promise<Customer> {
     try {
-      // Sanitize text data to ensure proper UTF-8 encoding
-      const sanitizedCustomer = this.sanitizeTextData(customer);
-      
-      const { data, error } = await supabase
-        .from('customers')
-        .insert({
-          name: sanitizedCustomer.name,
-          phone: sanitizedCustomer.phone,
-          address: sanitizedCustomer.address,
-          total_spent: sanitizedCustomer.totalSpent,
-          last_order: sanitizedCustomer.lastOrder,
-          label: sanitizedCustomer.label,
-          measurements: customer.measurements,
-          notes: customer.notes
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-      return this.mapSupabaseCustomerToCustomer(data);
+      const created = await storage.createCustomer(customer as any);
+      this.localData.customers = [created, ...this.localData.customers];
+      this.persistAllToStorage();
+      (syncEngine as any).schedule?.();
+      return created;
     } catch (error) {
-      console.warn('Supabase error, using local data:', error);
-      const newCustomer: Customer = {
-        ...customer,
-        id: Date.now().toString()
-      };
+      console.warn('Local storage error:', error);
+      const newCustomer: Customer = { ...customer, id: Date.now().toString() } as any;
       this.localData.customers.push(newCustomer);
+      this.persistAllToStorage();
       return newCustomer;
     }
   }
 
   async updateCustomer(id: string, updates: Partial<Customer>): Promise<Customer> {
     try {
-      const { data, error } = await supabase
-        .from('customers')
-        .update({
-          name: updates.name,
-          phone: updates.phone,
-          address: updates.address,
-          total_spent: updates.totalSpent,
-          last_order: updates.lastOrder,
-          label: updates.label,
-          measurements: updates.measurements,
-          notes: updates.notes
-        })
-        .eq('id', id)
-        .select()
-        .single();
-
-      if (error) throw error;
-      return this.mapSupabaseCustomerToCustomer(data);
+      const updated = await storage.updateCustomer(id, updates as any);
+      const idx = this.localData.customers.findIndex(c => c.id === id);
+      if (idx !== -1) this.localData.customers[idx] = updated; else this.localData.customers.unshift(updated);
+      this.persistAllToStorage();
+      (syncEngine as any).schedule?.();
+      return updated;
     } catch (error) {
-      console.warn('Supabase error, using local data:', error);
+      console.warn('Local storage error:', error);
       const customerIndex = this.localData.customers.findIndex(c => c.id === id);
       if (customerIndex !== -1) {
-        this.localData.customers[customerIndex] = { ...this.localData.customers[customerIndex], ...updates };
+        this.localData.customers[customerIndex] = { ...this.localData.customers[customerIndex], ...updates } as any;
+        this.persistAllToStorage();
         return this.localData.customers[customerIndex];
       }
       throw new Error('Customer not found');
     }
   }
 
-  async deleteCustomer(id: string): Promise<void> {
-    try {
-      const { error } = await supabase
-        .from('customers')
-        .delete()
-        .eq('id', id);
+  async deleteCustomer(id: string): Promise<void> { await (storage as any).deleteCustomer?.(id); this.localData.customers = this.localData.customers.filter(c => c.id !== id); this.persistAllToStorage(); (syncEngine as any).schedule?.(); }
 
-      if (error) throw error;
-    } catch (error) {
-      console.warn('Supabase error, using local data:', error);
-      this.localData.customers = this.localData.customers.filter(c => c.id !== id);
-    }
-  }
+  // Orders operations (local-first)
+  async getOrders(): Promise<Order[]> { try { const rows = await storage.getOrders(); this.localData.orders = rows; this.persistAllToStorage(); return rows; } catch { return this.localData.orders; } }
 
-  // Orders operations
-  async getOrders(): Promise<Order[]> {
-    try {
-      const { data, error } = await supabase
-        .from('orders')
-        .select('*')
-        .order('created_at', { ascending: false });
+  async getOrdersByCustomer(customerId: string): Promise<Order[]> { const all = await this.getOrders(); return all.filter(o => (o as any).customer_id === customerId); }
 
-      if (error) throw error;
-      return (data || []).map(this.mapSupabaseOrderToOrder);
-    } catch (error) {
-      console.warn('Supabase error, using local data:', error);
-      return this.localData.orders;
-    }
-  }
+  async createOrder(order: NewOrder): Promise<Order> { const created = await storage.createOrder(order); this.localData.orders = [created, ...this.localData.orders]; this.persistAllToStorage(); (syncEngine as any).schedule?.(); return created; }
 
-  async getOrdersByCustomer(customerId: string): Promise<Order[]> {
-    try {
-      const { data, error } = await supabase
-        .from('orders')
-        .select('*')
-        .eq('customer_id', customerId)
-        .order('created_at', { ascending: false });
+  // Invoice operations (local-first)
+  async getInvoices(): Promise<Invoice[]> { try { const rows = await storage.getInvoices(); this.localData.invoices = rows; this.persistAllToStorage(); return rows; } catch { return this.localData.invoices; } }
 
-      if (error) throw error;
-      return (data || []).map(this.mapSupabaseOrderToOrder);
-    } catch (error) {
-      console.warn('Supabase error, using local data:', error);
-      return this.localData.orders.filter(order => order.customer_id === customerId);
-    }
-  }
+  async getInvoiceById(id: string): Promise<Invoice | null> { const all = await this.getInvoices(); return all.find(i => i.id === id) || null; }
 
-  async createOrder(order: NewOrder): Promise<Order> {
-    try {
-      const { data, error } = await supabase
-        .from('orders')
-        .insert({
-          customer_name: order.customer_name,
-          total: order.total
-        })
-        .select()
-        .single();
+  async createInvoice(invoice: NewInvoice): Promise<Invoice> { const created = await storage.createInvoice(invoice as any); this.localData.invoices = [created, ...this.localData.invoices]; this.persistAllToStorage(); (syncEngine as any).schedule?.(); return created; }
 
-      if (error) throw error;
-      return this.mapSupabaseOrderToOrder(data);
-    } catch (error) {
-      console.warn('Supabase error, using local data:', error);
-      const newOrder: Order = {
-        id: Date.now().toString(),
-        customer_name: order.customer_name,
-        total: order.total,
-        created_at: new Date().toISOString()
-      };
-      this.localData.orders.push(newOrder);
-      return newOrder;
-    }
-  }
+  async updateInvoice(id: string, updates: Partial<Invoice>): Promise<Invoice> { const updated = await storage.updateInvoice(id, updates as any); const idx = this.localData.invoices.findIndex(i => i.id === id); if (idx !== -1) this.localData.invoices[idx] = updated; this.persistAllToStorage(); (syncEngine as any).schedule?.(); return updated; }
 
-  // Invoice operations
-  async getInvoices(): Promise<Invoice[]> {
-    try {
-      const { data, error } = await supabase
-        .from('invoices')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      return (data || []).map(this.mapSupabaseInvoiceToInvoice);
-    } catch (error) {
-      console.warn('Supabase error, using local data:', error);
-      return this.localData.invoices;
-    }
-  }
-
-  async getInvoiceById(id: string): Promise<Invoice | null> {
-    try {
-      const { data, error } = await supabase
-        .from('invoices')
-        .select('*')
-        .eq('id', id)
-        .single();
-
-      if (error) throw error;
-      return this.mapSupabaseInvoiceToInvoice(data);
-    } catch (error) {
-      console.warn('Supabase error, using local data:', error);
-      return this.localData.invoices.find(invoice => invoice.id === id) || null;
-    }
-  }
-
-  async createInvoice(invoice: NewInvoice): Promise<Invoice> {
-    try {
-      // Sanitize text data to ensure proper UTF-8 encoding
-      const sanitizedInvoice = this.sanitizeTextData(invoice);
-      
-      const { data: invoiceData, error: invoiceError } = await supabase
-        .from('invoices')
-        .insert({
-          customer_id: sanitizedInvoice.customer_id,
-          customer_name: sanitizedInvoice.customer_name,
-          customer_phone: sanitizedInvoice.customer_phone,
-          customer_address: sanitizedInvoice.customer_address,
-          total: sanitizedInvoice.total,
-          paid_amount: sanitizedInvoice.paid_amount || 0,
-          status: sanitizedInvoice.status || 'معلق',
-          due_date: sanitizedInvoice.due_date,
-          notes: sanitizedInvoice.notes,
-          fabric_image_url: sanitizedInvoice.fabric_image_url
-        })
-        .select()
-        .single();
-
-      if (invoiceError) throw invoiceError;
-
-      // Create invoice items
-      if (invoice.items && invoice.items.length > 0) {
-        const items = invoice.items.map(item => ({
-          invoice_id: invoiceData.id,
-          item_name: item.item_name,
-          description: item.description,
-          quantity: item.quantity,
-          unit_price: item.unit_price,
-          total_price: item.total_price
-        }));
-
-        const { error: itemsError } = await supabase
-          .from('invoice_items')
-          .insert(items);
-
-        if (itemsError) throw itemsError;
-      }
-
-      return this.mapSupabaseInvoiceToInvoice(invoiceData);
-    } catch (error) {
-      console.warn('Supabase error, using local data:', error);
-      const newInvoice: Invoice = {
-        id: Date.now().toString(),
-        invoice_number: `INV${Date.now()}`,
-        customer_id: invoice.customer_id,
-        customer_name: invoice.customer_name,
-        customer_phone: invoice.customer_phone,
-        customer_address: invoice.customer_address,
-        total: invoice.total,
-        paid_amount: invoice.paid_amount || 0,
-        status: invoice.status || 'معلق',
-        invoice_date: new Date().toISOString(),
-        due_date: invoice.due_date,
-        notes: invoice.notes,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      };
-      this.localData.invoices.push(newInvoice);
-      this.persistInvoicesToStorage();
-      return newInvoice;
-    }
-  }
-
-  async updateInvoice(id: string, updates: Partial<Invoice>): Promise<Invoice> {
-    console.log('DatabaseService.updateInvoice called with id:', id, 'updates:', updates);
-    
-    try {
-      // Only update fields that are provided
-      const updateData: any = {};
-      if (updates.customer_id !== undefined) updateData.customer_id = updates.customer_id;
-      if (updates.customer_name !== undefined) updateData.customer_name = updates.customer_name;
-      if (updates.customer_phone !== undefined) updateData.customer_phone = updates.customer_phone;
-      if (updates.customer_address !== undefined) updateData.customer_address = updates.customer_address;
-      if (updates.total !== undefined) updateData.total = updates.total;
-      if (updates.paid_amount !== undefined) updateData.paid_amount = updates.paid_amount;
-      if (updates.status !== undefined) updateData.status = updates.status;
-      if (updates.due_date !== undefined) updateData.due_date = updates.due_date;
-      if (updates.notes !== undefined) updateData.notes = updates.notes;
-
-      console.log('Updating invoice with data:', updateData);
-      console.log('Calling Supabase update...');
-
-      const { data, error } = await supabase
-        .from('invoices')
-        .update(updateData)
-        .eq('id', id)
-        .select()
-        .single();
-
-      if (error) {
-        console.error('Supabase update error:', error);
-        throw error;
-      }
-      
-      console.log('Supabase update successful, data:', data);
-      const result = this.mapSupabaseInvoiceToInvoice(data);
-      console.log('Mapped result:', result);
-      return result;
-    } catch (error) {
-      console.warn('Supabase error, using local data:', error);
-      const invoiceIndex = this.localData.invoices.findIndex(i => i.id === id);
-      if (invoiceIndex !== -1) {
-        console.log('Updating local data...');
-        this.localData.invoices[invoiceIndex] = { ...this.localData.invoices[invoiceIndex], ...updates };
-        console.log('Local data updated:', this.localData.invoices[invoiceIndex]);
-        this.persistInvoicesToStorage();
-        return this.localData.invoices[invoiceIndex];
-      }
-      throw new Error('Invoice not found');
-    }
-  }
-
-  async deleteInvoice(id: string): Promise<void> {
-    try {
-      const { error } = await supabase
-        .from('invoices')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
-    } catch (error) {
-      console.warn('Supabase error, using local data:', error);
-      this.localData.invoices = this.localData.invoices.filter(i => i.id !== id);
-      this.persistInvoicesToStorage();
-    }
-  }
+  async deleteInvoice(id: string): Promise<void> { await storage.deleteInvoice(id); this.localData.invoices = this.localData.invoices.filter(i => i.id !== id); this.persistAllToStorage(); (syncEngine as any).schedule?.(); }
 
   // Invoice items operations
-  async getInvoiceItems(invoiceId: string): Promise<InvoiceItem[]> {
-    try {
-      const { data, error } = await supabase
-        .from('invoice_items')
-        .select('*')
-        .eq('invoice_id', invoiceId)
-        .order('created_at', { ascending: false });
+  async getInvoiceItems(invoiceId: string): Promise<InvoiceItem[]> { if ((storage as any).getInvoiceItems) { const items = await (storage as any).getInvoiceItems(invoiceId); const others = this.localData.invoiceItems.filter(i => i.invoice_id !== invoiceId); this.localData.invoiceItems = [...items, ...others]; this.persistAllToStorage(); return items; } return this.localData.invoiceItems.filter(i => i.invoice_id === invoiceId); }
 
-      if (error) throw error;
-      return data || [];
-    } catch (error) {
-      console.warn('Supabase error, using local data:', error);
-      return this.localData.invoiceItems.filter(item => item.invoice_id === invoiceId);
-    }
-  }
+  async createInvoiceItem(item: Omit<InvoiceItem, 'id' | 'created_at'>): Promise<InvoiceItem> { if ((storage as any).createInvoiceItem) { const created = await (storage as any).createInvoiceItem(item); this.localData.invoiceItems.push(created); this.persistAllToStorage(); (syncEngine as any).schedule?.(); return created; } const newItem: InvoiceItem = { ...item, id: Date.now().toString(), created_at: new Date().toISOString() }; this.localData.invoiceItems.push(newItem); this.persistAllToStorage(); return newItem; }
 
-  async createInvoiceItem(item: Omit<InvoiceItem, 'id' | 'created_at'>): Promise<InvoiceItem> {
-    try {
-      // Sanitize text data to ensure proper UTF-8 encoding
-      const sanitizedItem = this.sanitizeTextData(item);
-      
-      const { data, error } = await supabase
-        .from('invoice_items')
-        .insert({
-          invoice_id: sanitizedItem.invoice_id,
-          item_name: sanitizedItem.item_name,
-          description: sanitizedItem.description,
-          quantity: sanitizedItem.quantity,
-          unit_price: sanitizedItem.unit_price,
-          total_price: sanitizedItem.total_price
-        })
-        .select()
-        .single();
+  async updateInvoiceItem(id: string, updates: Partial<InvoiceItem>): Promise<InvoiceItem> { if ((storage as any).updateInvoiceItem) { const updated = await (storage as any).updateInvoiceItem(id, updates); const idx = this.localData.invoiceItems.findIndex(i => i.id === id); if (idx !== -1) this.localData.invoiceItems[idx] = updated; this.persistAllToStorage(); (syncEngine as any).schedule?.(); return updated; } const itemIndex = this.localData.invoiceItems.findIndex(i => i.id === id); if (itemIndex !== -1) { this.localData.invoiceItems[itemIndex] = { ...this.localData.invoiceItems[itemIndex], ...updates } as any; this.persistAllToStorage(); return this.localData.invoiceItems[itemIndex]; } throw new Error('Invoice item not found'); }
 
-      if (error) throw error;
-      return data;
-    } catch (error) {
-      console.warn('Supabase error, using local data:', error);
-      const newItem: InvoiceItem = {
-        ...item,
-        id: Date.now().toString(),
-        created_at: new Date().toISOString()
-      };
-      this.localData.invoiceItems.push(newItem);
-      this.persistInvoicesToStorage();
-      return newItem;
-    }
-  }
-
-  async updateInvoiceItem(id: string, updates: Partial<InvoiceItem>): Promise<InvoiceItem> {
-    try {
-      const { data, error } = await supabase
-        .from('invoice_items')
-        .update({
-          item_name: updates.item_name,
-          description: updates.description,
-          quantity: updates.quantity,
-          unit_price: updates.unit_price,
-          total_price: updates.total_price
-        })
-        .eq('id', id)
-        .select()
-        .single();
-
-      if (error) throw error;
-      return data;
-    } catch (error) {
-      console.warn('Supabase error, using local data:', error);
-      const itemIndex = this.localData.invoiceItems.findIndex(item => item.id === id);
-      if (itemIndex !== -1) {
-        this.localData.invoiceItems[itemIndex] = { ...this.localData.invoiceItems[itemIndex], ...updates };
-        this.persistInvoicesToStorage();
-        return this.localData.invoiceItems[itemIndex];
-      }
-      throw new Error('Invoice item not found');
-    }
-  }
-
-  async deleteInvoiceItem(id: string): Promise<void> {
-    try {
-      const { error } = await supabase
-        .from('invoice_items')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
-    } catch (error) {
-      console.warn('Supabase error, using local data:', error);
-      this.localData.invoiceItems = this.localData.invoiceItems.filter(item => item.id !== id);
-      this.persistInvoicesToStorage();
-    }
-  }
+  async deleteInvoiceItem(id: string): Promise<void> { if ((storage as any).deleteInvoiceItem) await (storage as any).deleteInvoiceItem(id); this.localData.invoiceItems = this.localData.invoiceItems.filter(i => i.id !== id); this.persistAllToStorage(); (syncEngine as any).schedule?.(); }
 
   // Customer measurements operations
   async getCustomerMeasurements(customerId: number): Promise<any[]> {
@@ -820,6 +523,7 @@ export class DatabaseService {
       const invoices = await this.getInvoices();
       this.localData.invoices = invoices;
 
+      this.persistAllToStorage();
       console.log('Data synced with Supabase successfully');
     } catch (error) {
       console.error('Failed to sync with Supabase:', error);
@@ -839,50 +543,6 @@ export class DatabaseService {
       isActive: data.is_active,
       createdAt: data.created_at,
       lastLogin: data.last_login
-    };
-  }
-
-  private mapSupabaseCustomerToCustomer(data: any): Customer {
-    return {
-      id: data.id,
-      name: data.name,
-      phone: data.phone,
-      address: data.address,
-      totalSpent: data.total_spent,
-      lastOrder: data.last_order,
-      label: data.label,
-      measurements: data.measurements || undefined,
-      notes: data.notes,
-      created_at: data.created_at
-    };
-  }
-
-  private mapSupabaseOrderToOrder(data: any): Order {
-    return {
-      id: data.id,
-      customer_id: data.customer_id,
-      customer_name: data.customer_name,
-      total: data.total,
-      created_at: data.created_at
-    };
-  }
-
-  private mapSupabaseInvoiceToInvoice(data: any): Invoice {
-    return {
-      id: String(data.id),
-      invoice_number: data.invoice_number,
-      customer_id: data.customer_id != null ? String(data.customer_id) : undefined,
-      customer_name: data.customer_name,
-      customer_phone: data.customer_phone,
-      customer_address: data.customer_address,
-      total: data.total,
-      paid_amount: data.paid_amount,
-      status: data.status,
-      invoice_date: data.invoice_date,
-      due_date: data.due_date,
-      notes: data.notes,
-      created_at: data.created_at,
-      updated_at: data.updated_at
     };
   }
 }
