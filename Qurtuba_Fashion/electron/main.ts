@@ -56,6 +56,12 @@ app.whenReady().then(async () => {
   
   // Initialize sync service
   syncService = new SyncService(localDB);
+  // Start periodic auto-sync in the background
+  await syncService.startAutoSync();
+  // Kick off an immediate sync on startup (non-blocking)
+  syncService.forceSync().catch((err) => {
+    console.error('Startup force sync failed:', err);
+  });
   
   createWindow();
   createTray();

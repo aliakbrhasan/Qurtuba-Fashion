@@ -19,11 +19,19 @@ export class SyncService {
     this.localDB = localDB;
     this.initializeSupabase();
     this.checkOnlineStatus();
+    // Listen to online/offline events (main process has no window, rely on timer + lightweight probe)
     
-    // Check online status every 30 seconds
-    setInterval(() => {
-      this.checkOnlineStatus();
-    }, 30000);
+    // Check online status every 15 seconds and trigger sync on reconnection
+    setInterval(async () => {
+      const wasOnline = this.isOnline;
+      await this.checkOnlineStatus();
+      if (!wasOnline && this.isOnline && !this.isSyncing) {
+        const pending = await this.getPendingChangesCount();
+        if (pending > 0) {
+          await this.syncAll();
+        }
+      }
+    }, 15000);
   }
 
   private initializeSupabase(): void {
@@ -306,10 +314,12 @@ export class SyncService {
   }
 
   getStatus(): SyncStatus {
+    // Note: pendingChanges is computed asynchronously elsewhere; provide best-effort sync value here
+    // For accurate number, callers can invoke getPendingChangesCount()
     return {
       isOnline: this.isOnline,
       lastSync: this.lastSync,
-      pendingChanges: 0, // This would be calculated from unsynced records
+      pendingChanges: (this as any)._lastPendingCount ?? 0,
       isSyncing: this.isSyncing
     };
   }
@@ -317,9 +327,11 @@ export class SyncService {
   async getPendingChangesCount(): Promise<number> {
     try {
       const unsyncedRecords = await this.localDB.getUnsyncedRecords();
-      return unsyncedRecords.customers.length + 
+      const count = unsyncedRecords.customers.length + 
              unsyncedRecords.invoices.length + 
              unsyncedRecords.orders.length;
+      (this as any)._lastPendingCount = count;
+      return count;
     } catch (error) {
       console.error('Error getting pending changes count:', error);
       return 0;
