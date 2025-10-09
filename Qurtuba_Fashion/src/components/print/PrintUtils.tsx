@@ -333,7 +333,7 @@ export const formatPrintDateTime = (date: Date) =>
     timeStyle: 'short',
   }).format(date);
 
-export const openPrintWindow = (title: string, content: React.ReactElement) => {
+export const openPrintWindow = (title: string, content: React.ReactElement, extraStyles?: string) => {
   const printWindow = window.open('', '_blank', 'width=900,height=700');
 
   if (!printWindow) {
@@ -350,7 +350,7 @@ export const openPrintWindow = (title: string, content: React.ReactElement) => {
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
     <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet" />
-    <style>${brandPrintStyles}</style>
+    <style>${brandPrintStyles}${extraStyles ? `\n${extraStyles}` : ''}</style>
   </head>
   <body>
     <div class="print-container">

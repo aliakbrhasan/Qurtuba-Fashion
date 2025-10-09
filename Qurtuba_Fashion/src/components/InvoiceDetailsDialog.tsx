@@ -1,9 +1,9 @@
-import React from 'react';
+// React import not required with modern JSX transform
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from './ui/dialog';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
-import { Separator } from './ui/separator';
+// import { Separator } from './ui/separator';
 import { 
   Printer, 
   Share2, 
@@ -16,11 +16,11 @@ import {
   Ruler, 
   Scissors, 
   CreditCard,
-  Clock,
+  // Clock,
   MessageCircle,
   X
 } from 'lucide-react';
-import { formatCurrency, formatDate, PrintableInvoiceData, PrintableInvoice } from './PrintableInvoice';
+import { formatCurrency, formatDate, PrintableInvoiceData, PrintableInvoice, receiptStyles } from './PrintableInvoice';
 import { openPrintWindow } from './print/PrintUtils';
 
 interface InvoiceDetailsDialogProps {
@@ -49,7 +49,7 @@ export function InvoiceDetailsDialog({ isOpen, onOpenChange, invoice }: InvoiceD
   const remaining = Math.max(invoice.total - invoice.paid, 0);
 
   const handlePrint = () => {
-    openPrintWindow(`فاتورة ${invoice.id}`, <PrintableInvoice invoice={invoice} />);
+    openPrintWindow(`فاتورة ${invoice.id}`, <PrintableInvoice invoice={invoice} />, receiptStyles);
   };
 
   const handleShare = async () => {

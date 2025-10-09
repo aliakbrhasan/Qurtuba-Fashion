@@ -1,9 +1,13 @@
 import React from 'react';
-import { Home, Receipt, Users, Menu, Settings, User, LogOut, DollarSign } from 'lucide-react';
+import { Home, Receipt, Users, Menu, Settings, User, LogOut, DollarSign, Bell } from 'lucide-react';
 import { Button } from './ui/button';
 import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle, SheetDescription } from './ui/sheet';
 import { User as UserType } from '../services/auth.service';
 import { usePermissions } from '../hooks/usePermissions';
+import { useState } from 'react';
+import { NotificationCenter } from './dashboard/NotificationCenter';
+import { useNotifications } from '@/app/NotificationsProvider';
+// import { SyncStatus } from './SyncStatus';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -16,6 +20,8 @@ interface LayoutProps {
 
 export function Layout({ children, currentPage, onNavigate, isLoggedIn, onLogout, currentUser }: LayoutProps) {
   const { hasPagePermission } = usePermissions(currentUser ?? null);
+  const { unreadCount } = useNotifications();
+  const [isNotificationOpen, setIsNotificationOpen] = useState(false);
 
   // All possible navigation items
   const allNavigationItems = [
@@ -145,6 +151,20 @@ export function Layout({ children, currentPage, onNavigate, isLoggedIn, onLogout
           </div>
           
           <div className="flex items-center gap-4">
+            <div className="relative">
+              <Button
+                variant="ghost"
+                onClick={() => setIsNotificationOpen(true)}
+                className="text-[#C69A72] hover:text-[#F6E9CA] hover:bg-[#155446] p-2 touch-target"
+              >
+                <Bell size={18} />
+              </Button>
+              {unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 bg-red-600 text-white text-[10px] leading-none rounded-full py-[2px] px-[6px]">
+                  {unreadCount}
+                </span>
+              )}
+            </div>
             {currentUser && (
               <div className="flex items-center gap-2 text-[#F6E9CA]">
                 <div className="w-8 h-8 bg-[#155446] rounded-full flex items-center justify-center">
@@ -189,6 +209,11 @@ export function Layout({ children, currentPage, onNavigate, isLoggedIn, onLogout
         {children}
       </main>
       <MobileNavigation />
+      <NotificationCenter
+        isOpen={isNotificationOpen}
+        onClose={() => setIsNotificationOpen(false)}
+        onNavigate={onNavigate}
+      />
     </div>
   );
 }

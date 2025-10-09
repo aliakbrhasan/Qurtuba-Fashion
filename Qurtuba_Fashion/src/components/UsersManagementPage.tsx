@@ -757,6 +757,30 @@ export function UsersManagementPage({ onNavigate }: UsersManagementPageProps) {
                   </Select>
                 </div>
               </div>
+              {/* كلمة المرور الحالية - للعرض كحقل دائم مع زر تغيير */}
+              <div className="grid grid-cols-1 gap-4">
+                <div>
+                  <Label htmlFor="currentPassword" className="arabic-text">كلمة المرور الحالية</Label>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      id="currentPassword"
+                      type="password"
+                      value="********"
+                      disabled
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="border-blue-500 text-blue-500 hover:bg-blue-500 hover:text-white"
+                      onClick={() => setChangingPasswordUser(editingUser!)}
+                    >
+                      <Key className="w-4 h-4 mr-1" />
+                      تغيير
+                    </Button>
+                  </div>
+                  <p className="text-xs text-gray-500 arabic-text mt-1">لا يمكن عرض كلمة المرور الحالية لأسباب أمنية. يمكنك تغييرها من هنا.</p>
+                </div>
+              </div>
               <div className="grid grid-cols-1 gap-4">
                 <div className="flex items-center space-x-2 space-x-reverse">
                   <input

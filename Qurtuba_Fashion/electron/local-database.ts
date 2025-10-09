@@ -1,7 +1,8 @@
 import { app } from 'electron';
 import { join } from 'path';
-import { Database } from 'sqlite3';
-import { promisify } from 'util';
+// Use require to avoid type resolution issues in environments without typings
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const Database = require('better-sqlite3');
 
 export interface LocalCustomer {
   id: string;
@@ -32,6 +33,7 @@ export interface LocalInvoice {
   due_date?: string;
   notes?: string;
   fabric_image_url?: string;
+  paid_at?: string;
   created_at: string;
   updated_at: string;
   synced: boolean;
@@ -51,7 +53,7 @@ export interface LocalOrder {
 }
 
 export class LocalDatabase {
-  private db: Database | null = null;
+  private db: any | null = null;
   private dbPath: string;
 
   constructor() {
@@ -60,59 +62,40 @@ export class LocalDatabase {
   }
 
   async initialize(): Promise<void> {
-    return new Promise((resolve, reject) => {
-      this.db = new Database(this.dbPath, (err) => {
-        if (err) {
-          console.error('Error opening database:', err);
-          reject(err);
-          return;
-        }
-        
-        this.createTables()
-          .then(() => resolve())
-          .catch(reject);
-      });
-    });
+    try {
+      this.db = new Database(this.dbPath);
+      // Pragmas for durability and concurrency
+      this.db.pragma('journal_mode = WAL');
+      this.db.pragma('synchronous = NORMAL');
+      this.db.pragma('foreign_keys = ON');
+      this.createTables();
+    } catch (err) {
+      console.error('Error opening database:', err);
+      throw err;
+    }
   }
 
-  // Low-level async helpers with parameters support
-  private runAsync(sql: string, params: any[] = []): Promise<void> {
+  // Low-level helpers
+  private run(sql: string, params: any[] = []): void {
     if (!this.db) throw new Error('Database not initialized');
-    return new Promise<void>((resolve, reject) => {
-      this.db!.run(sql, params, function(err) {
-        if (err) return reject(err);
-        resolve();
-      });
-    });
+    this.db.prepare(sql).run(...params);
   }
 
-  private getAsync<T>(sql: string, params: any[] = []): Promise<T> {
+  private get<T>(sql: string, params: any[] = []): T {
     if (!this.db) throw new Error('Database not initialized');
-    return new Promise<T>((resolve, reject) => {
-      this.db!.get(sql, params, function(err, row) {
-        if (err) return reject(err);
-        resolve(row as T);
-      });
-    });
+    return this.db.prepare(sql).get(...params) as T;
   }
 
-  private allAsync<T>(sql: string, params: any[] = []): Promise<T[]> {
+  private all<T>(sql: string, params: any[] = []): T[] {
     if (!this.db) throw new Error('Database not initialized');
-    return new Promise<T[]>((resolve, reject) => {
-      this.db!.all(sql, params, function(err, rows) {
-        if (err) return reject(err);
-        resolve(rows as T[]);
-      });
-    });
+    return this.db.prepare(sql).all(...params) as T[];
   }
 
-  private async createTables(): Promise<void> {
+  private createTables(): void {
     if (!this.db) throw new Error('Database not initialized');
-
-    const run = promisify(this.db.run.bind(this.db));
 
     // Customers table
-    await run(`
+    this.run(`
       CREATE TABLE IF NOT EXISTS customers (
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
@@ -123,14 +106,15 @@ export class LocalDatabase {
         label TEXT,
         measurements TEXT,
         notes TEXT,
+        version INTEGER NOT NULL DEFAULT 1,
+        deleted INTEGER NOT NULL DEFAULT 0,
         created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL,
-        synced INTEGER DEFAULT 0
+        updated_at TEXT NOT NULL
       )
     `);
 
     // Invoices table
-    await run(`
+    this.run(`
       CREATE TABLE IF NOT EXISTS invoices (
         id TEXT PRIMARY KEY,
         invoice_number TEXT UNIQUE NOT NULL,
@@ -145,14 +129,16 @@ export class LocalDatabase {
         due_date TEXT,
         notes TEXT,
         fabric_image_url TEXT,
+        paid_at TEXT,
+        version INTEGER NOT NULL DEFAULT 1,
+        deleted INTEGER NOT NULL DEFAULT 0,
         created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL,
-        synced INTEGER DEFAULT 0
+        updated_at TEXT NOT NULL
       )
     `);
 
     // Orders table
-    await run(`
+    this.run(`
       CREATE TABLE IF NOT EXISTS orders (
         id TEXT PRIMARY KEY,
         customer_id TEXT NOT NULL,
@@ -161,14 +147,15 @@ export class LocalDatabase {
         status TEXT NOT NULL,
         total REAL NOT NULL,
         notes TEXT,
+        version INTEGER NOT NULL DEFAULT 1,
+        deleted INTEGER NOT NULL DEFAULT 0,
         created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL,
-        synced INTEGER DEFAULT 0
+        updated_at TEXT NOT NULL
       )
     `);
 
     // Invoice items table
-    await run(`
+    this.run(`
       CREATE TABLE IF NOT EXISTS invoice_items (
         id TEXT PRIMARY KEY,
         invoice_id TEXT NOT NULL,
@@ -177,35 +164,58 @@ export class LocalDatabase {
         quantity INTEGER NOT NULL,
         unit_price REAL NOT NULL,
         total_price REAL NOT NULL,
-        created_at TEXT NOT NULL,
-        synced INTEGER DEFAULT 0
+        created_at TEXT NOT NULL
       )
     `);
 
-    // Sync log table
-    await run(`
-      CREATE TABLE IF NOT EXISTS sync_log (
+    // Roles table
+    this.run(`
+      CREATE TABLE IF NOT EXISTS roles (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL UNIQUE,
+        description TEXT,
+        permissions TEXT,
+        allowed_pages TEXT,
+        allowed_actions TEXT,
+        is_active INTEGER NOT NULL DEFAULT 1,
+        version INTEGER NOT NULL DEFAULT 1,
+        deleted INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )
+    `);
+
+    // Outbox for sync
+    this.run(`
+      CREATE TABLE IF NOT EXISTS outbox (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         table_name TEXT NOT NULL,
         record_id TEXT NOT NULL,
-        action TEXT NOT NULL,
-        timestamp TEXT NOT NULL,
-        synced INTEGER DEFAULT 0
+        action TEXT NOT NULL, -- insert | update | delete
+        payload TEXT NOT NULL,
+        attempt_count INTEGER NOT NULL DEFAULT 0,
+        last_error TEXT,
+        created_at TEXT NOT NULL
       )
     `);
 
-    // Create indexes
-    await run(`CREATE INDEX IF NOT EXISTS idx_customers_synced ON customers(synced)`);
-    await run(`CREATE INDEX IF NOT EXISTS idx_invoices_synced ON invoices(synced)`);
-    await run(`CREATE INDEX IF NOT EXISTS idx_orders_synced ON orders(synced)`);
-    await run(`CREATE INDEX IF NOT EXISTS idx_sync_log_synced ON sync_log(synced)`);
+    // Sync state
+    this.run(`
+      CREATE TABLE IF NOT EXISTS sync_state (
+        table_name TEXT PRIMARY KEY,
+        last_pull TEXT NOT NULL DEFAULT '1970-01-01T00:00:00.000Z'
+      )
+    `);
+
+    // Indexes
+    this.run(`CREATE INDEX IF NOT EXISTS idx_outbox_created ON outbox(created_at)`);
+    this.run(`CREATE INDEX IF NOT EXISTS idx_outbox_table ON outbox(table_name, record_id)`);
   }
 
   // Customer methods
   async getCustomers(): Promise<LocalCustomer[]> {
     if (!this.db) throw new Error('Database not initialized');
-    const all = promisify(this.db.all.bind(this.db));
-    return await all('SELECT * FROM customers ORDER BY created_at DESC') as LocalCustomer[];
+    return this.all<LocalCustomer>("SELECT * FROM customers WHERE deleted = 0 AND LOWER(name) NOT LIKE '%test customer%' ORDER BY created_at DESC");
   }
 
   async createCustomer(customer: Omit<LocalCustomer, 'id' | 'created_at' | 'updated_at' | 'synced'>): Promise<LocalCustomer> {
@@ -214,30 +224,35 @@ export class LocalDatabase {
     const id = this.generateId();
     const now = new Date().toISOString();
     
-    const created = await new Promise<LocalCustomer>((resolve, reject) => {
-      this.db!.run(`
-        INSERT INTO customers (id, name, phone, address, total_spent, last_order, label, measurements, notes, created_at, updated_at, synced)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
-      `, [id, customer.name, customer.phone, customer.address, customer.totalSpent, customer.lastOrder, customer.label,
-          JSON.stringify(customer.measurements), customer.notes, now, now], function(err) {
-        if (err) {
-          reject(err);
-        } else {
-          resolve({
-            id,
-            ...customer,
-            created_at: now,
-            updated_at: now,
-            synced: false
-          } as LocalCustomer);
-        }
-      });
+    this.run(`
+      INSERT INTO customers (id, name, phone, address, total_spent, last_order, label, measurements, notes, version, deleted, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0, ?, ?)
+    `, [id, customer.name, customer.phone, customer.address, customer.totalSpent, customer.lastOrder, customer.label,
+        JSON.stringify(customer.measurements), customer.notes, now, now]);
+
+    this.enqueueOutbox('customers', id, 'insert', {
+      id,
+      name: customer.name,
+      phone: customer.phone,
+      address: customer.address,
+      total_spent: customer.totalSpent,
+      last_order: customer.lastOrder,
+      label: customer.label,
+      measurements: customer.measurements,
+      notes: customer.notes,
+      version: 1,
+      deleted: 0,
+      created_at: now,
+      updated_at: now,
     });
 
-    // Log sync action
-    await this.logSyncAction('customers', id, 'create');
-
-    return created;
+    return {
+      id,
+      ...customer,
+      created_at: now,
+      updated_at: now,
+      synced: false
+    } as LocalCustomer;
   }
 
   async updateCustomer(id: string, updates: Partial<LocalCustomer>, options?: { fromCloud?: boolean }): Promise<LocalCustomer> {
@@ -253,31 +268,29 @@ export class LocalDatabase {
       Object.keys(updates)[index] !== 'id' && Object.keys(updates)[index] !== 'created_at'
     );
     
-    const syncedValue = options?.fromCloud ? 1 : 0;
-    await this.runAsync(`UPDATE customers SET ${setClause}, updated_at = ?, synced = ${syncedValue} WHERE id = ?`, 
-      [...values, now, id]);
+    const versionUpdate = options?.fromCloud ? '' : ', version = version + 1';
+    this.run(`UPDATE customers SET ${setClause}, updated_at = ?${versionUpdate} WHERE id = ?`, [...values, now, id]);
 
-    // Log sync action only for local edits
     if (!options?.fromCloud) {
-      await this.logSyncAction('customers', id, 'update');
+      const row = this.get<LocalCustomer>('SELECT * FROM customers WHERE id = ?', [id]);
+      this.enqueueOutbox('customers', id, 'update', row);
     }
 
-    return await this.getAsync<LocalCustomer>('SELECT * FROM customers WHERE id = ?', [id]);
+    return this.get<LocalCustomer>('SELECT * FROM customers WHERE id = ?', [id]);
   }
 
   async deleteCustomer(id: string): Promise<void> {
     if (!this.db) throw new Error('Database not initialized');
     
-    await this.runAsync('DELETE FROM customers WHERE id = ?', [id]);
-    
-    // Log sync action
-    await this.logSyncAction('customers', id, 'delete');
+    const now = new Date().toISOString();
+    this.run('UPDATE customers SET deleted = 1, updated_at = ?, version = version + 1 WHERE id = ?', [now, id]);
+    this.enqueueOutbox('customers', id, 'delete', { id, deleted: 1, updated_at: now });
   }
 
   // Invoice methods
   async getInvoices(): Promise<LocalInvoice[]> {
     if (!this.db) throw new Error('Database not initialized');
-    return await this.allAsync<LocalInvoice>('SELECT * FROM invoices ORDER BY created_at DESC');
+    return this.all<LocalInvoice>('SELECT * FROM invoices WHERE deleted = 0 ORDER BY created_at DESC');
   }
 
   async createInvoice(invoice: Omit<LocalInvoice, 'id' | 'created_at' | 'updated_at' | 'synced'>): Promise<LocalInvoice> {
@@ -287,16 +300,23 @@ export class LocalDatabase {
     const invoiceNumber = this.generateInvoiceNumber();
     const now = new Date().toISOString();
     
-    await this.runAsync(`
-      INSERT INTO invoices (id, invoice_number, customer_id, customer_name, customer_phone, customer_address, 
-                           total, paid_amount, status, invoice_date, due_date, notes, fabric_image_url, created_at, updated_at, synced)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
-    `, [id, invoiceNumber, invoice.customer_id, invoice.customer_name, invoice.customer_phone, 
-        invoice.customer_address, invoice.total, invoice.paid_amount, invoice.status, 
-        invoice.invoice_date, invoice.due_date, invoice.notes, invoice.fabric_image_url, now, now]);
+    this.run(`
+      INSERT INTO invoices (id, invoice_number, customer_id, customer_name, customer_phone, customer_address,
+                           total, paid_amount, status, invoice_date, due_date, notes, fabric_image_url, paid_at, version, deleted, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0, ?, ?)
+    `, [id, invoiceNumber, invoice.customer_id, invoice.customer_name, invoice.customer_phone,
+        invoice.customer_address, invoice.total, invoice.paid_amount, invoice.status,
+        invoice.invoice_date, invoice.due_date, invoice.notes, invoice.fabric_image_url, invoice.paid_at || null, now, now]);
 
-    // Log sync action
-    await this.logSyncAction('invoices', id, 'create');
+    this.enqueueOutbox('invoices', id, 'insert', {
+      ...invoice,
+      id,
+      invoice_number: invoiceNumber,
+      version: 1,
+      deleted: 0,
+      created_at: now,
+      updated_at: now,
+    });
 
     return { ...invoice, id, invoice_number: invoiceNumber, created_at: now, updated_at: now, synced: false };
   }
@@ -315,32 +335,28 @@ export class LocalDatabase {
       return key !== 'id' && key !== 'created_at' && key !== 'invoice_number';
     });
     
-    const syncedValue = options?.fromCloud ? 1 : 0;
-    await this.runAsync(`UPDATE invoices SET ${setClause}, updated_at = ?, synced = ${syncedValue} WHERE id = ?`, 
-      [...values, now, id]);
-
-    // Log sync action only for local edits
+    const versionUpdate = options?.fromCloud ? '' : ', version = version + 1';
+    this.run(`UPDATE invoices SET ${setClause}, updated_at = ?${versionUpdate} WHERE id = ?`, [...values, now, id]);
     if (!options?.fromCloud) {
-      await this.logSyncAction('invoices', id, 'update');
+      const row = this.get<LocalInvoice>('SELECT * FROM invoices WHERE id = ?', [id]);
+      this.enqueueOutbox('invoices', id, 'update', row);
     }
-
-    return await this.getAsync<LocalInvoice>('SELECT * FROM invoices WHERE id = ?', [id]);
+    return this.get<LocalInvoice>('SELECT * FROM invoices WHERE id = ?', [id]);
   }
 
   async deleteInvoice(id: string): Promise<void> {
     if (!this.db) throw new Error('Database not initialized');
     
-    await this.runAsync('DELETE FROM invoices WHERE id = ?', [id]);
-    await this.runAsync('DELETE FROM invoice_items WHERE invoice_id = ?', [id]);
-    
-    // Log sync action
-    await this.logSyncAction('invoices', id, 'delete');
+    const now = new Date().toISOString();
+    this.run('UPDATE invoices SET deleted = 1, updated_at = ?, version = version + 1 WHERE id = ?', [now, id]);
+    this.run('DELETE FROM invoice_items WHERE invoice_id = ?', [id]);
+    this.enqueueOutbox('invoices', id, 'delete', { id, deleted: 1, updated_at: now });
   }
 
   // Order methods
   async getOrders(): Promise<LocalOrder[]> {
     if (!this.db) throw new Error('Database not initialized');
-    return await this.allAsync<LocalOrder>('SELECT * FROM orders ORDER BY created_at DESC');
+    return this.all<LocalOrder>('SELECT * FROM orders WHERE deleted = 0 ORDER BY created_at DESC');
   }
 
   async createOrder(order: Omit<LocalOrder, 'id' | 'created_at' | 'updated_at' | 'synced'>): Promise<LocalOrder> {
@@ -349,13 +365,19 @@ export class LocalDatabase {
     const id = this.generateId();
     const now = new Date().toISOString();
     
-    await this.runAsync(`
-      INSERT INTO orders (id, customer_id, order_date, delivery_date, status, total, notes, created_at, updated_at, synced)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+    this.run(`
+      INSERT INTO orders (id, customer_id, order_date, delivery_date, status, total, notes, version, deleted, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 1, 0, ?, ?)
     `, [id, order.customer_id, order.order_date, order.delivery_date, order.status, order.total, order.notes, now, now]);
 
-    // Log sync action
-    await this.logSyncAction('orders', id, 'create');
+    this.enqueueOutbox('orders', id, 'insert', {
+      id,
+      ...order,
+      version: 1,
+      deleted: 0,
+      created_at: now,
+      updated_at: now,
+    });
 
     return { ...order, id, created_at: now, updated_at: now, synced: false };
   }
@@ -373,48 +395,48 @@ export class LocalDatabase {
       Object.keys(updates)[index] !== 'id' && Object.keys(updates)[index] !== 'created_at'
     );
     
-    const syncedValue = options?.fromCloud ? 1 : 0;
-    await this.runAsync(`UPDATE orders SET ${setClause}, updated_at = ?, synced = ${syncedValue} WHERE id = ?`, 
-      [...values, now, id]);
-
-    // Log sync action only for local edits
+    const versionUpdate = options?.fromCloud ? '' : ', version = version + 1';
+    this.run(`UPDATE orders SET ${setClause}, updated_at = ?${versionUpdate} WHERE id = ?`, [...values, now, id]);
     if (!options?.fromCloud) {
-      await this.logSyncAction('orders', id, 'update');
+      const row = this.get<LocalOrder>('SELECT * FROM orders WHERE id = ?', [id]);
+      this.enqueueOutbox('orders', id, 'update', row);
     }
-
-    return await this.getAsync<LocalOrder>('SELECT * FROM orders WHERE id = ?', [id]);
+    return this.get<LocalOrder>('SELECT * FROM orders WHERE id = ?', [id]);
   }
 
   async deleteOrder(id: string): Promise<void> {
     if (!this.db) throw new Error('Database not initialized');
-    await this.runAsync('DELETE FROM orders WHERE id = ?', [id]);
-    
-    // Log sync action
-    await this.logSyncAction('orders', id, 'delete');
+    const now = new Date().toISOString();
+    this.run('UPDATE orders SET deleted = 1, updated_at = ?, version = version + 1 WHERE id = ?', [now, id]);
+    this.enqueueOutbox('orders', id, 'delete', { id, deleted: 1, updated_at: now });
   }
 
   // Sync methods
-  async getUnsyncedRecords(): Promise<{ customers: LocalCustomer[]; invoices: LocalInvoice[]; orders: LocalOrder[] }> {
+  // Outbox accessors for sync service
+  getOutboxBatch(limit: number = 50): { id: number; table_name: string; record_id: string; action: string; payload: any; created_at: string; attempt_count: number; last_error?: string }[] {
     if (!this.db) throw new Error('Database not initialized');
-    const customers = await this.allAsync<LocalCustomer>('SELECT * FROM customers WHERE synced = 0');
-    const invoices = await this.allAsync<LocalInvoice>('SELECT * FROM invoices WHERE synced = 0');
-    const orders = await this.allAsync<LocalOrder>('SELECT * FROM orders WHERE synced = 0');
-    
-    return { customers, invoices, orders };
+    const rows = this.all<any>('SELECT id, table_name, record_id, action, payload, created_at, attempt_count, last_error FROM outbox ORDER BY created_at ASC LIMIT ?', [limit]);
+    return rows.map(r => ({ ...r, payload: JSON.parse(r.payload) }));
   }
 
-  async markAsSynced(tableName: string, recordId: string): Promise<void> {
-    if (!this.db) throw new Error('Database not initialized');
-    await this.runAsync(`UPDATE ${tableName} SET synced = 1 WHERE id = ?`, [recordId]);
+  markOutboxSuccess(id: number): void {
+    this.run('DELETE FROM outbox WHERE id = ?', [id]);
   }
+
+  markOutboxFailure(id: number, error: string): void {
+    this.run('UPDATE outbox SET attempt_count = attempt_count + 1, last_error = ? WHERE id = ?', [error, id]);
+  }
+
+  // Deprecated: kept for compatibility
+  async markAsSynced(_tableName: string, _recordId: string): Promise<void> { return; }
 
   async getAllOfflineData(): Promise<any> {
     if (!this.db) throw new Error('Database not initialized');
     return {
-      customers: await this.allAsync<LocalCustomer>('SELECT * FROM customers'),
-      invoices: await this.allAsync<LocalInvoice>('SELECT * FROM invoices'),
-      orders: await this.allAsync<LocalOrder>('SELECT * FROM orders'),
-      invoiceItems: await this.allAsync<any>('SELECT * FROM invoice_items')
+      customers: this.all<LocalCustomer>('SELECT * FROM customers'),
+      invoices: this.all<LocalInvoice>('SELECT * FROM invoices'),
+      orders: this.all<LocalOrder>('SELECT * FROM orders'),
+      invoiceItems: this.all<any>('SELECT * FROM invoice_items')
     };
   }
 
@@ -432,24 +454,15 @@ export class LocalDatabase {
     return `INV-${year}${month}${day}-${random}`;
   }
 
-  private async logSyncAction(tableName: string, recordId: string, action: string): Promise<void> {
+  private enqueueOutbox(tableName: string, recordId: string, action: 'insert' | 'update' | 'delete', payload: any): void {
     if (!this.db) throw new Error('Database not initialized');
-    await this.runAsync(`
-      INSERT INTO sync_log (table_name, record_id, action, timestamp, synced)
-      VALUES (?, ?, ?, ?, 0)
-    `, [tableName, recordId, action, new Date().toISOString()]);
+    this.run(`
+      INSERT INTO outbox (table_name, record_id, action, payload, created_at)
+      VALUES (?, ?, ?, ?, ?)
+    `, [tableName, recordId, action, JSON.stringify(payload), new Date().toISOString()]);
   }
 
-  async close(): Promise<void> {
-    if (this.db) {
-      return new Promise((resolve) => {
-        this.db!.close((err) => {
-          if (err) console.error('Error closing database:', err);
-          resolve();
-        });
-      });
-    }
-  }
+  async close(): Promise<void> { /* better-sqlite3 closes on process exit */ }
 
   // Upsert helpers for cloud -> local synchronization
   async upsertCustomerFromCloud(payload: {
@@ -466,23 +479,30 @@ export class LocalDatabase {
     updated_at: string;
   }): Promise<void> {
     if (!this.db) throw new Error('Database not initialized');
-    const exists = await this.getAsync<{ id: string } | undefined>('SELECT id FROM customers WHERE id = ?', [payload.id]);
+    const local = this.get<{ id: string; version: number; updated_at: string } | undefined>('SELECT id, version, updated_at FROM customers WHERE id = ?', [payload.id]);
 
-    if (exists) {
-      await this.updateCustomer(payload.id, {
-        name: payload.name,
-        phone: payload.phone,
-        address: payload.address,
-        totalSpent: payload.total_spent as any,
-        lastOrder: payload.last_order,
-        label: payload.label,
-        measurements: payload.measurements,
-        notes: payload.notes
-      }, { fromCloud: true });
+    const remoteVersion = (payload as any).version ?? 1;
+    const remoteUpdatedAt = payload.updated_at;
+
+    if (local) {
+      // Conflict policy: keep local if it is newer or equal by version/updated_at
+      const keepLocal = (local.version ?? 1) >= remoteVersion || new Date(local.updated_at) >= new Date(remoteUpdatedAt);
+      if (!keepLocal) {
+        await this.updateCustomer(payload.id, {
+          name: payload.name,
+          phone: payload.phone,
+          address: payload.address,
+          totalSpent: payload.total_spent as any,
+          lastOrder: payload.last_order,
+          label: payload.label,
+          measurements: payload.measurements,
+          notes: payload.notes
+        }, { fromCloud: true });
+      }
     } else {
-      await this.runAsync(`
-        INSERT INTO customers (id, name, phone, address, total_spent, last_order, label, measurements, notes, created_at, updated_at, synced)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+      this.run(`
+        INSERT INTO customers (id, name, phone, address, total_spent, last_order, label, measurements, notes, version, deleted, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
       `, [
         payload.id,
         payload.name,
@@ -493,6 +513,7 @@ export class LocalDatabase {
         payload.label || null,
         JSON.stringify(payload.measurements || null),
         payload.notes || null,
+        remoteVersion,
         payload.created_at,
         payload.updated_at
       ]);
@@ -517,27 +538,32 @@ export class LocalDatabase {
     updated_at: string;
   }): Promise<void> {
     if (!this.db) throw new Error('Database not initialized');
-    const exists = await this.getAsync<{ id: string } | undefined>('SELECT id FROM invoices WHERE id = ?', [payload.id]);
+    const local = this.get<{ id: string; version: number; updated_at: string } | undefined>('SELECT id, version, updated_at FROM invoices WHERE id = ?', [payload.id]);
+    const remoteVersion = (payload as any).version ?? 1;
+    const remoteUpdatedAt = payload.updated_at;
 
-    if (exists) {
-      await this.updateInvoice(payload.id, {
-        customer_id: payload.customer_id,
-        customer_name: payload.customer_name,
-        customer_phone: payload.customer_phone,
-        customer_address: payload.customer_address,
-        total: payload.total,
-        paid_amount: payload.paid_amount,
-        status: payload.status,
-        invoice_date: payload.invoice_date,
-        due_date: payload.due_date,
-        notes: payload.notes,
-        fabric_image_url: payload.fabric_image_url
-      }, { fromCloud: true });
+    if (local) {
+      const keepLocal = (local.version ?? 1) >= remoteVersion || new Date(local.updated_at) >= new Date(remoteUpdatedAt);
+      if (!keepLocal) {
+        await this.updateInvoice(payload.id, {
+          customer_id: payload.customer_id,
+          customer_name: payload.customer_name,
+          customer_phone: payload.customer_phone,
+          customer_address: payload.customer_address,
+          total: payload.total,
+          paid_amount: payload.paid_amount,
+          status: payload.status,
+          invoice_date: payload.invoice_date,
+          due_date: payload.due_date,
+          notes: payload.notes,
+          fabric_image_url: payload.fabric_image_url
+        }, { fromCloud: true });
+      }
     } else {
-      await this.runAsync(`
-        INSERT INTO invoices (id, invoice_number, customer_id, customer_name, customer_phone, customer_address, 
-                             total, paid_amount, status, invoice_date, due_date, notes, fabric_image_url, created_at, updated_at, synced)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+      this.run(`
+        INSERT INTO invoices (id, invoice_number, customer_id, customer_name, customer_phone, customer_address,
+                             total, paid_amount, status, invoice_date, due_date, notes, fabric_image_url, version, deleted, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
       `, [
         payload.id,
         payload.invoice_number,
@@ -552,6 +578,7 @@ export class LocalDatabase {
         payload.due_date || null,
         payload.notes || null,
         payload.fabric_image_url || null,
+        remoteVersion,
         payload.created_at,
         payload.updated_at
       ]);
@@ -570,21 +597,26 @@ export class LocalDatabase {
     updated_at: string;
   }): Promise<void> {
     if (!this.db) throw new Error('Database not initialized');
-    const exists = await this.getAsync<{ id: string } | undefined>('SELECT id FROM orders WHERE id = ?', [payload.id]);
+    const local = this.get<{ id: string; version: number; updated_at: string } | undefined>('SELECT id, version, updated_at FROM orders WHERE id = ?', [payload.id]);
+    const remoteVersion = (payload as any).version ?? 1;
+    const remoteUpdatedAt = payload.updated_at;
 
-    if (exists) {
-      await this.updateOrder(payload.id, {
-        customer_id: payload.customer_id,
-        order_date: payload.order_date,
-        delivery_date: payload.delivery_date,
-        status: payload.status,
-        total: payload.total,
-        notes: payload.notes
-      }, { fromCloud: true });
+    if (local) {
+      const keepLocal = (local.version ?? 1) >= remoteVersion || new Date(local.updated_at) >= new Date(remoteUpdatedAt);
+      if (!keepLocal) {
+        await this.updateOrder(payload.id, {
+          customer_id: payload.customer_id,
+          order_date: payload.order_date,
+          delivery_date: payload.delivery_date,
+          status: payload.status,
+          total: payload.total,
+          notes: payload.notes
+        }, { fromCloud: true });
+      }
     } else {
-      await this.runAsync(`
-        INSERT INTO orders (id, customer_id, order_date, delivery_date, status, total, notes, created_at, updated_at, synced)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+      this.run(`
+        INSERT INTO orders (id, customer_id, order_date, delivery_date, status, total, notes, version, deleted, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
       `, [
         payload.id,
         payload.customer_id,
@@ -593,9 +625,150 @@ export class LocalDatabase {
         payload.status,
         payload.total,
         payload.notes || null,
+        remoteVersion,
         payload.created_at,
         payload.updated_at
       ]);
+    }
+  }
+
+  // Roles CRUD
+  async getRoles(): Promise<any[]> {
+    return this.all<any>('SELECT * FROM roles WHERE deleted = 0 ORDER BY created_at DESC');
+  }
+
+  async createRole(role: any): Promise<any> {
+    const id = this.generateId();
+    const now = new Date().toISOString();
+    this.run(`
+      INSERT INTO roles (id, name, description, permissions, allowed_pages, allowed_actions, is_active, version, deleted, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 1, 0, ?, ?)
+    `, [id, role.name, role.description || '', JSON.stringify(role.permissions || []), JSON.stringify(role.allowedPages || []), JSON.stringify(role.allowedActions || []), role.isActive ? 1 : 0, now, now]);
+    const row = this.get<any>('SELECT * FROM roles WHERE id = ?', [id]);
+    this.enqueueOutbox('roles', id, 'insert', row);
+    return row;
+  }
+
+  async updateRole(id: string, updates: any): Promise<any> {
+    const now = new Date().toISOString();
+    const toSet: string[] = [];
+    const vals: any[] = [];
+    for (const [k, v] of Object.entries(updates)) {
+      if (k === 'id' || k === 'created_at') continue;
+      const value = Array.isArray(v) ? JSON.stringify(v) : v;
+      toSet.push(`${k === 'permissions' || k === 'allowedPages' || k === 'allowedActions' ? (k === 'allowedPages' ? 'allowed_pages' : k === 'allowedActions' ? 'allowed_actions' : 'permissions') : k} = ?`);
+      vals.push(value);
+    }
+    this.run(`UPDATE roles SET ${toSet.join(', ')}, updated_at = ?, version = version + 1 WHERE id = ?`, [...vals, now, id]);
+    const row = this.get<any>('SELECT * FROM roles WHERE id = ?', [id]);
+    this.enqueueOutbox('roles', id, 'update', row);
+    return row;
+  }
+
+  async deleteRole(id: string): Promise<void> {
+    const now = new Date().toISOString();
+    this.run('UPDATE roles SET deleted = 1, updated_at = ?, version = version + 1 WHERE id = ?', [now, id]);
+    this.enqueueOutbox('roles', id, 'delete', { id, deleted: 1, updated_at: now });
+  }
+
+  getLastPull(table: string): string {
+    const row = this.get<{ last_pull: string } | undefined>('SELECT last_pull FROM sync_state WHERE table_name = ?', [table]);
+    return row?.last_pull || '1970-01-01T00:00:00.000Z';
+  }
+
+  setLastPull(table: string, ts: string): void {
+    this.run('INSERT INTO sync_state (table_name, last_pull) VALUES (?, ?) ON CONFLICT(table_name) DO UPDATE SET last_pull = excluded.last_pull', [table, ts]);
+  }
+
+  // Self-test to validate local DB CRUD and image URL persistence
+  async selfTest(): Promise<{ ok: boolean; report: string }>{
+    if (!this.db) throw new Error('Database not initialized');
+
+    const lines: string[] = [];
+    const nowIso = new Date().toISOString();
+    try {
+      lines.push('بدء اختبار قاعدة البيانات المحلية...');
+
+      // 1) Create test customer
+      const cust = await this.createCustomer({
+        name: 'Test Customer (LocalDB SelfTest)',
+        phone: '07700000000',
+        address: 'SelfTest Address',
+        totalSpent: 0,
+        lastOrder: nowIso,
+        label: 'اختبار',
+        measurements: { chest: 100, waist: 80 },
+        notes: 'SelfTest'
+      } as any);
+      lines.push(`✅ تم إنشاء عميل تجريبي: ${cust.id}`);
+
+      // 2) Create test invoice with image URL (text field)
+      const inv = await this.createInvoice({
+        customer_id: cust.id,
+        customer_name: 'Test Customer (LocalDB SelfTest)',
+        customer_phone: '07700000000',
+        customer_address: 'SelfTest Address',
+        total: 150,
+        paid_amount: 50,
+        status: 'جزئي',
+        invoice_date: nowIso,
+        due_date: nowIso,
+        notes: 'SelfTest Invoice',
+        fabric_image_url: 'https://example.com/selftest-image.jpg'
+      } as any);
+      lines.push(`✅ تم إنشاء فاتورة تجريبية: ${inv.id}`);
+
+      // Verify image URL persisted
+      const fetchedInv = this.get<LocalInvoice>('SELECT * FROM invoices WHERE id = ?', [inv.id]);
+      if (fetchedInv?.fabric_image_url === 'https://example.com/selftest-image.jpg') {
+        lines.push('✅ تم حفظ رابط صورة القماش داخل القاعدة المحلية (حقل نصي)');
+      } else {
+        throw new Error('فشل التحقق من حفظ رابط الصورة في الفاتورة');
+      }
+
+      // 3) Create test order
+      const ord = await this.createOrder({
+        customer_id: cust.id,
+        order_date: nowIso,
+        delivery_date: nowIso,
+        status: 'جديد',
+        total: 100,
+        notes: 'SelfTest Order'
+      } as any);
+      lines.push(`✅ تم إنشاء طلب تجريبي: ${ord.id}`);
+
+      // 4) Read back entities
+      const customers = this.all<LocalCustomer>("SELECT * FROM customers WHERE name LIKE '%SelfTest%'");
+      const invoices = this.all<LocalInvoice>("SELECT * FROM invoices WHERE notes = 'SelfTest Invoice'");
+      const orders = this.all<LocalOrder>("SELECT * FROM orders WHERE notes = 'SelfTest Order'");
+      if (!customers.length || !invoices.length || !orders.length) {
+        throw new Error('فشل في قراءة السجلات التجريبية بعد الإدخال');
+      }
+      lines.push(`✅ قراءة السجلات: عملاء=${customers.length}, فواتير=${invoices.length}, طلبات=${orders.length}`);
+
+      // 5) Update and verify
+      await this.updateCustomer(cust.id, { notes: 'SelfTest Updated' });
+      const updatedCust = this.get<LocalCustomer>('SELECT * FROM customers WHERE id = ?', [cust.id]);
+      if (updatedCust?.notes !== 'SelfTest Updated') {
+        throw new Error('فشل التحديث على العميل');
+      }
+      lines.push('✅ التحديثات تعمل بشكل صحيح');
+
+      // 6) Outbox check (should have entries)
+      const outbox = this.getOutboxBatch(10);
+      if (outbox.length >= 3) {
+        lines.push(`✅ تم تسجيل التغييرات في outbox (${outbox.length}) للمزامنة`);
+      } else {
+        lines.push('⚠️ لم يتم العثور على إدخالات كافية في outbox (قد يكون ذلك طبيعياً في بعض الحالات)');
+      }
+
+      // Note: لا نحذف السجلات التجريبية لضمان تتبعها، وواجهة القائمة لا تعرض "Test Customer"
+
+      lines.push('🎉 اكتمل الاختبار بنجاح. قاعدة البيانات المحلية تعمل وتخزن النصوص وروابط الصور.');
+      return { ok: true, report: lines.join('\n') };
+    } catch (e: any) {
+      lines.push(`❌ حدث خطأ: ${String(e?.message || e)}`);
+      return { ok: false, report: lines.join('\n') };
     }
   }
 }

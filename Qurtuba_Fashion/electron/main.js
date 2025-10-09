@@ -6,8 +6,12 @@ function createWindow() {
     width: 1200,
     height: 800,
     webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false,
+      // Security hardening for legacy JS entry (prefer using main.ts)
+      nodeIntegration: false,
+      contextIsolation: true,
+      sandbox: true,
+      webSecurity: true,
+      allowRunningInsecureContent: false,
       enableRemoteModule: false
     }
   });
@@ -21,10 +25,14 @@ function createWindow() {
     mainWindow.loadFile(path.join(__dirname, '..', 'build', 'index.html'));
   }
 
-  // Open DevTools in development
-  if (isDev) {
-    mainWindow.webContents.openDevTools();
-  }
+  // Deny all new windows/popups
+  mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+
+  // Prevent navigation to arbitrary domains
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    if (isDev) return; // allow localhost navigation during dev
+    event.preventDefault();
+  });
 }
 
 app.whenReady().then(createWindow);
@@ -39,6 +47,11 @@ app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0) {
     createWindow();
   }
+});
+
+// Global security default for any created webContents
+app.on('web-contents-created', (_evt, contents) => {
+  contents.setWindowOpenHandler(() => ({ action: 'deny' }));
 });
 
 

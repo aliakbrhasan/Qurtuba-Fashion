@@ -1,5 +1,6 @@
 import { invoicesAdapter } from '@/adapters/invoices.adapter';
 import type { Invoice, NewInvoice } from '@/db/database.service';
+import { notifications } from '@/services/notifications.service';
 
 export interface InvoiceFormData {
   customerName: string;
@@ -68,7 +69,16 @@ export class InvoiceService {
         fabric_image_url: formData.fabricImageUrl
       };
 
-      return await invoicesAdapter.createInvoice(newInvoice);
+      const created = await invoicesAdapter.createInvoice(newInvoice);
+      try {
+        notifications.emit({
+          type: 'success',
+          title: 'فاتورة جديدة',
+          message: `تم إنشاء فاتورة للعميل ${formData.customerName}`,
+          target: { page: 'invoices', id: (created as any).id },
+        });
+      } catch {}
+      return created;
     } catch (error) {
       console.error('Error creating invoice:', error);
       throw error;
@@ -79,7 +89,16 @@ export class InvoiceService {
   static async updateInvoice(id: string, updates: Partial<Invoice>): Promise<Invoice> {
     try {
       const { databaseService } = await import('@/db/database.service');
-      return await databaseService.updateInvoice(id, updates);
+      const updated = await databaseService.updateInvoice(id, updates);
+      try {
+        notifications.emit({
+          type: 'info',
+          title: 'تعديل فاتورة',
+          message: `تم تعديل الفاتورة رقم ${id}`,
+          target: { page: 'invoices', id },
+        });
+      } catch {}
+      return updated;
     } catch (error) {
       console.error('Error updating invoice:', error);
       throw error;
@@ -116,10 +135,12 @@ export class InvoiceService {
       }
       
       // Update only the necessary fields
-      const updates = {
+      const nowIso = new Date().toISOString();
+      const updates: Partial<Invoice> = {
         status: 'مدفوع',
-        paid_amount: invoice.total
-      };
+        paid_amount: invoice.total,
+        paid_at: nowIso,
+      } as any;
       
       console.log('Updating invoice with:', updates);
       const result = await this.updateInvoice(id, updates);

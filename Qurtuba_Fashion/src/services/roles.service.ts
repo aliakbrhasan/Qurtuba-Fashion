@@ -1,4 +1,4 @@
-import { supabase } from '../db/client';
+// Renderer must not call Supabase directly; use IPC via preload
 import { sanitizeAction, sanitizePage, sanitizeRole, sanitizeArabicText } from '../utils/encoding';
 
 export interface Role {
@@ -53,13 +53,10 @@ class RolesService {
   private async getRoleIdByName(roleName: string): Promise<string | null> {
     try {
       const name = sanitizeArabicText(roleName);
-      const { data, error } = await supabase
-        .from('roles')
-        .select('id')
-        .eq('name', name)
-        .single();
-      if (error || !data) return null;
-      return (data as any).id as string;
+      const api = (window as any).electronAPI;
+      const all = await api.local.getRoles();
+      const found = (all || []).find((r: any) => (r.name || '').trim() === name.trim());
+      return found ? String(found.id) : null;
     } catch {
       return null;
     }
@@ -176,15 +173,10 @@ class RolesService {
   // Get all roles
   async getRoles(): Promise<Role[]> {
     try {
-      const { data, error } = await supabase
-        .from('roles')
-        .select('*')
-        .eq('is_active', true)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      // Sanitize Arabic on every load to avoid mojibake after refresh
-      const mapped = (data || []).map(role => this.mapSupabaseRoleToRole(role));
+      const api = (window as any).electronAPI;
+      const res = await api.local.getRoles();
+      if (!res?.ok) throw new Error(res?.error || 'Failed to load roles');
+      const mapped = (res.data || []).map((role: any) => this.mapSupabaseRoleToRole(role));
       // Local-first: don't overwrite cache with empty remote result
       if (mapped.length > 0) {
         this.writeCache(this.ROLES_CACHE_KEY, mapped);
@@ -209,14 +201,11 @@ class RolesService {
         const localRole = this.localData.roles.find(role => role.id === id) || null;
         return localRole ? sanitizeRole(localRole) : null;
       }
-      const { data, error } = await supabase
-        .from('roles')
-        .select('*')
-        .eq('id', id)
-        .single();
-
-      if (error) throw error;
-      return this.mapSupabaseRoleToRole(data);
+      const api = (window as any).electronAPI;
+      const res = await api.local.getRoles();
+      if (!res?.ok) throw new Error(res?.error || 'Failed to load roles');
+      const row = (res.data || []).find((r: any) => String(r.id) === String(id));
+      return row ? this.mapSupabaseRoleToRole(row) : null;
     } catch (error) {
       console.warn('Supabase error, using local data:', error);
       return this.localData.roles.find(role => role.id === id) || null;
@@ -226,24 +215,20 @@ class RolesService {
   // Create new role
   async createRole(role: Omit<Role, 'id' | 'created_at' | 'updated_at'>): Promise<Role> {
     try {
-      const { data, error } = await supabase
-        .from('roles')
-        .insert([{
-          name: sanitizeArabicText(role.name),
-          description: sanitizeArabicText(role.description),
-          permissions: role.permissions,
-          allowed_pages: role.allowedPages,
-          allowed_actions: role.allowedActions,
-          is_active: role.isActive
-        }])
-        .select()
-        .single();
-
-      if (error) throw error;
-      const created = this.mapSupabaseRoleToRole(data);
+      const api = (window as any).electronAPI;
+      const res = await api.local.createRole({
+        name: sanitizeArabicText(role.name),
+        description: sanitizeArabicText(role.description),
+        permissions: role.permissions,
+        allowedPages: role.allowedPages,
+        allowedActions: role.allowedActions,
+        isActive: role.isActive,
+      });
+      if (!res?.ok) throw new Error(res?.error || 'Failed to create role');
+      const createdMapped = this.mapSupabaseRoleToRole(res.data);
       const current = this.readCache<Role[]>(this.ROLES_CACHE_KEY, []);
-      this.writeCache(this.ROLES_CACHE_KEY, [created, ...current]);
-      return created;
+      this.writeCache(this.ROLES_CACHE_KEY, [createdMapped, ...current]);
+      return createdMapped;
     } catch (error) {
       console.warn('Supabase createRole error, persisting to cache:', error);
       const newRole: Role = sanitizeRole({
@@ -272,22 +257,17 @@ class RolesService {
         const resolvedId = targetName ? await this.getRoleIdByName(targetName) : null;
 
         if (resolvedId) {
-          const { data, error } = await supabase
-            .from('roles')
-            .update({
-              name: sanitizedName ?? currentLocal!.name,
-              description: sanitizedDesc ?? currentLocal!.description,
-              permissions: updates.permissions ?? currentLocal!.permissions,
-              allowed_pages: updates.allowedPages ?? currentLocal!.allowedPages,
-              allowed_actions: updates.allowedActions ?? currentLocal!.allowedActions,
-              is_active: updates.isActive ?? currentLocal!.isActive,
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', resolvedId)
-            .select()
-            .single();
-          if (error) throw error;
-          const updated = this.mapSupabaseRoleToRole(data);
+          const api = (window as any).electronAPI;
+          const res = await api.local.updateRole(resolvedId, {
+            name: sanitizedName ?? currentLocal!.name,
+            description: sanitizedDesc ?? currentLocal!.description,
+            permissions: updates.permissions ?? currentLocal!.permissions,
+            allowedPages: updates.allowedPages ?? currentLocal!.allowedPages,
+            allowedActions: updates.allowedActions ?? currentLocal!.allowedActions,
+            isActive: updates.isActive ?? currentLocal!.isActive,
+          });
+          if (!res?.ok) throw new Error(res?.error || 'Failed to update role');
+          const updated = this.mapSupabaseRoleToRole(res.data);
           const cached = this.readCache<Role[]>(this.ROLES_CACHE_KEY, []);
           const next = cached.map(r => (r.id === resolvedId ? updated : r));
           this.writeCache(this.ROLES_CACHE_KEY, next);
@@ -298,20 +278,17 @@ class RolesService {
           return updated;
         } else if (currentLocal) {
           // Insert a new role if none exists in cloud
-          const { data, error } = await supabase
-            .from('roles')
-            .insert({
-              name: sanitizedName ?? currentLocal.name,
-              description: sanitizedDesc ?? currentLocal.description,
-              permissions: updates.permissions ?? currentLocal.permissions,
-              allowed_pages: updates.allowedPages ?? currentLocal.allowedPages,
-              allowed_actions: updates.allowedActions ?? currentLocal.allowedActions,
-              is_active: updates.isActive ?? currentLocal.isActive
-            })
-            .select()
-            .single();
-          if (error) throw error;
-          const created = this.mapSupabaseRoleToRole(data);
+          const api = (window as any).electronAPI;
+          const res = await api.local.createRole({
+            name: sanitizedName ?? currentLocal.name,
+            description: sanitizedDesc ?? currentLocal.description,
+            permissions: updates.permissions ?? currentLocal.permissions,
+            allowedPages: updates.allowedPages ?? currentLocal.allowedPages,
+            allowedActions: updates.allowedActions ?? currentLocal.allowedActions,
+            isActive: updates.isActive ?? currentLocal.isActive,
+          });
+          if (!res?.ok) throw new Error(res?.error || 'Failed to create role');
+          const created = this.mapSupabaseRoleToRole(res.data);
           const cached = this.readCache<Role[]>(this.ROLES_CACHE_KEY, []);
           this.writeCache(this.ROLES_CACHE_KEY, [created, ...cached]);
           // Update local copy
@@ -321,23 +298,17 @@ class RolesService {
       }
 
       // UUID path: direct update by id
-      const { data, error } = await supabase
-        .from('roles')
-        .update({
-          name: sanitizedName,
-          description: sanitizedDesc,
-          permissions: updates.permissions,
-          allowed_pages: updates.allowedPages,
-          allowed_actions: updates.allowedActions,
-          is_active: updates.isActive,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', id)
-        .select()
-        .single();
-
-      if (error) throw error;
-      const updated = this.mapSupabaseRoleToRole(data);
+      const api = (window as any).electronAPI;
+      const res = await api.local.updateRole(id, {
+        name: sanitizedName,
+        description: sanitizedDesc,
+        permissions: updates.permissions,
+        allowedPages: updates.allowedPages,
+        allowedActions: updates.allowedActions,
+        isActive: updates.isActive,
+      });
+      if (!res?.ok) throw new Error(res?.error || 'Failed to update role');
+      const updated = this.mapSupabaseRoleToRole(res.data);
       const cached = this.readCache<Role[]>(this.ROLES_CACHE_KEY, []);
       const next = cached.map(r => (r.id === id ? updated : r));
       this.writeCache(this.ROLES_CACHE_KEY, next);
@@ -378,12 +349,9 @@ class RolesService {
   // Delete role
   async deleteRole(id: string): Promise<void> {
     try {
-      const { error } = await supabase
-        .from('roles')
-        .update({ is_active: false })
-        .eq('id', id);
-
-      if (error) throw error;
+      const api = (window as any).electronAPI;
+      const res = await api.local.deleteRole(id);
+      if (!res?.ok) throw new Error(res?.error || 'Failed to delete role');
     } catch (error) {
       console.warn('Supabase deleteRole error, updating cached roles:', error);
       const cached = this.readCache<Role[]>(this.ROLES_CACHE_KEY, []);
@@ -395,14 +363,8 @@ class RolesService {
   // Get all pages
   async getPages(): Promise<Page[]> {
     try {
-      const { data, error } = await supabase
-        .from('pages')
-        .select('*')
-        .eq('is_active', true)
-        .order('name');
-
-      if (error) throw error;
-      const mapped = (data || []).map((p: any) => sanitizePage(p));
+      // Pages are static in local service; return defaults then cache
+      const mapped = this.localData.pages.map(p => sanitizePage(p));
       if (mapped.length > 0) {
         this.writeCache(this.PAGES_CACHE_KEY, mapped);
         return mapped;
@@ -421,15 +383,8 @@ class RolesService {
   // Get all actions
   async getActions(): Promise<Action[]> {
     try {
-      const { data, error } = await supabase
-        .from('actions')
-        .select('*')
-        .eq('is_active', true)
-        .order('category', { ascending: true })
-        .order('name');
-
-      if (error) throw error;
-      const mapped = (data || []).map((a: any) => sanitizeAction(a));
+      // Actions are static in local service; return defaults then cache
+      const mapped = this.localData.actions.map(a => sanitizeAction(a));
       if (mapped.length > 0) {
         this.writeCache(this.ACTIONS_CACHE_KEY, mapped);
         return mapped;

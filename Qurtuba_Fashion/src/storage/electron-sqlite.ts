@@ -6,6 +6,15 @@ const isElectron = typeof window !== 'undefined' && (window as any).electronAPI;
 
 export class ElectronSQLiteStorage implements StoragePort {
 	private api: any;
+	private async call<T>(channel: string, ...args: any[]): Promise<T> {
+		const res = await (this.ensureApi() as any);
+		const out = await (resPath(res, channel))(...args);
+		if (out && typeof out === 'object' && 'ok' in out) {
+			if ((out as any).ok) return (out as any).data as T;
+			throw new Error((out as any).error || 'IPC error');
+		}
+		return out as T;
+	}
 
 	constructor() {
 		this.api = isElectron ? (window as any).electronAPI : null;
@@ -16,29 +25,35 @@ export class ElectronSQLiteStorage implements StoragePort {
 		return this.api;
 	}
 
-	async getCustomers(): Promise<Customer[]> { const api = this.ensureApi(); return await api.local.getCustomers(); }
+	async getCustomers(): Promise<Customer[]> { return await this.call<Customer[]>('local.getCustomers'); }
 
-	async createCustomer(customer: Omit<Customer, 'id' | 'created_at'>): Promise<Customer> { const api = this.ensureApi(); return await api.local.createCustomer(customer); }
+	async createCustomer(customer: Omit<Customer, 'id' | 'created_at'>): Promise<Customer> { return await this.call<Customer>('local.createCustomer', customer); }
 
-	async updateCustomer(id: string, updates: Partial<Customer>): Promise<Customer> { const api = this.ensureApi(); return await api.local.updateCustomer(id, updates); }
+	async updateCustomer(id: string, updates: Partial<Customer>): Promise<Customer> { return await this.call<Customer>('local.updateCustomer', id, updates); }
 
-	async deleteCustomer(id: string): Promise<void> { const api = this.ensureApi(); await api.local.deleteCustomer(id); }
+	async deleteCustomer(id: string): Promise<void> { await this.call('local.deleteCustomer', id); }
 
-	async getOrders(): Promise<Order[]> { const api = this.ensureApi(); return await api.local.getOrders(); }
+	async getOrders(): Promise<Order[]> { return await this.call<Order[]>('local.getOrders'); }
 
-	async createOrder(order: NewOrder): Promise<Order> { const api = this.ensureApi(); return await api.local.createOrder(order); }
+	async createOrder(order: NewOrder): Promise<Order> { return await this.call<Order>('local.createOrder', order); }
 
-	async updateOrder(id: string, updates: Partial<Order>): Promise<Order> { const api = this.ensureApi(); return await api.local.updateOrder(id, updates); }
+	async updateOrder(id: string, updates: Partial<Order>): Promise<Order> { return await this.call<Order>('local.updateOrder', id, updates); }
 
-	async deleteOrder(id: string): Promise<void> { const api = this.ensureApi(); await api.local.deleteOrder(id); }
+	async deleteOrder(id: string): Promise<void> { await this.call('local.deleteOrder', id); }
 
-	async getInvoices(): Promise<Invoice[]> { const api = this.ensureApi(); return await api.local.getInvoices(); }
+	async getInvoices(): Promise<Invoice[]> { return await this.call<Invoice[]>('local.getInvoices'); }
 
-	async createInvoice(invoice: any): Promise<Invoice> { const api = this.ensureApi(); return await api.local.createInvoice(invoice); }
+	async createInvoice(invoice: any): Promise<Invoice> { return await this.call<Invoice>('local.createInvoice', invoice); }
 
-	async updateInvoice(id: string, updates: Partial<Invoice>): Promise<Invoice> { const api = this.ensureApi(); return await api.local.updateInvoice(id, updates); }
+	async updateInvoice(id: string, updates: Partial<Invoice>): Promise<Invoice> { return await this.call<Invoice>('local.updateInvoice', id, updates); }
 
-	async deleteInvoice(id: string): Promise<void> { const api = this.ensureApi(); await api.local.deleteInvoice(id); }
+	async deleteInvoice(id: string): Promise<void> { await this.call('local.deleteInvoice', id); }
+
+	// Roles via IPC
+	async getRoles(): Promise<any[]> { return await this.call<any[]>('local.getRoles'); }
+	async createRole(role: any): Promise<any> { return await this.call<any>('local.createRole', role); }
+	async updateRole(id: string, updates: any): Promise<any> { return await this.call<any>('local.updateRole', id, updates); }
+	async deleteRole(id: string): Promise<void> { await this.call('local.deleteRole', id); }
 
 	async getInvoiceItems(_invoiceId: string): Promise<InvoiceItem[]> { return []; }
 
@@ -57,6 +72,11 @@ export class ElectronSQLiteStorage implements StoragePort {
 	async upsertCustomerFromCloud(): Promise<void> { /* no-op */ }
 	async upsertInvoiceFromCloud(): Promise<void> { /* no-op */ }
 	async upsertOrderFromCloud(): Promise<void> { /* no-op */ }
+}
+
+// Helper to traverse object by dotted path like 'local.getCustomers'
+function resPath(obj: any, path: string): any {
+	return path.split('.').reduce((acc, key) => acc?.[key], obj);
 }
 
 

@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { formatCurrency, formatDate, PrintableInvoiceData, PrintableInvoice } from './PrintableInvoice';
 import { openPrintWindow } from './print/PrintUtils';
+import { receiptStyles } from './PrintableInvoice';
 import { useInvoiceDetails } from '@/hooks/useInvoiceDetails';
 
 interface InvoiceDetailsPageProps {
@@ -31,7 +32,7 @@ interface InvoiceDetailsPageProps {
 }
 
 export function InvoiceDetailsPage({ invoiceId, onBack, onMarkAsPaid }: InvoiceDetailsPageProps) {
-  const { invoiceDetails, isLoading, error } = useInvoiceDetails(invoiceId);
+  const { invoiceDetails, isLoading, error, refetch } = useInvoiceDetails(invoiceId);
 
   // حالة التحميل
   if (isLoading) {
@@ -76,13 +77,14 @@ export function InvoiceDetailsPage({ invoiceId, onBack, onMarkAsPaid }: InvoiceD
     address: invoice.customer_address || '',
     total: invoice.total,
     paid: invoice.paid_amount,
+    paymentDate: invoice.paid_amount > 0 ? (invoice.paid_at || invoice.updated_at || invoice.invoice_date) : undefined,
     receivedDate: invoice.invoice_date,
     deliveryDate: invoice.due_date || invoice.invoice_date,
     notes: invoice.notes || ''
   };
 
   const handlePrint = () => {
-    openPrintWindow(`فاتورة ${invoice.invoice_number}`, <PrintableInvoice invoice={printableInvoice} />);
+    openPrintWindow(`فاتورة ${invoice.invoice_number}`, <PrintableInvoice invoice={printableInvoice} />, receiptStyles);
   };
 
   const handleShare = async () => {
@@ -112,9 +114,14 @@ export function InvoiceDetailsPage({ invoiceId, onBack, onMarkAsPaid }: InvoiceD
     handlePrint();
   };
 
-  const handleMarkAsPaid = () => {
-    if (onMarkAsPaid) {
-      onMarkAsPaid(invoice.id);
+  const handleMarkAsPaid = async () => {
+    try {
+      const { InvoiceService } = await import('@/services/invoice.service');
+      await InvoiceService.markAsPaid(invoice.id);
+      if (onMarkAsPaid) onMarkAsPaid(invoice.id);
+      await refetch();
+    } catch (e) {
+      console.error('Failed to mark as paid:', e);
     }
   };
 
@@ -391,9 +398,9 @@ export function InvoiceDetailsPage({ invoiceId, onBack, onMarkAsPaid }: InvoiceD
              </CardHeader>
             <CardContent>
               <div className="bg-[#f9fafb] rounded-lg p-8 border border-[#e5e7eb] flex flex-col items-center justify-center gap-3 min-h-[140px]">
-                {invoice.fabricImageUrl ? (
+                { (invoice.fabricImageUrl || (invoice as any).fabric_image_url) ? (
                   <img
-                    src={invoice.fabricImageUrl}
+                    src={invoice.fabricImageUrl || (invoice as any).fabric_image_url}
                     alt="صورة القماش"
                     className="max-w-full h-auto max-h-48 rounded-lg shadow-md"
                   />

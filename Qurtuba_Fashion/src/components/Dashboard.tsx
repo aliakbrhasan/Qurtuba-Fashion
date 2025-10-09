@@ -2,10 +2,12 @@ import { useState } from 'react';
 import { Card, CardContent } from './ui/card';
 import { Button } from './ui/button';
 import { Bell, AlertCircle, RefreshCw } from 'lucide-react';
+import { SyncStatus } from './SyncStatus';
 import { useDashboardStats } from '@/hooks/useDashboardStats';
 import { QuickActions } from './dashboard/QuickActions';
 import { RecentActivities } from './dashboard/RecentActivities';
 import { NotificationCenter } from './dashboard/NotificationCenter';
+import { useNotifications } from '@/app/NotificationsProvider';
 
 interface DashboardProps {
   onNavigate: (page: string) => void;
@@ -15,6 +17,7 @@ interface DashboardProps {
 export function Dashboard({ onNavigate, onCreateInvoice }: DashboardProps) {
   const { stats, error } = useDashboardStats();
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
+  const { unreadCount } = useNotifications();
 
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -60,14 +63,24 @@ export function Dashboard({ onNavigate, onCreateInvoice }: DashboardProps) {
             مرحباً بك في نظام إدارة أزياء قرطبة
           </p>
         </div>
-        <div className="flex gap-2">
-          <Button 
-            className="bg-[#155446] hover:bg-[#13312A] text-[#F6E9CA] touch-target"
-            onClick={() => setIsNotificationOpen(true)}
-          >
-            <Bell className="w-4 h-4 ml-2" />
-            <span className="arabic-text">الإشعارات</span>
-          </Button>
+        <div className="flex gap-2 items-center">
+          <div className="relative hidden md:block">
+            <SyncStatus />
+          </div>
+          <div className="relative">
+            <Button 
+              className="bg-[#155446] hover:bg-[#13312A] text-[#F6E9CA] touch-target"
+              onClick={() => setIsNotificationOpen(true)}
+            >
+              <Bell className="w-4 h-4 ml-2" />
+              <span className="arabic-text">الإشعارات</span>
+            </Button>
+            {unreadCount > 0 && (
+              <span className="absolute -top-1 -right-1 bg-red-600 text-white text-[10px] leading-none rounded-full py-[2px] px-[6px]">
+                {unreadCount}
+              </span>
+            )}
+          </div>
         </div>
       </div>
 

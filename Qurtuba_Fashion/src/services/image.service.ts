@@ -1,4 +1,4 @@
-import { supabase } from '@/db/client';
+// Use IPC via preload; renderer should not access Supabase directly
 
 export interface ImageUploadResult {
   url: string;
@@ -10,6 +10,7 @@ export class ImageService {
   private static readonly BUCKET_NAME = 'invoice-images';
   private static readonly MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
   private static readonly ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+  private static readonly MAX_DIMENSION = 4000; // pixels
 
   // Upload image to Supabase Storage
   static async uploadImage(file: File, folder: string = 'fabric-images'): Promise<ImageUploadResult> {
@@ -19,34 +20,25 @@ export class ImageService {
         throw new Error('نوع الملف غير مدعوم أو حجمه كبير جداً');
       }
 
-      // Generate unique filename
-      const timestamp = Date.now();
-      const randomString = Math.random().toString(36).substring(2, 8);
-      const fileExtension = file.name.split('.').pop() || 'jpg';
-      const fileName = `${folder}/${timestamp}-${randomString}.${fileExtension}`;
-
-      // Upload to Supabase Storage
-      const { data, error } = await supabase.storage
-        .from(this.BUCKET_NAME)
-        .upload(fileName, file, {
-          cacheControl: '3600',
-          upsert: false
-        });
-
-      if (error) {
-        throw new Error(`فشل في رفع الصورة: ${error.message}`);
+      // Validate image dimensions conservatively to avoid extremely large images
+      const dimensions = await this.getImageDimensions(file);
+      if (dimensions.width > this.MAX_DIMENSION || dimensions.height > this.MAX_DIMENSION) {
+        throw new Error('أبعاد الصورة كبيرة جداً');
       }
 
-      // Get public URL
-      const { data: publicData } = supabase.storage
-        .from(this.BUCKET_NAME)
-        .getPublicUrl(fileName);
+      // Generate unique filename
+      const timestamp = Date.now();
+      const randomString = crypto.getRandomValues(new Uint32Array(1))[0].toString(36);
+      const fileExtension = file.name.split('.').pop() || 'jpg';
+      const safeFolder = folder.replace(/[^a-zA-Z0-9-_\/]/g, '').slice(0, 64) || 'images';
+      const fileName = `${safeFolder}/${timestamp}-${randomString}.${fileExtension}`;
 
-      return {
-        url: data.path,
-        path: fileName,
-        publicUrl: publicData.publicUrl
-      };
+      // Upload via IPC (main process handles Supabase)
+      const buffer = await file.arrayBuffer();
+      const api = (window as any).electronAPI;
+      const res = await api.images.upload(Array.from(new Uint8Array(buffer)), file.type, fileName);
+      if (!res?.ok) throw new Error(res?.error || 'فشل في رفع الصورة');
+      return res.data as ImageUploadResult;
     } catch (error) {
       console.error('Error uploading image:', error);
       throw error;
@@ -56,13 +48,9 @@ export class ImageService {
   // Delete image from Supabase Storage
   static async deleteImage(path: string): Promise<void> {
     try {
-      const { error } = await supabase.storage
-        .from(this.BUCKET_NAME)
-        .remove([path]);
-
-      if (error) {
-        throw new Error(`فشل في حذف الصورة: ${error.message}`);
-      }
+      const api = (window as any).electronAPI;
+      const res = await api.images.delete(path);
+      if (!res?.ok) throw new Error(res?.error || 'فشل في حذف الصورة');
     } catch (error) {
       console.error('Error deleting image:', error);
       throw error;
@@ -70,12 +58,11 @@ export class ImageService {
   }
 
   // Get image URL
-  static getImageUrl(path: string): string {
-    const { data } = supabase.storage
-      .from(this.BUCKET_NAME)
-      .getPublicUrl(path);
-    
-    return data.publicUrl;
+  static async getImageUrl(path: string): Promise<string> {
+    const api = (window as any).electronAPI;
+    const res = await api.images.getPublicUrl(path);
+    if (res?.ok) return res.data as string;
+    throw new Error(res?.error || 'فشل في جلب رابط الصورة');
   }
 
   // Validate file
@@ -91,6 +78,15 @@ export class ImageService {
     }
 
     return true;
+  }
+
+  private static getImageDimensions(file: File): Promise<{ width: number; height: number }> {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve({ width: img.width, height: img.height });
+      img.onerror = () => reject(new Error('فشل في قراءة أبعاد الصورة'));
+      img.src = URL.createObjectURL(file);
+    });
   }
 
   // Compress image before upload

@@ -1,19 +1,13 @@
-import { createClient } from '@supabase/supabase-js';
+// Reuse the shared Supabase client to avoid multiple GoTrue instances
+import { supabase } from '@/db/client';
 import type { StoragePort } from '@/storage/StoragePort';
-
-const fallbackSupabaseUrl = 'https://dbjaogpesmyrqjwtzzwr.supabase.co';
-const fallbackSupabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRiamFvZ3Blc215cnFqd3R6endyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg0Nzk1MzksImV4cCI6MjA3NDA1NTUzOX0.mioc1bAd_RYxcKS546MuBB3-DpLdyxxJiumJW4zv6Rw';
 
 export class SyncEngine {
 	private storage: StoragePort;
-	private supabase: any;
 	private timer: any = null;
 
 	constructor(storage: StoragePort) {
 		this.storage = storage;
-		const url = (import.meta as any).env?.VITE_SUPABASE_URL || fallbackSupabaseUrl;
-		const key = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY || fallbackSupabaseAnonKey;
-		this.supabase = createClient(url, key);
 	}
 
 	schedule(intervalMs: number = 60000) {
@@ -33,7 +27,7 @@ export class SyncEngine {
 		const bundle = await this.storage.getUnsyncedRecords!();
 		// customers
 		for (const c of bundle.customers) {
-			await this.supabase.from('customers').upsert({
+			await supabase.from('customers').upsert({
 				id: c.id,
 				name: c.name,
 				phone: c.phone,
@@ -50,7 +44,7 @@ export class SyncEngine {
 		}
 		// invoices
 		for (const inv of bundle.invoices) {
-			await this.supabase.from('invoices').upsert({
+			await supabase.from('invoices').upsert({
 				id: inv.id,
 				invoice_number: inv.invoice_number,
 				customer_id: inv.customer_id,
@@ -71,7 +65,7 @@ export class SyncEngine {
 		}
 		// orders
 		for (const o of bundle.orders) {
-			await this.supabase.from('orders').upsert({
+			await supabase.from('orders').upsert({
 				id: o.id,
 				customer_id: (o as any).customer_id,
 				order_date: (o as any).order_date || o.created_at,
@@ -88,7 +82,7 @@ export class SyncEngine {
 
 	private async pull(): Promise<void> {
 		// customers
-		const { data: customers } = await this.supabase.from('customers').select('*').order('updated_at', { ascending: false });
+		const { data: customers } = await supabase.from('customers').select('*').order('updated_at', { ascending: false });
 		if (customers && this.storage.upsertCustomerFromCloud) {
 			for (const c of customers) {
 				await this.storage.upsertCustomerFromCloud({ ...c });
@@ -103,7 +97,7 @@ export class SyncEngine {
 			}
 		}
 		// invoices
-		const { data: invoices } = await this.supabase.from('invoices').select('*').order('updated_at', { ascending: false });
+		const { data: invoices } = await supabase.from('invoices').select('*').order('updated_at', { ascending: false });
 		if (invoices && this.storage.upsertInvoiceFromCloud) {
 			for (const inv of invoices) {
 				await this.storage.upsertInvoiceFromCloud({ ...inv });
@@ -117,7 +111,7 @@ export class SyncEngine {
 			}
 		}
 		// orders
-		const { data: orders } = await this.supabase.from('orders').select('*').order('updated_at', { ascending: false });
+		const { data: orders } = await supabase.from('orders').select('*').order('updated_at', { ascending: false });
 		if (orders && this.storage.upsertOrderFromCloud) {
 			for (const o of orders) {
 				await this.storage.upsertOrderFromCloud({ ...o });

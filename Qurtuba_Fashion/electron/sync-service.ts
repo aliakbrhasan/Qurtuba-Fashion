@@ -1,5 +1,8 @@
 import { LocalDatabase } from './local-database';
 import { createClient } from '@supabase/supabase-js';
+import { app } from 'electron';
+import { join } from 'path';
+import { appendFileSync, mkdirSync, existsSync } from 'fs';
 
 export interface SyncStatus {
   isOnline: boolean;
@@ -32,6 +35,15 @@ export class SyncService {
         }
       }
     }, 15000);
+  }
+
+  private logError(message: string): void {
+    try {
+      const dir = join(app.getPath('userData'), 'logs');
+      if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+      const file = join(dir, 'logs.txt');
+      appendFileSync(file, `[${new Date().toISOString()}] ${message}\n`);
+    } catch {}
   }
 
   private initializeSupabase(): void {
@@ -81,92 +93,62 @@ export class SyncService {
     let syncedCount = 0;
 
     try {
-      // Get unsynced records
-      const unsyncedRecords = await this.localDB.getUnsyncedRecords();
-      
-      // Sync customers
-      for (const customer of unsyncedRecords.customers) {
+      // Push outbox ordered by created_at with idempotency
+      const batch = this.localDB.getOutboxBatch(100);
+      for (const entry of batch) {
         try {
-          const { error } = await this.supabase
-            .from('customers')
-            .upsert({
-              id: customer.id,
-              name: customer.name,
-              phone: customer.phone,
-              address: customer.address,
-              total_spent: (customer as any).total_spent ?? (customer as any).totalSpent ?? 0,
-              last_order: (customer as any).last_order ?? (customer as any).lastOrder ?? null,
-              label: customer.label,
-              measurements: customer.measurements ? JSON.parse(customer.measurements) : null,
-              notes: customer.notes,
-              created_at: customer.created_at,
-              updated_at: customer.updated_at
-            });
-
-          if (!error) {
-            await this.localDB.markAsSynced('customers', customer.id);
-            syncedCount++;
+          const payload = entry.payload;
+          if (entry.table_name === 'customers') {
+            if (entry.action === 'insert') {
+              const { error } = await this.supabase.from('customers').insert(payload as any);
+              if (error && String(error.message || '').toLowerCase().includes('duplicate')) {
+                await this.supabase.from('customers').update(payload as any).eq('id', payload.id);
+              }
+            } else if (entry.action === 'update') {
+              await this.supabase.from('customers').update(payload as any).eq('id', payload.id);
+            } else if (entry.action === 'delete') {
+              await this.supabase.from('customers').update({ deleted: 1, updated_at: payload.updated_at }).eq('id', payload.id);
+            }
+          } else if (entry.table_name === 'invoices') {
+            if (entry.action === 'insert') {
+              const { error } = await this.supabase.from('invoices').insert(payload as any);
+              if (error && String(error.message || '').toLowerCase().includes('duplicate')) {
+                await this.supabase.from('invoices').update(payload as any).eq('id', payload.id);
+              }
+            } else if (entry.action === 'update') {
+              await this.supabase.from('invoices').update(payload as any).eq('id', payload.id);
+            } else if (entry.action === 'delete') {
+              await this.supabase.from('invoices').update({ deleted: 1, updated_at: payload.updated_at }).eq('id', payload.id);
+            }
+          } else if (entry.table_name === 'orders') {
+            if (entry.action === 'insert') {
+              const { error } = await this.supabase.from('orders').insert(payload as any);
+              if (error && String(error.message || '').toLowerCase().includes('duplicate')) {
+                await this.supabase.from('orders').update(payload as any).eq('id', payload.id);
+              }
+            } else if (entry.action === 'update') {
+              await this.supabase.from('orders').update(payload as any).eq('id', payload.id);
+            } else if (entry.action === 'delete') {
+              await this.supabase.from('orders').update({ deleted: 1, updated_at: payload.updated_at }).eq('id', payload.id);
+            }
+          } else if (entry.table_name === 'roles') {
+            if (entry.action === 'insert') {
+              const { error } = await this.supabase.from('roles').insert(payload as any);
+              if (error && String(error.message || '').toLowerCase().includes('duplicate')) {
+                await this.supabase.from('roles').update(payload as any).eq('id', payload.id);
+              }
+            } else if (entry.action === 'update') {
+              await this.supabase.from('roles').update(payload as any).eq('id', payload.id);
+            } else if (entry.action === 'delete') {
+              await this.supabase.from('roles').update({ is_active: false, updated_at: payload.updated_at }).eq('id', payload.id);
+            }
           }
-        } catch (error) {
-          console.error('Error syncing customer:', error);
-        }
-      }
-
-      // Sync invoices
-      for (const invoice of unsyncedRecords.invoices) {
-        try {
-          const { error } = await this.supabase
-            .from('invoices')
-            .upsert({
-              id: invoice.id,
-              invoice_number: invoice.invoice_number,
-              customer_id: invoice.customer_id,
-              customer_name: invoice.customer_name,
-              customer_phone: invoice.customer_phone,
-              customer_address: invoice.customer_address,
-              total: invoice.total,
-              paid_amount: invoice.paid_amount,
-              status: invoice.status,
-              invoice_date: invoice.invoice_date,
-              due_date: invoice.due_date,
-              notes: invoice.notes,
-              fabric_image_url: invoice.fabric_image_url,
-              created_at: invoice.created_at,
-              updated_at: invoice.updated_at
-            });
-
-          if (!error) {
-            await this.localDB.markAsSynced('invoices', invoice.id);
-            syncedCount++;
-          }
-        } catch (error) {
-          console.error('Error syncing invoice:', error);
-        }
-      }
-
-      // Sync orders
-      for (const order of unsyncedRecords.orders) {
-        try {
-          const { error } = await this.supabase
-            .from('orders')
-            .upsert({
-              id: order.id,
-              customer_id: order.customer_id,
-              order_date: order.order_date,
-              delivery_date: order.delivery_date,
-              status: order.status,
-              total: order.total,
-              notes: order.notes,
-              created_at: order.created_at,
-              updated_at: order.updated_at
-            });
-
-          if (!error) {
-            await this.localDB.markAsSynced('orders', order.id);
-            syncedCount++;
-          }
-        } catch (error) {
-          console.error('Error syncing order:', error);
+          this.localDB.markOutboxSuccess(entry.id);
+          syncedCount++;
+        } catch (err: any) {
+          const msg = String(err?.message || err);
+          this.localDB.markOutboxFailure(entry.id, msg);
+          this.logError(`push error on ${entry.table_name}/${entry.record_id}: ${msg}`);
         }
       }
 
@@ -195,84 +177,41 @@ export class SyncService {
 
   private async downloadChanges(): Promise<void> {
     if (!this.supabase) return;
-
     try {
-      // Download customers
-      const { data: customers } = await this.supabase
-        .from('customers')
-        .select('*')
-        .order('updated_at', { ascending: false });
-
-      if (customers) {
-        for (const customer of customers) {
-          await (this.localDB as any).upsertCustomerFromCloud?.({
-            id: customer.id,
-            name: customer.name,
-            phone: customer.phone,
-            address: customer.address,
-            total_spent: customer.total_spent,
-            last_order: customer.last_order,
-            label: customer.label,
-            measurements: customer.measurements,
-            notes: customer.notes,
-            created_at: customer.created_at,
-            updated_at: customer.updated_at
+      const tables = [
+        { name: 'customers' },
+        { name: 'invoices' },
+        { name: 'orders' },
+        { name: 'roles' },
+      ];
+      for (const t of tables) {
+        const last = this.localDB.getLastPull(t.name);
+        const { data, error } = await this.supabase
+          .from(t.name)
+          .select('*')
+          .gt('updated_at', last)
+          .order('updated_at', { ascending: true })
+          .limit(500);
+        if (error) continue;
+        const rows = data || [];
+        for (const row of rows) {
+          if (t.name === 'customers') await (this.localDB as any).upsertCustomerFromCloud?.({ ...row });
+          else if (t.name === 'invoices') await (this.localDB as any).upsertInvoiceFromCloud?.({ ...row });
+          else if (t.name === 'orders') await (this.localDB as any).upsertOrderFromCloud?.({ ...row });
+          else if (t.name === 'roles') await (this.localDB as any).updateRole?.(String(row.id), {
+            name: row.name,
+            description: row.description,
+            permissions: row.permissions,
+            allowedPages: row.allowed_pages,
+            allowedActions: row.allowed_actions,
+            is_active: row.is_active,
           });
         }
+        const newest = rows.length ? rows[rows.length - 1].updated_at : last;
+        this.localDB.setLastPull(t.name, newest);
       }
-
-      // Download invoices
-      const { data: invoices } = await this.supabase
-        .from('invoices')
-        .select('*')
-        .order('updated_at', { ascending: false });
-
-      if (invoices) {
-        for (const invoice of invoices) {
-          await (this.localDB as any).upsertInvoiceFromCloud?.({
-            id: invoice.id,
-            invoice_number: invoice.invoice_number,
-            customer_id: invoice.customer_id,
-            customer_name: invoice.customer_name,
-            customer_phone: invoice.customer_phone,
-            customer_address: invoice.customer_address,
-            total: invoice.total,
-            paid_amount: invoice.paid_amount,
-            status: invoice.status,
-            invoice_date: invoice.invoice_date,
-            due_date: invoice.due_date,
-            notes: invoice.notes,
-            fabric_image_url: invoice.fabric_image_url,
-            created_at: invoice.created_at,
-            updated_at: invoice.updated_at
-          });
-        }
-      }
-
-      // Download orders
-      const { data: orders } = await this.supabase
-        .from('orders')
-        .select('*')
-        .order('updated_at', { ascending: false });
-
-      if (orders) {
-        for (const order of orders) {
-          await (this.localDB as any).upsertOrderFromCloud?.({
-            id: order.id,
-            customer_id: order.customer_id,
-            order_date: order.order_date,
-            delivery_date: order.delivery_date,
-            status: order.status,
-            total: order.total,
-            notes: order.notes,
-            created_at: order.created_at,
-            updated_at: order.updated_at
-          });
-        }
-      }
-
-    } catch (error) {
-      console.error('Error downloading changes:', error);
+    } catch (error: any) {
+      this.logError(`pull error: ${String(error?.message || error)}`);
     }
   }
 
@@ -317,10 +256,8 @@ export class SyncService {
 
   async getPendingChangesCount(): Promise<number> {
     try {
-      const unsyncedRecords = await this.localDB.getUnsyncedRecords();
-      const count = unsyncedRecords.customers.length + 
-             unsyncedRecords.invoices.length + 
-             unsyncedRecords.orders.length;
+      const outbox = this.localDB.getOutboxBatch(1000);
+      const count = outbox.length;
       (this as any)._lastPendingCount = count;
       return count;
     } catch (error) {

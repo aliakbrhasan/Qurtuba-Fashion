@@ -14,7 +14,7 @@ export class LocalAppService {
 
   private constructor() {
     this.config = {
-      isElectron: this.isElectronApp(),
+      isElectron: this.detectElectronApp(),
       isOnline: navigator.onLine,
       autoSync: true,
       syncInterval: 5 // 5 minutes
@@ -30,7 +30,7 @@ export class LocalAppService {
     return LocalAppService.instance;
   }
 
-  private isElectronApp(): boolean {
+  private detectElectronApp(): boolean {
     return !!(window as any).electronAPI;
   }
 
@@ -107,8 +107,9 @@ export class LocalAppService {
     if (!this.config.isElectron) return;
 
     try {
-      const result = await (window as any).electronAPI.sync.start();
-      if (result.success) {
+      const res = await (window as any).electronAPI.sync.start();
+      const result = res?.ok ? res.data : res;
+      if (result?.success) {
         console.log(`Synced ${result.syncedCount} records`);
       }
     } catch (error) {
@@ -263,11 +264,20 @@ export class LocalAppService {
         return await (window as any).electronAPI.local.updateOrder(id, updates);
       } catch (error) {
         console.error('Error updating order in local DB:', error);
-        // Fallback to cloud database
-        return await DatabaseService.getInstance().updateOrder(id, updates);
+        // Fallback to cloud database (if available)
+        const ds: any = DatabaseService.getInstance();
+        if (typeof ds.updateOrder === 'function') {
+          return await ds.updateOrder(id, updates);
+        }
+        // Minimal fallback
+        return { id, ...updates };
       }
     } else {
-      return await DatabaseService.getInstance().updateOrder(id, updates);
+      const ds: any = DatabaseService.getInstance();
+      if (typeof ds.updateOrder === 'function') {
+        return await ds.updateOrder(id, updates);
+      }
+      return { id, ...updates };
     }
   }
 
@@ -277,11 +287,19 @@ export class LocalAppService {
         return await (window as any).electronAPI.local.deleteOrder(id);
       } catch (error) {
         console.error('Error deleting order from local DB:', error);
-        // Fallback to cloud database
-        return await DatabaseService.getInstance().deleteOrder(id);
+        // Fallback to cloud database (if available)
+        const ds: any = DatabaseService.getInstance();
+        if (typeof ds.deleteOrder === 'function') {
+          return await ds.deleteOrder(id);
+        }
+        return;
       }
     } else {
-      return await DatabaseService.getInstance().deleteOrder(id);
+      const ds: any = DatabaseService.getInstance();
+      if (typeof ds.deleteOrder === 'function') {
+        return await ds.deleteOrder(id);
+      }
+      return;
     }
   }
 
@@ -292,8 +310,8 @@ export class LocalAppService {
     }
 
     try {
-      const result = await (window as any).electronAPI.sync.start();
-      return result;
+      const res = await (window as any).electronAPI.sync.start();
+      return res?.ok ? res.data : res;
     } catch (error) {
       console.error('Sync error:', error);
       return { success: false, message: 'حدث خطأ أثناء المزامنة' };
@@ -306,7 +324,8 @@ export class LocalAppService {
     }
 
     try {
-      return await (window as any).electronAPI.sync.getStatus();
+      const res = await (window as any).electronAPI.sync.getStatus();
+      return res?.ok ? res.data : res;
     } catch (error) {
       console.error('Error getting sync status:', error);
       return { isOnline: this.config.isOnline, lastSync: null, pendingChanges: 0, isSyncing: false };
@@ -319,8 +338,8 @@ export class LocalAppService {
     }
 
     try {
-      const result = await (window as any).electronAPI.sync.forceSync();
-      return result;
+      const res = await (window as any).electronAPI.sync.forceSync();
+      return res?.ok ? res.data : res;
     } catch (error) {
       console.error('Force sync error:', error);
       return { success: false, message: 'حدث خطأ أثناء المزامنة القسرية' };

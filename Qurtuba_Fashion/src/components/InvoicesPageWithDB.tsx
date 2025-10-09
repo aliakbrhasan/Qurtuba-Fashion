@@ -380,6 +380,7 @@ export function InvoicesPageWithDB({ onCreateInvoice, onViewInvoiceDetails, onMa
       address: invoice.customer_address || '',
       total: invoice.total,
       paid: invoice.paid_amount,
+      paymentDate: (invoice.paid_amount || 0) > 0 ? (invoice.updated_at || invoice.invoice_date || invoice.created_at) : undefined,
       receivedDate: invoice.invoice_date || invoice.created_at || new Date().toISOString(),
       deliveryDate: invoice.due_date || invoice.invoice_date || invoice.created_at || new Date().toISOString(),
       notes: invoice.notes || ''

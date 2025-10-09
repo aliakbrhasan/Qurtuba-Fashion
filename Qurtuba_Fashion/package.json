@@ -32,10 +32,11 @@
             "@supabase/supabase-js": "^2.57.4",
             "@tanstack/react-query": "^5.89.0",
             "class-variance-authority": "^0.7.1",
-            "clsx": "*",
+            "clsx": "^2.1.1",
             "cmdk": "^1.1.1",
             "dexie": "^4.0.8",
             "dotenv": "^17.2.3",
+            "better-sqlite3": "^9.6.0",
             "embla-carousel-react": "^8.6.0",
             "input-otp": "^1.4.2",
             "lucide-react": "^0.487.0",
@@ -48,7 +49,7 @@
             "react-resizable-panels": "^2.1.7",
             "recharts": "^2.15.2",
             "sonner": "^2.0.3",
-            "tailwind-merge": "*",
+            "tailwind-merge": "^2.5.2",
             "vaul": "^1.1.2"
       },
       "devDependencies": {
@@ -64,10 +65,11 @@
             "electron": "^32.0.0",
             "electron-builder": "^24.13.3",
             "jsdom": "^27.0.0",
-            "sqlite3": "^5.1.7",
+            
             "vite": "6.3.5",
             "vitest": "^3.2.4",
-            "wait-on": "^7.2.0"
+            "wait-on": "^7.2.0",
+            "serve": "^14.2.4"
       },
       "scripts": {
             "dev": "vite",
@@ -82,7 +84,7 @@
             "lint": "eslint src --ext .ts,.tsx",
             "lint:fix": "eslint src --ext .ts,.tsx --fix",
             "typecheck": "tsc --noEmit",
-            "electron:dev": "concurrently \"npm run dev\" \"wait-on http://localhost:3000 && electron electron/main.js\"",
+            "electron:dev": "concurrently \"npm run dev\" \"wait-on http://localhost:3000 && (npx tsc -p electron/tsconfig.json && electron dist-electron/main.js)\"",
             "electron:build": "npm run build && electron-builder",
             "electron:build:win": "npm run build && electron-builder --win",
             "electron:build:mac": "npm run build && electron-builder --mac",

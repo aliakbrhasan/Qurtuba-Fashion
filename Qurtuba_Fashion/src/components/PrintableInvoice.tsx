@@ -7,6 +7,7 @@ export interface PrintableInvoiceData {
   address?: string;
   total: number;
   paid: number;
+  paymentDate?: string;
   receivedDate: string;
   deliveryDate: string;
   notes?: string;
@@ -194,7 +195,7 @@ export const receiptStyles = `
     grid-template-rows: auto 1fr;
     grid-template-areas:
       'customer amounts'
-      'dates notes';
+      'dates dates';
     gap: 12px 16px;
     align-content: stretch;
     align-items: stretch;
@@ -293,7 +294,7 @@ export const receiptStyles = `
 
   .dates-grid {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 8px;
   }
 
@@ -451,6 +452,10 @@ export const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ invoice }) =
             <section className="section dates-section">
               <h2 className="section-title">التواريخ</h2>
               <div className="dates-grid">
+              <div className="info-item">
+                <span className="info-label">تاريخ الدفع</span>
+                <span className="info-value">{invoice.paymentDate ? formatDate(invoice.paymentDate) : '—'}</span>
+              </div>
                 <div className="info-item">
                   <span className="info-label">تاريخ الاستلام</span>
                   <span className="info-value">{formatDate(invoice.receivedDate)}</span>
@@ -462,10 +467,7 @@ export const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ invoice }) =
               </div>
             </section>
 
-            <section className="section notes-section">
-              <h2 className="section-title">ملاحظات</h2>
-              <div className="note-box">{invoice.notes || '—'}</div>
-            </section>
+            {/* Removed notes section to optimize space for clearer layout */}
           </div>
 
           <footer className="receipt-footer">

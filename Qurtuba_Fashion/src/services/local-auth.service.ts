@@ -100,41 +100,41 @@ class LocalAuthService {
   // Login user
   public async login(credentials: LoginCredentials): Promise<AuthResult> {
     try {
-      const { email, password, rememberMe = false } = credentials;
+      const { username, password, rememberMe = false } = credentials;
 
       // Validate input
-      if (!email || !password) {
+      if (!username || !password) {
         return {
           success: false,
-          error: 'البريد الإلكتروني وكلمة المرور مطلوبان'
+          error: 'اسم المستخدم وكلمة المرور مطلوبان'
         };
       }
 
       // Find user in mock data
       const user = this.mockUsers.find(u => 
-        u.email.toLowerCase().trim() === email.toLowerCase().trim() && 
+        u.code.trim() === username.trim() && 
         u.is_active
       );
 
       if (!user) {
         return {
           success: false,
-          error: 'البريد الإلكتروني أو كلمة المرور غير صحيحة'
+          error: 'اسم المستخدم أو كلمة المرور غير صحيحة'
         };
       }
 
       // Simple password verification for demo
       // In real app, you would verify against stored hash
-      const validPasswords: { [key: string]: string } = {
-        'admin@qurtuba.com': 'admin123',
-        'ahmed@qurtuba.com': 'ahmed123',
-        'fatima@qurtuba.com': 'fatima123'
+      const validPasswordsByCode: { [key: string]: string } = {
+        'ADMIN001': 'admin123',
+        'EMP001': 'ahmed123',
+        'ACC001': 'fatima123'
       };
 
-      if (validPasswords[email.toLowerCase().trim()] !== password) {
+      if (validPasswordsByCode[username.trim()] !== password) {
         return {
           success: false,
-          error: 'البريد الإلكتروني أو كلمة المرور غير صحيحة'
+          error: 'اسم المستخدم أو كلمة المرور غير صحيحة'
         };
       }
 

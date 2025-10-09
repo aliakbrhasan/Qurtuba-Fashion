@@ -1,6 +1,15 @@
 import { contextBridge, ipcRenderer } from 'electron';
 
 // Define the API that will be exposed to the renderer process
+const wrap = async <T>(fn: () => Promise<T>): Promise<{ ok: boolean; data?: T; error?: string }> => {
+  try {
+    const data = await fn();
+    return { ok: true, data };
+  } catch (e: any) {
+    return { ok: false, error: String(e?.message || e) };
+  }
+};
+
 const electronAPI = {
   // App information
   getVersion: () => ipcRenderer.invoke('app:getVersion'),
@@ -44,6 +53,15 @@ const electronAPI = {
     createOrder: (order: any) => ipcRenderer.invoke('local:createOrder', order),
     updateOrder: (id: string, updates: any) => ipcRenderer.invoke('local:updateOrder', id, updates),
     deleteOrder: (id: string) => ipcRenderer.invoke('local:deleteOrder', id),
+
+    // Self-test
+    selfTest: () => ipcRenderer.invoke('local:selfTest'),
+
+    // Roles
+    getRoles: () => ipcRenderer.invoke('local:getRoles'),
+    createRole: (role: any) => ipcRenderer.invoke('local:createRole', role),
+    updateRole: (id: string, updates: any) => ipcRenderer.invoke('local:updateRole', id, updates),
+    deleteRole: (id: string) => ipcRenderer.invoke('local:deleteRole', id),
   },
 
   // Sync functions
@@ -51,6 +69,7 @@ const electronAPI = {
     start: () => ipcRenderer.invoke('sync:start'),
     getStatus: () => ipcRenderer.invoke('sync:getStatus'),
     forceSync: () => ipcRenderer.invoke('sync:forceSync'),
+    runOnce: () => ipcRenderer.invoke('sync:runOnce'),
   },
 
   // Offline functions
@@ -66,6 +85,27 @@ const electronAPI = {
 
   onSyncError: (callback: (error: any) => void) => {
     ipcRenderer.on('sync-error', callback);
+  },
+  
+  // Auth (proxied to main)
+  auth: {
+    getRoleIdByName: (name: string) => ipcRenderer.invoke('auth:getRoleIdByName', name),
+    findUserByEmail: (email: string) => ipcRenderer.invoke('auth:findUserByEmail', email),
+    updateLastLogin: (id: string) => ipcRenderer.invoke('auth:updateLastLogin', id),
+    checkEmailExists: (email: string) => ipcRenderer.invoke('auth:checkEmailExists', email),
+    checkCodeExists: (code: string) => ipcRenderer.invoke('auth:checkCodeExists', code),
+    createUser: (payload: any) => ipcRenderer.invoke('auth:createUser', payload),
+    updatePassword: (id: string, password_hash: string) => ipcRenderer.invoke('auth:updatePassword', id, password_hash),
+    listUsers: () => ipcRenderer.invoke('auth:listUsers'),
+    updateUser: (id: string, updates: any) => ipcRenderer.invoke('auth:updateUser', id, updates),
+    deleteUser: (id: string) => ipcRenderer.invoke('auth:deleteUser', id),
+  },
+
+  // Images
+  images: {
+    upload: (buffer: number[], contentType: string, fileName: string) => ipcRenderer.invoke('image:upload', { buffer, contentType, fileName }),
+    delete: (path: string) => ipcRenderer.invoke('image:delete', path),
+    getPublicUrl: (path: string) => ipcRenderer.invoke('image:getPublicUrl', path),
   },
 };
 

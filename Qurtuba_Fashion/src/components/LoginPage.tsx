@@ -13,7 +13,7 @@ interface LoginPageProps {
 }
 
 export function LoginPage({ onLogin }: LoginPageProps) {
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -55,8 +55,8 @@ export function LoginPage({ onLogin }: LoginPageProps) {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!email.trim() || !password.trim()) {
-      setError('يرجى إدخال البريد الإلكتروني وكلمة المرور');
+    if (!username.trim() || !password.trim()) {
+      setError('يرجى إدخال اسم المستخدم وكلمة المرور');
       return;
     }
 
@@ -65,7 +65,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
 
     try {
       const credentials: LoginCredentials = {
-        email: email.trim(),
+        username: username.trim(),
         password,
         rememberMe
       };
@@ -113,18 +113,18 @@ export function LoginPage({ onLogin }: LoginPageProps) {
             )}
             
             <div className="space-y-2">
-              <Label htmlFor="email" className="text-[#13312A] arabic-text">
-                البريد الإلكتروني
+              <Label htmlFor="username" className="text-[#13312A] arabic-text">
+                اسم المستخدم
               </Label>
               <Input
-                id="email"
-                type="email"
-                value={email}
+                id="username"
+                type="text"
+                value={username}
                 onChange={(e) => {
-                  setEmail(e.target.value);
+                  setUsername(e.target.value);
                   if (error) setError(''); // Clear error when user starts typing
                 }}
-                placeholder="أدخل البريد الإلكتروني"
+                placeholder="أدخل اسم المستخدم"
                 className="bg-white border-[#C69A72] focus:border-[#155446] text-right touch-target"
                 required
                 disabled={isLoading}

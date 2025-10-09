@@ -100,6 +100,8 @@ export class WebIndexedDBStorage implements StoragePort {
 			invoice_date: invoice.invoice_date || now,
 			due_date: invoice.due_date,
 			notes: invoice.notes,
+			fabric_image_url: invoice.fabric_image_url,
+			paid_at: invoice.paid_at,
 			created_at: now,
 			updated_at: now,
 		} as any;

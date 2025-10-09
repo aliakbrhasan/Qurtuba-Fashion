@@ -1,0 +1,2 @@
+10054	IGNORE	Content Security Policy (CSP) Header Not Set	We set CSP via meta and Netlify _headers
+90033	IGNORE	Mixed Content	Build enforces upgrade-insecure-requests 

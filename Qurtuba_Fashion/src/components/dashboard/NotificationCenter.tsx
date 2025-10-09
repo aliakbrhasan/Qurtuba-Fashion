@@ -1,22 +1,10 @@
-import React, { useState, useEffect } from 'react';
+// React import not needed with react-jsx runtime
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { Bell, X, AlertCircle, CheckCircle, Info, Clock } from 'lucide-react';
 import { cn } from '../ui/utils';
-
-interface Notification {
-  id: string;
-  type: 'info' | 'success' | 'warning' | 'error';
-  title: string;
-  message: string;
-  timestamp: Date;
-  read: boolean;
-  action?: {
-    label: string;
-    onClick: () => void;
-  };
-}
+import { useNotifications } from '@/app/NotificationsProvider';
 
 interface NotificationCenterProps {
   isOpen: boolean;
@@ -25,82 +13,11 @@ interface NotificationCenterProps {
 }
 
 export function NotificationCenter({ isOpen, onClose, onNavigate }: NotificationCenterProps) {
-  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const { notifications, unreadCount, markAllAsRead, markAsRead, remove } = useNotifications();
 
-  // Mock notifications - in a real app, these would come from a service
-  useEffect(() => {
-    const mockNotifications: Notification[] = [
-      {
-        id: '1',
-        type: 'info',
-        title: 'فاتورة جديدة',
-        message: 'تم إنشاء فاتورة جديدة للعميل أحمد محمد',
-        timestamp: new Date(Date.now() - 1000 * 60 * 30), // 30 minutes ago
-        read: false,
-        action: {
-          label: 'عرض الفاتورة',
-          onClick: () => onNavigate('invoices')
-        }
-      },
-      {
-        id: '2',
-        type: 'warning',
-        title: 'تسليم قريب',
-        message: 'فاتورة #INV001 ستكون جاهزة للتسليم غداً',
-        timestamp: new Date(Date.now() - 1000 * 60 * 60 * 2), // 2 hours ago
-        read: false,
-        action: {
-          label: 'عرض التفاصيل',
-          onClick: () => onNavigate('invoices')
-        }
-      },
-      {
-        id: '3',
-        type: 'success',
-        title: 'دفعة مستلمة',
-        message: 'تم استلام دفعة بقيمة 150,000 د.ع من العميل سارة علي',
-        timestamp: new Date(Date.now() - 1000 * 60 * 60 * 4), // 4 hours ago
-        read: true
-      },
-      {
-        id: '4',
-        type: 'error',
-        title: 'خطأ في المزامنة',
-        message: 'فشل في مزامنة البيانات مع الخادم',
-        timestamp: new Date(Date.now() - 1000 * 60 * 60 * 6), // 6 hours ago
-        read: true,
-        action: {
-          label: 'إعادة المحاولة',
-          onClick: () => window.location.reload()
-        }
-      }
-    ];
-    setNotifications(mockNotifications);
-  }, [onNavigate]);
+  const removeNotification = remove;
 
-  const unreadCount = notifications.filter(n => !n.read).length;
-
-  const markAsRead = (id: string) => {
-    setNotifications(prev => 
-      prev.map(notification => 
-        notification.id === id 
-          ? { ...notification, read: true }
-          : notification
-      )
-    );
-  };
-
-  const markAllAsRead = () => {
-    setNotifications(prev => 
-      prev.map(notification => ({ ...notification, read: true }))
-    );
-  };
-
-  const removeNotification = (id: string) => {
-    setNotifications(prev => prev.filter(n => n.id !== id));
-  };
-
-  const getIcon = (type: Notification['type']) => {
+  const getIcon = (type: 'info' | 'success' | 'warning' | 'error') => {
     switch (type) {
       case 'success':
         return CheckCircle;
@@ -113,7 +30,7 @@ export function NotificationCenter({ isOpen, onClose, onNavigate }: Notification
     }
   };
 
-  const getIconColor = (type: Notification['type']) => {
+  const getIconColor = (type: 'info' | 'success' | 'warning' | 'error') => {
     switch (type) {
       case 'success':
         return 'text-green-600';
@@ -142,8 +59,14 @@ export function NotificationCenter({ isOpen, onClose, onNavigate }: Notification
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-start justify-end p-4">
-      <Card className="w-full max-w-md bg-white border-[#C69A72] shadow-xl">
+    <div
+      className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-start justify-end p-4"
+      onClick={onClose}
+    >
+      <Card
+        className="w-full max-w-md bg-white border-[#C69A72] shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-[#13312A] arabic-text flex items-center gap-2">
             <Bell className="w-5 h-5" />
@@ -219,17 +142,21 @@ export function NotificationCenter({ isOpen, onClose, onNavigate }: Notification
                         <p className="text-sm text-[#155446] arabic-text mt-1">
                           {notification.message}
                         </p>
-                        {notification.action && (
+                        {notification.target && (
                           <Button
                             size="sm"
                             variant="outline"
                             onClick={() => {
                               markAsRead(notification.id);
-                              notification.action!.onClick();
+                              onNavigate(notification.target!.page);
                             }}
                             className="mt-2 text-xs"
                           >
-                            {notification.action.label}
+                            {notification.target.page === 'invoices'
+                              ? 'عرض الفاتورة'
+                              : notification.target.page === 'customers'
+                                ? 'عرض الزبون'
+                                : 'عرض'}
                           </Button>
                         )}
                       </div>

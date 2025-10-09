@@ -37,6 +37,8 @@ export interface Invoice {
   invoice_date: string;
   due_date?: string;
   notes?: string;
+  fabric_image_url?: string;
+  paid_at?: string;
   created_at: string;
   updated_at: string;
 }
@@ -234,7 +236,7 @@ export class DatabaseService {
     try {
       const { data, error } = await supabase
         .from('users')
-        .select('*')
+        .select('id, code, name, email, phone, status, role, is_active, created_at, last_login')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -262,7 +264,7 @@ export class DatabaseService {
           is_active: user.isActive,
           last_login: user.lastLogin
         })
-        .select()
+        .select('id, code, name, email, phone, status, role, is_active, created_at, last_login')
         .single();
 
       if (error) throw error;
@@ -298,7 +300,7 @@ export class DatabaseService {
           last_login: updates.lastLogin
         })
         .eq('id', id)
-        .select()
+        .select('id, code, name, email, phone, status, role, is_active, created_at, last_login')
         .single();
 
       if (error) throw error;
@@ -372,12 +374,30 @@ export class DatabaseService {
       this.localData.customers = [created, ...this.localData.customers];
       this.persistAllToStorage();
       (syncEngine as any).schedule?.();
+      try {
+        const { notifications } = await import('@/services/notifications.service');
+        notifications.emit({
+          type: 'success',
+          title: 'زبون جديد',
+          message: `تم إضافة الزبون ${customer.name}`,
+          target: { page: 'customers', id: (created as any).id?.toString?.() },
+        });
+      } catch {}
       return created;
     } catch (error) {
       console.warn('Local storage error:', error);
       const newCustomer: Customer = { ...customer, id: Date.now().toString() } as any;
       this.localData.customers.push(newCustomer);
       this.persistAllToStorage();
+      try {
+        const { notifications } = await import('@/services/notifications.service');
+        notifications.emit({
+          type: 'success',
+          title: 'زبون جديد',
+          message: `تم إضافة الزبون ${customer.name}`,
+          target: { page: 'customers', id: (newCustomer as any).id?.toString?.() },
+        });
+      } catch {}
       return newCustomer;
     }
   }
@@ -389,6 +409,15 @@ export class DatabaseService {
       if (idx !== -1) this.localData.customers[idx] = updated; else this.localData.customers.unshift(updated);
       this.persistAllToStorage();
       (syncEngine as any).schedule?.();
+      try {
+        const { notifications } = await import('@/services/notifications.service');
+        notifications.emit({
+          type: 'info',
+          title: 'تعديل زبون',
+          message: `تم تعديل بيانات الزبون`,
+          target: { page: 'customers', id: id?.toString?.() },
+        });
+      } catch {}
       return updated;
     } catch (error) {
       console.warn('Local storage error:', error);
@@ -396,6 +425,15 @@ export class DatabaseService {
       if (customerIndex !== -1) {
         this.localData.customers[customerIndex] = { ...this.localData.customers[customerIndex], ...updates } as any;
         this.persistAllToStorage();
+        try {
+          const { notifications } = await import('@/services/notifications.service');
+          notifications.emit({
+            type: 'info',
+            title: 'تعديل زبون',
+            message: `تم تعديل بيانات الزبون`,
+            target: { page: 'customers', id: id?.toString?.() },
+          });
+        } catch {}
         return this.localData.customers[customerIndex];
       }
       throw new Error('Customer not found');
