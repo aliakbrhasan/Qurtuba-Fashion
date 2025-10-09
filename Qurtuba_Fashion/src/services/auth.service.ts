@@ -1,5 +1,6 @@
 import { supabase } from '../db/client';
 import { localAuthService } from './local-auth.service';
+import { sanitizeArabicText } from '../utils/encoding';
 
 export interface User {
   id: string;
@@ -31,6 +32,8 @@ class AuthService {
   private currentUser: User | null = null;
   private readonly STORAGE_KEY = 'qurtuba_auth';
   private readonly REMEMBER_KEY = 'qurtuba_remember';
+  private schemaCache: { users_has_role?: boolean; users_has_role_id?: boolean } = {};
+  private rolesCache: Map<string, string> = new Map();
 
   private constructor() {
     this.initializeAuth();
@@ -51,7 +54,14 @@ class AuthService {
         const storedAuth = localStorage.getItem(this.STORAGE_KEY);
         if (storedAuth) {
           const authData = JSON.parse(storedAuth);
-          this.currentUser = authData.user;
+          const user = authData.user as User;
+          // Sanitize persisted values in case they were saved garbled
+          this.currentUser = {
+            ...user,
+            name: sanitizeArabicText(user.name),
+            role: sanitizeArabicText(user.role),
+            status: user.status
+          };
         }
       }
     } catch (error) {
@@ -74,6 +84,75 @@ class AuthService {
     return passwordHash === hash;
   }
 
+  // Detect if a column exists on a table (cached per session)
+  private async tableHasColumn(table: string, column: string): Promise<boolean> {
+    const cacheKey = `${table}_has_${column}` as const;
+    if ((this.schemaCache as any)[cacheKey] !== undefined) {
+      return (this.schemaCache as any)[cacheKey];
+    }
+    try {
+      const { error } = await supabase.from(table).select(column).limit(1);
+      const exists = !error || (error as any)?.code !== '42703';
+      (this.schemaCache as any)[cacheKey] = exists;
+      return exists;
+    } catch (err: any) {
+      const exists = err?.code !== '42703';
+      (this.schemaCache as any)[cacheKey] = exists;
+      return exists;
+    }
+  }
+
+  private async getRoleIdByName(roleName: string): Promise<string | null> {
+    const name = sanitizeArabicText(roleName);
+    try {
+      const { data, error } = await supabase
+        .from('roles')
+        .select('id')
+        .eq('name', name)
+        .single();
+      if (error || !data) return null;
+      return data.id as string;
+    } catch {
+      return null;
+    }
+  }
+  private normalizeUserRow(row: any): User {
+    const roleName = sanitizeArabicText(row?.role ?? row?.roles?.name ?? '');
+    const normalized: User = {
+      id: row.id,
+      code: row.code,
+      name: sanitizeArabicText(row.name),
+      email: row.email,
+      phone: row.phone,
+      status: row.status,
+      role: roleName,
+      is_active: row.is_active,
+      created_at: row.created_at,
+      last_login: row.last_login
+    };
+    return normalized;
+  }
+
+
+  // Reserved for future use when resolving role names from role_id on-demand
+  private async getRoleNameById(roleId: string): Promise<string | null> {
+    if (!roleId) return null;
+    if (this.rolesCache.has(roleId)) return this.rolesCache.get(roleId)!;
+    try {
+      const { data, error } = await supabase
+        .from('roles')
+        .select('id, name')
+        .eq('id', roleId)
+        .single();
+      if (error || !data) return null;
+      const name = sanitizeArabicText((data as any).name);
+      this.rolesCache.set(roleId, name);
+      return name;
+    } catch {
+      return null;
+    }
+  }
+
   // Login user
   public async login(credentials: LoginCredentials): Promise<AuthResult> {
     try {
@@ -90,9 +169,15 @@ class AuthService {
       // Try database first, fallback to local auth
       try {
         // Query user from database
+        const usersHasRoleId = await this.tableHasColumn('users', 'role_id');
+
+        const selectColumns = usersHasRoleId
+          ? 'id, code, name, email, phone, status, is_active, created_at, last_login, role, role_id, roles:role_id(name)'
+          : '*';
+
         const { data: users, error } = await supabase
           .from('users')
-          .select('*')
+          .select(selectColumns)
           .eq('email', email.toLowerCase().trim())
           .eq('is_active', true)
           .single();
@@ -113,7 +198,7 @@ class AuthService {
         }
 
         // Verify password or fallback to local auth for dev setup
-        if (!users.password_hash) {
+        if (!(users as any).password_hash) {
           console.warn('User found without password_hash. Falling back to local auth.');
           const localResult = await localAuthService.login(credentials);
           if (localResult.success && localResult.user) {
@@ -127,7 +212,7 @@ class AuthService {
           return localResult;
         }
 
-        const isValidPassword = await this.verifyPassword(password, users.password_hash);
+        const isValidPassword = await this.verifyPassword(password, (users as any).password_hash);
         if (!isValidPassword) {
           console.warn('Password hash mismatch. Falling back to local auth.');
           const localResult = await localAuthService.login(credentials);
@@ -146,10 +231,13 @@ class AuthService {
         await supabase
           .from('users')
           .update({ last_login: new Date().toISOString() })
-          .eq('id', users.id);
+          .eq('id', (users as any).id);
+
+        // Normalize role name from join if present
+        const normalizedUser: User = this.normalizeUserRow(users as any);
 
         // Set current user
-        this.currentUser = users;
+        this.currentUser = normalizedUser;
 
         // Store auth data if remember me is checked
         if (rememberMe) {
@@ -163,7 +251,7 @@ class AuthService {
 
         return {
           success: true,
-          user: users
+          user: normalizedUser
         };
 
       } catch (dbError) {
@@ -173,7 +261,7 @@ class AuthService {
         if (localResult.success && localResult.user) {
           this.currentUser = localResult.user;
           if (rememberMe) {
-            const authData = { user: localResult.user, timestamp: Date.now() };
+          const authData = { user: this.normalizeUserRow(localResult.user), timestamp: Date.now() };
             localStorage.setItem(this.STORAGE_KEY, JSON.stringify(authData));
             localStorage.setItem(this.REMEMBER_KEY, 'true');
           }
@@ -273,19 +361,31 @@ class AuthService {
         // Hash password
         const passwordHash = await this.hashPassword(userData.password);
 
-        // Create user
+        // Decide whether to write role or role_id
+        const usersHasRole = await this.tableHasColumn('users', 'role');
+        const usersHasRoleId = await this.tableHasColumn('users', 'role_id');
+
+        const insertPayload: any = {
+          code: userData.code,
+          name: sanitizeArabicText(userData.name),
+          email: userData.email.toLowerCase().trim(),
+          phone: userData.phone,
+          password_hash: passwordHash,
+          status: userData.status,
+          is_active: true
+        };
+
+        if (usersHasRoleId) {
+          const roleId = await this.getRoleIdByName(userData.role);
+          if (roleId) insertPayload.role_id = roleId;
+        }
+        if (usersHasRole) {
+          insertPayload.role = sanitizeArabicText(userData.role);
+        }
+
         const { data: newUser, error } = await supabase
           .from('users')
-          .insert({
-            code: userData.code,
-            name: userData.name,
-            email: userData.email.toLowerCase().trim(),
-            phone: userData.phone,
-            password_hash: passwordHash,
-            status: userData.status,
-            role: userData.role,
-            is_active: true
-          })
+          .insert(insertPayload)
           .select()
           .single();
 
@@ -296,9 +396,11 @@ class AuthService {
           };
         }
 
+        const normalized: User = this.normalizeUserRow(newUser as any);
+
         return {
           success: true,
-          user: newUser
+          user: normalized
         };
       } catch (dbError) {
         console.log('Database unavailable, using local authentication for create user');
@@ -359,20 +461,26 @@ class AuthService {
 
       // Try database first, fallback to local auth
       try {
+        const usersHasRoleId = await this.tableHasColumn('users', 'role_id');
+        const selectColumns = usersHasRoleId
+          ? 'id, code, name, email, phone, status, is_active, created_at, last_login, role, role_id, roles:role_id(name)'
+          : '*';
+
         const { data: users, error } = await supabase
           .from('users')
-          .select('*')
+          .select(selectColumns)
           .order('created_at', { ascending: false });
 
         if (error) {
           throw new Error('فشل في جلب المستخدمين: ' + error.message);
         }
 
-        return users || [];
+        return (users || []).map((u: any) => this.normalizeUserRow(u));
       } catch (dbError) {
         console.log('Database unavailable, using local authentication for users');
         // Fallback to local auth
-        return await localAuthService.getUsers();
+        const local = await localAuthService.getUsers();
+        return local.map((u: any) => this.normalizeUserRow(u));
       }
 
     } catch (error) {
@@ -399,11 +507,26 @@ class AuthService {
 
       // Try database first, fallback to local auth
       try {
+        const usersHasRole = await this.tableHasColumn('users', 'role');
+        const usersHasRoleId = await this.tableHasColumn('users', 'role_id');
+
+        const payload: any = { ...updates };
+        if (updates.name !== undefined) payload.name = sanitizeArabicText(updates.name);
+        if (updates.role !== undefined && usersHasRole) payload.role = sanitizeArabicText(updates.role);
+        if (updates.role !== undefined && usersHasRoleId) {
+          const roleId = await this.getRoleIdByName(updates.role as string);
+          if (roleId) payload.role_id = roleId;
+        }
+
+        const selectColumns = usersHasRoleId
+          ? 'id, code, name, email, phone, status, is_active, created_at, last_login, role, role_id, roles:role_id(name)'
+          : '*';
+
         const { data: updatedUser, error } = await supabase
           .from('users')
-          .update(updates)
+          .update(payload)
           .eq('id', userId)
-          .select()
+          .select(selectColumns)
           .single();
 
         if (error) {
@@ -413,14 +536,13 @@ class AuthService {
           };
         }
 
-        // Update current user if it's the same user
-        if (this.currentUser?.id === userId) {
-          this.currentUser = updatedUser;
-        }
+        const normalized: User = this.normalizeUserRow(updatedUser as any);
+
+        if (this.currentUser?.id === userId) this.currentUser = normalized;
 
         return {
           success: true,
-          user: updatedUser
+          user: normalized
         };
       } catch (dbError) {
         console.log('Database unavailable, using local authentication for update user');

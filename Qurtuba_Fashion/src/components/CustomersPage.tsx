@@ -28,6 +28,7 @@ import {
   User,
   CheckCircle
 } from 'lucide-react';
+import { ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
 import { Customer } from '../types/customer';
 import { openPrintWindow, formatPrintDateTime } from './print/PrintUtils';
 import { formatCurrency, formatDate } from './PrintableInvoice';
@@ -46,7 +47,8 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false }: 
   const { hasActionPermission } = usePermissions(currentUser);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterLabel, setFilterLabel] = useState('all');
-  const [sortBy, setSortBy] = useState('name');
+  const [sortField, setSortField] = useState<string>('name');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('table');
   const [showFilters, setShowFilters] = useState(false);
   const [isNewCustomerOpen, setIsNewCustomerOpen] = useState(false);
@@ -180,6 +182,30 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false }: 
     }
   };
 
+  // Sorting helpers
+  const defaultDescFields = new Set(['totalSpent', 'ordersCount', 'lastOrder']);
+  const handleHeaderSort = (field: string) => {
+    if (sortField === field) {
+      setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortField(field);
+      setSortDirection(defaultDescFields.has(field) ? 'desc' : 'asc');
+    }
+  };
+
+  const compareValues = (a: any, b: any, direction: 'asc' | 'desc') => {
+    const multiplier = direction === 'asc' ? 1 : -1;
+    if (typeof a === 'number' && typeof b === 'number') {
+      return (a - b) * multiplier;
+    }
+    const aDate = new Date(a);
+    const bDate = new Date(b);
+    if (!Number.isNaN(aDate.getTime()) && !Number.isNaN(bDate.getTime())) {
+      return (aDate.getTime() - bDate.getTime()) * multiplier;
+    }
+    return String(a ?? '').localeCompare(String(b ?? ''), 'ar', { sensitivity: 'base' }) * multiplier;
+  };
+
   // Enhanced filtering and sorting logic
   const filteredAndSortedCustomers = useMemo(() => {
     let filtered = customers.filter(customer => {
@@ -196,25 +222,26 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false }: 
 
     // Sort filtered results
     return [...filtered].sort((a, b) => {
-      switch (sortBy) {
+      switch (sortField) {
         case 'name':
-          return a.name.localeCompare(b.name);
-        case 'totalSpent':
-          return b.totalSpent - a.totalSpent;
-        case 'ordersCount':
-          return b.orders.length - a.orders.length;
-        case 'lastOrder':
-          if (!a.lastOrder && !b.lastOrder) return 0;
-          if (!a.lastOrder) return 1;
-          if (!b.lastOrder) return -1;
-          return new Date(b.lastOrder).getTime() - new Date(a.lastOrder).getTime();
+          return compareValues(a.name, b.name, sortDirection);
+        case 'phone':
+          return compareValues(a.phone, b.phone, sortDirection);
+        case 'address':
+          return compareValues(a.address, b.address, sortDirection);
         case 'label':
-          return a.label.localeCompare(b.label);
+          return compareValues(a.label, b.label, sortDirection);
+        case 'ordersCount':
+          return compareValues(a.orders.length, b.orders.length, sortDirection);
+        case 'lastOrder':
+          return compareValues(a.lastOrder, b.lastOrder, sortDirection);
+        case 'totalSpent':
+          return compareValues(a.totalSpent, b.totalSpent, sortDirection);
         default:
           return 0;
       }
     });
-  }, [customers, searchTerm, filterLabel, sortBy]);
+  }, [customers, searchTerm, filterLabel, sortField, sortDirection]);
 
   // Statistics
   const stats = useMemo(() => {
@@ -545,8 +572,8 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false }: 
             <Card className="bg-gradient-to-br from-[#155446] to-[#13312A] border-0 shadow-xl hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1">
               <CardContent className="p-6 text-center">
                 <div className="flex items-center justify-center mb-3">
-                  <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
-                    <User className="w-6 h-6 text-white" />
+                  <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center">
+                    <User className="w-6 h-6 text-[#13312A]" />
                   </div>
                 </div>
                 <div className="text-3xl font-bold mb-2 text-black">{stats.total}</div>
@@ -557,8 +584,8 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false }: 
             <Card className="bg-gradient-to-br from-green-500 to-green-600 border-0 shadow-xl hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1">
               <CardContent className="p-6 text-center">
                 <div className="flex items-center justify-center mb-3">
-                  <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
-                    <CheckCircle className="w-6 h-6 text-white" />
+                  <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center">
+                    <CheckCircle className="w-6 h-6 text-[#13312A]" />
                   </div>
                 </div>
                 <div className="text-3xl font-bold mb-2 text-black">{stats.regularCustomers}</div>
@@ -569,8 +596,8 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false }: 
             <Card className="bg-gradient-to-br from-yellow-500 to-orange-500 border-0 shadow-xl hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1">
               <CardContent className="p-6 text-center">
                 <div className="flex items-center justify-center mb-3">
-                  <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
-                    <Star className="w-6 h-6 text-white" />
+                  <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center">
+                    <Star className="w-6 h-6 text-[#13312A]" />
                   </div>
                 </div>
                 <div className="text-3xl font-bold mb-2 text-black">{stats.goldenCustomers}</div>
@@ -581,8 +608,8 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false }: 
             <Card className="bg-gradient-to-br from-[#C69A72] to-[#B8860B] border-0 shadow-xl hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1">
               <CardContent className="p-6 text-center">
                 <div className="flex items-center justify-center mb-3">
-                  <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
-                    <CreditCard className="w-6 h-6 text-white" />
+                  <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center">
+                    <CreditCard className="w-6 h-6 text-[#13312A]" />
                   </div>
                 </div>
                 <div className="text-3xl font-bold mb-2 text-black">{formatCurrency(stats.totalSpent)}</div>
@@ -606,7 +633,7 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false }: 
                 />
               </div>
               <div className="flex flex-wrap gap-3">
-                <Select value={sortBy} onValueChange={setSortBy}>
+                <Select value={sortField} onValueChange={(val: string) => { setSortField(val); setSortDirection(defaultDescFields.has(val) ? 'desc' : 'asc'); }}>
                   <SelectTrigger className="w-48 border-2 border-[#C69A72]/30 rounded-xl">
                     <SelectValue placeholder="ترتيب حسب" />
                   </SelectTrigger>
@@ -645,7 +672,8 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false }: 
                   onClick={() => {
                     setSearchTerm('');
                     setFilterLabel('all');
-                    setSortBy('name');
+                    setSortField('name');
+                    setSortDirection('asc');
                   }}
                   className="border-2 border-red-300 text-red-600 hover:bg-red-50 flex items-center gap-2 px-4 py-3 rounded-xl"
                 >
@@ -730,13 +758,48 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false }: 
                       <Table>
                         <TableHeader>
                           <TableRow className="bg-gradient-to-r from-[#13312A] to-[#155446] hover:bg-gradient-to-r hover:from-[#13312A] hover:to-[#155446]">
-                            <TableHead className="text-black arabic-text text-right font-bold text-base">اسم الزبون</TableHead>
-                            <TableHead className="text-black arabic-text text-right font-bold text-base">الهاتف</TableHead>
-                            <TableHead className="text-black arabic-text text-right font-bold text-base">العنوان</TableHead>
-                            <TableHead className="text-black arabic-text text-right font-bold text-base">التصنيف</TableHead>
-                            <TableHead className="text-black arabic-text text-right font-bold text-base">آخر طلب</TableHead>
-                            <TableHead className="text-black arabic-text text-right font-bold text-base">إجمالي الإنفاق</TableHead>
-                            <TableHead className="text-black arabic-text text-right font-bold text-base">عدد الطلبات</TableHead>
+                            <TableHead className="text-black arabic-text text-right font-bold text-base select-none">
+                              <div className="flex items-center justify-between cursor-pointer" onClick={() => handleHeaderSort('name')}>
+                                <span>اسم الزبون</span>
+                                {sortField === 'name' ? (sortDirection === 'asc' ? <ArrowUp className="w-4 h-4" /> : <ArrowDown className="w-4 h-4" />) : <ArrowUpDown className="w-4 h-4 opacity-70" />}
+                              </div>
+                            </TableHead>
+                            <TableHead className="text-black arabic-text text-right font-bold text-base select-none">
+                              <div className="flex items-center justify-between cursor-pointer" onClick={() => handleHeaderSort('phone')}>
+                                <span>الهاتف</span>
+                                {sortField === 'phone' ? (sortDirection === 'asc' ? <ArrowUp className="w-4 h-4" /> : <ArrowDown className="w-4 h-4" />) : <ArrowUpDown className="w-4 h-4 opacity-70" />}
+                              </div>
+                            </TableHead>
+                            <TableHead className="text-black arabic-text text-right font-bold text-base select-none">
+                              <div className="flex items-center justify-between cursor-pointer" onClick={() => handleHeaderSort('address')}>
+                                <span>العنوان</span>
+                                {sortField === 'address' ? (sortDirection === 'asc' ? <ArrowUp className="w-4 h-4" /> : <ArrowDown className="w-4 h-4" />) : <ArrowUpDown className="w-4 h-4 opacity-70" />}
+                              </div>
+                            </TableHead>
+                            <TableHead className="text-black arabic-text text-right font-bold text-base select-none">
+                              <div className="flex items-center justify-between cursor-pointer" onClick={() => handleHeaderSort('label')}>
+                                <span>التصنيف</span>
+                                {sortField === 'label' ? (sortDirection === 'asc' ? <ArrowUp className="w-4 h-4" /> : <ArrowDown className="w-4 h-4" />) : <ArrowUpDown className="w-4 h-4 opacity-70" />}
+                              </div>
+                            </TableHead>
+                            <TableHead className="text-black arabic-text text-right font-bold text-base select-none">
+                              <div className="flex items-center justify-between cursor-pointer" onClick={() => handleHeaderSort('lastOrder')}>
+                                <span>آخر طلب</span>
+                                {sortField === 'lastOrder' ? (sortDirection === 'asc' ? <ArrowUp className="w-4 h-4" /> : <ArrowDown className="w-4 h-4" />) : <ArrowUpDown className="w-4 h-4 opacity-70" />}
+                              </div>
+                            </TableHead>
+                            <TableHead className="text-black arabic-text text-right font-bold text-base select-none">
+                              <div className="flex items-center justify-between cursor-pointer" onClick={() => handleHeaderSort('totalSpent')}>
+                                <span>إجمالي الإنفاق</span>
+                                {sortField === 'totalSpent' ? (sortDirection === 'asc' ? <ArrowUp className="w-4 h-4" /> : <ArrowDown className="w-4 h-4" />) : <ArrowUpDown className="w-4 h-4 opacity-70" />}
+                              </div>
+                            </TableHead>
+                            <TableHead className="text-black arabic-text text-right font-bold text-base select-none">
+                              <div className="flex items-center justify-between cursor-pointer" onClick={() => handleHeaderSort('ordersCount')}>
+                                <span>عدد الطلبات</span>
+                                {sortField === 'ordersCount' ? (sortDirection === 'asc' ? <ArrowUp className="w-4 h-4" /> : <ArrowDown className="w-4 h-4" />) : <ArrowUpDown className="w-4 h-4 opacity-70" />}
+                              </div>
+                            </TableHead>
                             <TableHead className="text-black arabic-text text-right font-bold text-base">الإجراءات</TableHead>
                           </TableRow>
                         </TableHeader>

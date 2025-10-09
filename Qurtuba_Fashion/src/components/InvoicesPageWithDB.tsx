@@ -27,6 +27,7 @@ import {
   FilterX,
   RefreshCw,
 } from 'lucide-react';
+import { ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
 import { InvoiceDetailsDialog } from './InvoiceDetailsDialog';
 import {
   PrintableInvoice,
@@ -120,7 +121,8 @@ export function InvoicesPageWithDB({ onCreateInvoice, onViewInvoiceDetails, onMa
   const [currentUser] = useState(authService.getCurrentUser());
   const { hasActionPermission } = usePermissions(currentUser);
   const [searchTerm, setSearchTerm] = useState('');
-  const [sortBy, setSortBy] = useState('date');
+  const [sortField, setSortField] = useState<string>('invoice_date');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [dateFilter, setDateFilter] = useState<string>('all');
   const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
@@ -170,6 +172,28 @@ export function InvoicesPageWithDB({ onCreateInvoice, onViewInvoiceDetails, onMa
   const [isResizing, setIsResizing] = useState<string | null>(null);
  
   // Helper functions
+  const defaultDescFields = new Set(['invoice_date', 'due_date', 'total', 'invoice_number']);
+  const handleHeaderSort = (field: string) => {
+    if (sortField === field) {
+      setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortField(field);
+      setSortDirection(defaultDescFields.has(field) ? 'desc' : 'asc');
+    }
+  };
+
+  const compareValues = (a: any, b: any, direction: 'asc' | 'desc') => {
+    const multiplier = direction === 'asc' ? 1 : -1;
+    if (typeof a === 'number' && typeof b === 'number') {
+      return (a - b) * multiplier;
+    }
+    const aDate = new Date(a);
+    const bDate = new Date(b);
+    if (!Number.isNaN(aDate.getTime()) && !Number.isNaN(bDate.getTime())) {
+      return (aDate.getTime() - bDate.getTime()) * multiplier;
+    }
+    return String(a ?? '').localeCompare(String(b ?? ''), 'ar', { sensitivity: 'base' }) * multiplier;
+  };
 
   // Handle resize start
   const handleResizeStart = (e: React.MouseEvent | React.TouchEvent, column: keyof typeof columnWidths) => {
@@ -427,20 +451,25 @@ export function InvoicesPageWithDB({ onCreateInvoice, onViewInvoiceDetails, onMa
 
     // Sort filtered results
     return [...filtered].sort((a, b) => {
-    switch (sortBy) {
-      case 'date':
-          return new Date(b.invoice_date || b.created_at).getTime() - new Date(a.invoice_date || a.created_at).getTime();
-      case 'customer':
-        return a.customer_name.localeCompare(b.customer_name);
-      case 'amount':
-        return b.total - a.total;
+      switch (sortField) {
+        case 'invoice_number':
+          return compareValues(a.invoice_number, b.invoice_number, sortDirection);
+        case 'customer_name':
+          return compareValues(a.customer_name, b.customer_name, sortDirection);
+        case 'customer_phone':
+          return compareValues(a.customer_phone, b.customer_phone, sortDirection);
+        case 'total':
+          return compareValues(a.total, b.total, sortDirection);
         case 'status':
-          return a.status.localeCompare(b.status);
-      default:
-        return 0;
-    }
-  });
-  }, [invoices, searchTerm, statusFilter, dateFilter, sortBy]);
+          return compareValues(a.status, b.status, sortDirection);
+        case 'due_date':
+          return compareValues(a.due_date || a.invoice_date || a.created_at, b.due_date || b.invoice_date || b.created_at, sortDirection);
+        case 'invoice_date':
+        default:
+          return compareValues(a.invoice_date || a.created_at, b.invoice_date || b.created_at, sortDirection);
+      }
+    });
+  }, [invoices, searchTerm, statusFilter, dateFilter, sortField, sortDirection]);
 
   // Statistics
   const stats = useMemo(() => {
@@ -746,14 +775,14 @@ export function InvoicesPageWithDB({ onCreateInvoice, onViewInvoiceDetails, onMa
                 />
               </div>
               <div className="flex flex-wrap gap-3">
-                <Select value={sortBy} onValueChange={setSortBy}>
+                <Select value={sortField} onValueChange={(val: string) => { setSortField(val); setSortDirection(defaultDescFields.has(val) ? 'desc' : 'asc'); }}>
                   <SelectTrigger className="w-48 border-2 border-[#C69A72]/30 rounded-xl">
                     <SelectValue placeholder="ترتيب حسب" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="date">التاريخ</SelectItem>
-                    <SelectItem value="customer">اسم الزبون</SelectItem>
-                    <SelectItem value="amount">المبلغ</SelectItem>
+                    <SelectItem value="invoice_date">التاريخ</SelectItem>
+                    <SelectItem value="customer_name">اسم الزبون</SelectItem>
+                    <SelectItem value="total">المبلغ</SelectItem>
                     <SelectItem value="status">الحالة</SelectItem>
                   </SelectContent>
                 </Select>
@@ -764,7 +793,8 @@ export function InvoicesPageWithDB({ onCreateInvoice, onViewInvoiceDetails, onMa
                     setSearchTerm('');
                     setStatusFilter('all');
                     setDateFilter('all');
-                    setSortBy('date');
+                    setSortField('invoice_date');
+                    setSortDirection('desc');
                   }}
                   className="border-2 border-red-300 text-red-600 hover:bg-red-50 flex items-center gap-2 px-4 py-3 rounded-xl"
                 >
@@ -853,8 +883,9 @@ export function InvoicesPageWithDB({ onCreateInvoice, onViewInvoiceDetails, onMa
                          className="text-black arabic-text text-right font-bold text-base relative select-none group"
                          style={{ width: `${columnWidths.invoiceNumber}px` }}
                        >
-                         <div className="pr-2">
-                           رقم الفاتورة
+                         <div className="pr-2 flex items-center justify-between cursor-pointer" onClick={() => handleHeaderSort('invoice_number')}>
+                           <span>رقم الفاتورة</span>
+                           {sortField === 'invoice_number' ? (sortDirection === 'asc' ? <ArrowUp className="w-4 h-4" /> : <ArrowDown className="w-4 h-4" />) : <ArrowUpDown className="w-4 h-4 opacity-70" />}
                          </div>
                          <ResizeHandle column="invoiceNumber" />
                        </TableHead>
@@ -862,8 +893,9 @@ export function InvoicesPageWithDB({ onCreateInvoice, onViewInvoiceDetails, onMa
                          className="text-black arabic-text text-right font-bold text-base relative select-none group"
                          style={{ width: `${columnWidths.customerName}px` }}
                        >
-                         <div className="pr-2">
-                           الزبون
+                         <div className="pr-2 flex items-center justify-between cursor-pointer" onClick={() => handleHeaderSort('customer_name')}>
+                           <span>الزبون</span>
+                           {sortField === 'customer_name' ? (sortDirection === 'asc' ? <ArrowUp className="w-4 h-4" /> : <ArrowDown className="w-4 h-4" />) : <ArrowUpDown className="w-4 h-4 opacity-70" />}
                          </div>
                          <ResizeHandle column="customerName" />
                        </TableHead>
@@ -871,8 +903,9 @@ export function InvoicesPageWithDB({ onCreateInvoice, onViewInvoiceDetails, onMa
                          className="text-black arabic-text text-right font-bold text-base relative select-none group"
                          style={{ width: `${columnWidths.phone}px` }}
                        >
-                         <div className="pr-2">
-                           الهاتف
+                         <div className="pr-2 flex items-center justify-between cursor-pointer" onClick={() => handleHeaderSort('customer_phone')}>
+                           <span>الهاتف</span>
+                           {sortField === 'customer_phone' ? (sortDirection === 'asc' ? <ArrowUp className="w-4 h-4" /> : <ArrowDown className="w-4 h-4" />) : <ArrowUpDown className="w-4 h-4 opacity-70" />}
                          </div>
                          <ResizeHandle column="phone" />
                        </TableHead>
@@ -880,8 +913,9 @@ export function InvoicesPageWithDB({ onCreateInvoice, onViewInvoiceDetails, onMa
                          className="text-black arabic-text text-right font-bold text-base relative select-none group"
                          style={{ width: `${columnWidths.totalAmount}px` }}
                        >
-                         <div className="pr-2">
-                           المبلغ الكلي
+                         <div className="pr-2 flex items-center justify-between cursor-pointer" onClick={() => handleHeaderSort('total')}>
+                           <span>المبلغ الكلي</span>
+                           {sortField === 'total' ? (sortDirection === 'asc' ? <ArrowUp className="w-4 h-4" /> : <ArrowDown className="w-4 h-4" />) : <ArrowUpDown className="w-4 h-4 opacity-70" />}
                          </div>
                          <ResizeHandle column="totalAmount" />
                        </TableHead>
@@ -907,8 +941,9 @@ export function InvoicesPageWithDB({ onCreateInvoice, onViewInvoiceDetails, onMa
                          className="text-black arabic-text text-right font-bold text-base relative select-none group"
                          style={{ width: `${columnWidths.receivedDate}px` }}
                        >
-                         <div className="pr-2">
-                           تاريخ الاستلام
+                         <div className="pr-2 flex items-center justify-between cursor-pointer" onClick={() => handleHeaderSort('invoice_date')}>
+                           <span>تاريخ الاستلام</span>
+                           {sortField === 'invoice_date' ? (sortDirection === 'asc' ? <ArrowUp className="w-4 h-4" /> : <ArrowDown className="w-4 h-4" />) : <ArrowUpDown className="w-4 h-4 opacity-70" />}
                          </div>
                          <ResizeHandle column="receivedDate" />
                        </TableHead>
@@ -916,8 +951,9 @@ export function InvoicesPageWithDB({ onCreateInvoice, onViewInvoiceDetails, onMa
                          className="text-black arabic-text text-right font-bold text-base relative select-none group"
                          style={{ width: `${columnWidths.deliveryDate}px` }}
                        >
-                         <div className="pr-2">
-                           تاريخ التسليم
+                         <div className="pr-2 flex items-center justify-between cursor-pointer" onClick={() => handleHeaderSort('due_date')}>
+                           <span>تاريخ التسليم</span>
+                           {sortField === 'due_date' ? (sortDirection === 'asc' ? <ArrowUp className="w-4 h-4" /> : <ArrowDown className="w-4 h-4" />) : <ArrowUpDown className="w-4 h-4 opacity-70" />}
                          </div>
                          <ResizeHandle column="deliveryDate" />
                        </TableHead>
@@ -925,8 +961,9 @@ export function InvoicesPageWithDB({ onCreateInvoice, onViewInvoiceDetails, onMa
                          className="text-black arabic-text text-right font-bold text-base relative select-none group"
                          style={{ width: `${columnWidths.status}px` }}
                        >
-                         <div className="pr-2">
-                           الحالة
+                         <div className="pr-2 flex items-center justify-between cursor-pointer" onClick={() => handleHeaderSort('status')}>
+                           <span>الحالة</span>
+                           {sortField === 'status' ? (sortDirection === 'asc' ? <ArrowUp className="w-4 h-4" /> : <ArrowDown className="w-4 h-4" />) : <ArrowUpDown className="w-4 h-4 opacity-70" />}
                          </div>
                          <ResizeHandle column="status" />
                        </TableHead>

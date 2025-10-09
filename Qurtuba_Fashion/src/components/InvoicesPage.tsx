@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
+import { Card, CardContent } from './ui/card';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
@@ -9,9 +9,9 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from './ui/dialog';
 import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
+// import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { useInvoices } from '@/hooks/useInvoices';
-import { InvoiceService } from '@/services/invoice.service';
+// import { InvoiceService } from '@/services/invoice.service';
 import {
   Plus,
   Search,
@@ -25,19 +25,15 @@ import {
   Printer,
   Eye,
   CheckCircle,
-  Save,
   Grid3X3,
   List,
   Calendar,
-  DollarSign,
-  User,
-  Phone,
-  MapPin,
   Clock,
   ArrowUpDown,
   FilterX,
   RefreshCw,
 } from 'lucide-react';
+import { ArrowUp, ArrowDown } from 'lucide-react';
 import { ImageWithFallback } from './figma/ImageWithFallback';
 import {
   PrintableInvoice,
@@ -47,7 +43,7 @@ import {
   PrintableInvoiceData,
 } from './PrintableInvoice';
 import { openPrintWindow, formatPrintDateTime } from './print/PrintUtils';
-import { InvoiceDetailsPage } from './InvoiceDetailsPage';
+// import { InvoiceDetailsPage } from './InvoiceDetailsPage';
 import { InvoiceDetailsDialog } from './InvoiceDetailsDialog';
 
 type DateParts = {
@@ -82,13 +78,12 @@ const formatRangeDate = (date: Date) =>
     day: 'numeric',
   }).format(date);
 
-const mobileDateFormatter = new Intl.DateTimeFormat('ar-IQ', {
-  year: 'numeric',
-  month: '2-digit',
-  day: '2-digit',
-});
-
-const formatMobileDate = (value: string) => mobileDateFormatter.format(new Date(value));
+// const mobileDateFormatter = new Intl.DateTimeFormat('ar-IQ', {
+//   year: 'numeric',
+//   month: '2-digit',
+//   day: '2-digit',
+// });
+// const formatMobileDate = (value: string) => mobileDateFormatter.format(new Date(value));
 
 const buildBoundaryDate = (parts: DateParts, isStart: boolean): Date | null => {
   const year = parseInt(parts.year, 10);
@@ -158,7 +153,8 @@ type Invoice = PrintableInvoiceData & {
 
 export function InvoicesPage({ onCreateInvoice, onViewInvoiceDetails, onMarkAsPaid }: InvoicesPageProps) {
   const [searchTerm, setSearchTerm] = useState('');
-  const [sortBy, setSortBy] = useState('date');
+  const [sortField, setSortField] = useState<string>('receivedDate');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('table');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [dateFilter, setDateFilter] = useState<string>('all');
@@ -326,6 +322,30 @@ export function InvoicesPage({ onCreateInvoice, onViewInvoiceDetails, onMarkAsPa
     }
   };
 
+  // Sorting helpers
+  const defaultDescFields = new Set(['receivedDate', 'deliveryDate', 'total', 'id']);
+  const handleHeaderSort = (field: string) => {
+    if (sortField === field) {
+      setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortField(field);
+      setSortDirection(defaultDescFields.has(field) ? 'desc' : 'asc');
+    }
+  };
+
+  const compareValues = (a: any, b: any, direction: 'asc' | 'desc') => {
+    const multiplier = direction === 'asc' ? 1 : -1;
+    if (typeof a === 'number' && typeof b === 'number') {
+      return (a - b) * multiplier;
+    }
+    const aDate = new Date(a);
+    const bDate = new Date(b);
+    if (!Number.isNaN(aDate.getTime()) && !Number.isNaN(bDate.getTime())) {
+      return (aDate.getTime() - bDate.getTime()) * multiplier;
+    }
+    return String(a).localeCompare(String(b), 'ar', { sensitivity: 'base' }) * multiplier;
+  };
+
   // Enhanced filtering and sorting logic
   const filteredAndSortedInvoices = useMemo(() => {
     let filtered = invoices.filter(invoice => {
@@ -366,20 +386,26 @@ export function InvoicesPage({ onCreateInvoice, onViewInvoiceDetails, onMarkAsPa
 
     // Sort filtered results
     return [...filtered].sort((a, b) => {
-      switch (sortBy) {
-        case 'date':
-          return new Date(b.receivedDate).getTime() - new Date(a.receivedDate).getTime();
+      switch (sortField) {
+        case 'id':
+          return compareValues(a.id, b.id, sortDirection);
         case 'customer':
-          return a.customerName.localeCompare(b.customerName);
+        case 'customerName':
+          return compareValues(a.customerName, b.customerName, sortDirection);
+        case 'phone':
+          return compareValues(a.phone, b.phone, sortDirection);
         case 'total':
-          return b.total - a.total;
+          return compareValues(a.total, b.total, sortDirection);
         case 'status':
-          return a.status.localeCompare(b.status);
+          return compareValues(a.status, b.status, sortDirection);
+        case 'deliveryDate':
+          return compareValues(a.deliveryDate, b.deliveryDate, sortDirection);
+        case 'receivedDate':
         default:
-          return 0;
+          return compareValues(a.receivedDate, b.receivedDate, sortDirection);
       }
     });
-  }, [invoices, searchTerm, statusFilter, dateFilter, sortBy]);
+  }, [invoices, searchTerm, statusFilter, dateFilter, sortField, sortDirection]);
 
   // Statistics
   const stats = useMemo(() => {
@@ -698,6 +724,7 @@ export function InvoicesPage({ onCreateInvoice, onViewInvoiceDetails, onMarkAsPa
   };
 
   return (
+    <>
     <div className="min-h-screen bg-gradient-to-br from-[#F6E9CA] to-[#FDFBF7]">
       <div className="container mx-auto p-4 space-y-6">
         {/* Enhanced Header with Statistics */}
@@ -794,12 +821,15 @@ export function InvoicesPage({ onCreateInvoice, onViewInvoiceDetails, onMarkAsPa
                 />
               </div>
               <div className="flex flex-wrap gap-3">
-                <Select value={sortBy} onValueChange={setSortBy}>
+                <Select value={sortField} onValueChange={(val: string) => {
+                  setSortField(val);
+                  setSortDirection(defaultDescFields.has(val) ? 'desc' : 'asc');
+                }}>
                   <SelectTrigger className="w-48 border-2 border-[#C69A72]/30 rounded-xl">
                     <SelectValue placeholder="ترتيب حسب" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="date">التاريخ</SelectItem>
+                    <SelectItem value="receivedDate">التاريخ</SelectItem>
                     <SelectItem value="customer">اسم الزبون</SelectItem>
                     <SelectItem value="total">المبلغ</SelectItem>
                     <SelectItem value="status">الحالة</SelectItem>
@@ -812,7 +842,8 @@ export function InvoicesPage({ onCreateInvoice, onViewInvoiceDetails, onMarkAsPa
                     setSearchTerm('');
                     setStatusFilter('all');
                     setDateFilter('all');
-                    setSortBy('date');
+                    setSortField('receivedDate');
+                    setSortDirection('desc');
                   }}
                   className="border-2 border-red-300 text-red-600 hover:bg-red-50 flex items-center gap-2 px-4 py-3 rounded-xl"
                 >
@@ -924,14 +955,77 @@ export function InvoicesPage({ onCreateInvoice, onViewInvoiceDetails, onMarkAsPa
                       <Table>
                         <TableHeader>
                           <TableRow className="bg-gradient-to-r from-[#13312A] to-[#155446] hover:bg-gradient-to-r hover:from-[#13312A] hover:to-[#155446]">
-                            <TableHead className="text-[#F6E9CA] arabic-text text-right font-bold text-base">رقم الفاتورة</TableHead>
-                            <TableHead className="text-[#F6E9CA] arabic-text text-right font-bold text-base">الزبون</TableHead>
-                            <TableHead className="text-[#F6E9CA] arabic-text text-right font-bold text-base">الهاتف</TableHead>
-                            <TableHead className="text-[#F6E9CA] arabic-text text-right font-bold text-base">المبلغ</TableHead>
+                            <TableHead className="text-[#F6E9CA] arabic-text text-right font-bold text-base select-none">
+                              <div className="flex items-center justify-between cursor-pointer" onClick={() => handleHeaderSort('id')}>
+                                <span>رقم الفاتورة</span>
+                                {sortField === 'id' ? (
+                                  sortDirection === 'asc' ? <ArrowUp className="w-4 h-4" /> : <ArrowDown className="w-4 h-4" />
+                                ) : (
+                                  <ArrowUpDown className="w-4 h-4 opacity-70" />
+                                )}
+                              </div>
+                            </TableHead>
+                            <TableHead className="text-[#F6E9CA] arabic-text text-right font-bold text-base select-none">
+                              <div className="flex items-center justify-between cursor-pointer" onClick={() => handleHeaderSort('customer')}>
+                                <span>الزبون</span>
+                                {sortField === 'customer' ? (
+                                  sortDirection === 'asc' ? <ArrowUp className="w-4 h-4" /> : <ArrowDown className="w-4 h-4" />
+                                ) : (
+                                  <ArrowUpDown className="w-4 h-4 opacity-70" />
+                                )}
+                              </div>
+                            </TableHead>
+                            <TableHead className="text-[#F6E9CA] arabic-text text-right font-bold text-base select-none">
+                              <div className="flex items-center justify-between cursor-pointer" onClick={() => handleHeaderSort('phone')}>
+                                <span>الهاتف</span>
+                                {sortField === 'phone' ? (
+                                  sortDirection === 'asc' ? <ArrowUp className="w-4 h-4" /> : <ArrowDown className="w-4 h-4" />
+                                ) : (
+                                  <ArrowUpDown className="w-4 h-4 opacity-70" />
+                                )}
+                              </div>
+                            </TableHead>
+                            <TableHead className="text-[#F6E9CA] arabic-text text-right font-bold text-base select-none">
+                              <div className="flex items-center justify-between cursor-pointer" onClick={() => handleHeaderSort('total')}>
+                                <span>المبلغ</span>
+                                {sortField === 'total' ? (
+                                  sortDirection === 'asc' ? <ArrowUp className="w-4 h-4" /> : <ArrowDown className="w-4 h-4" />
+                                ) : (
+                                  <ArrowUpDown className="w-4 h-4 opacity-70" />
+                                )}
+                              </div>
+                            </TableHead>
                             <TableHead className="text-[#F6E9CA] arabic-text text-right font-bold text-base">صورة القماش</TableHead>
-                            <TableHead className="text-[#F6E9CA] arabic-text text-right font-bold text-base">تاريخ الاستلام</TableHead>
-                            <TableHead className="text-[#F6E9CA] arabic-text text-right font-bold text-base">تاريخ التسليم</TableHead>
-                            <TableHead className="text-[#F6E9CA] arabic-text text-right font-bold text-base">الحالة</TableHead>
+                            <TableHead className="text-[#F6E9CA] arabic-text text-right font-bold text-base select-none">
+                              <div className="flex items-center justify-between cursor-pointer" onClick={() => handleHeaderSort('receivedDate')}>
+                                <span>تاريخ الاستلام</span>
+                                {sortField === 'receivedDate' ? (
+                                  sortDirection === 'asc' ? <ArrowUp className="w-4 h-4" /> : <ArrowDown className="w-4 h-4" />
+                                ) : (
+                                  <ArrowUpDown className="w-4 h-4 opacity-70" />
+                                )}
+                              </div>
+                            </TableHead>
+                            <TableHead className="text-[#F6E9CA] arabic-text text-right font-bold text-base select-none">
+                              <div className="flex items-center justify-between cursor-pointer" onClick={() => handleHeaderSort('deliveryDate')}>
+                                <span>تاريخ التسليم</span>
+                                {sortField === 'deliveryDate' ? (
+                                  sortDirection === 'asc' ? <ArrowUp className="w-4 h-4" /> : <ArrowDown className="w-4 h-4" />
+                                ) : (
+                                  <ArrowUpDown className="w-4 h-4 opacity-70" />
+                                )}
+                              </div>
+                            </TableHead>
+                            <TableHead className="text-[#F6E9CA] arabic-text text-right font-bold text-base select-none">
+                              <div className="flex items-center justify-between cursor-pointer" onClick={() => handleHeaderSort('status')}>
+                                <span>الحالة</span>
+                                {sortField === 'status' ? (
+                                  sortDirection === 'asc' ? <ArrowUp className="w-4 h-4" /> : <ArrowDown className="w-4 h-4" />
+                                ) : (
+                                  <ArrowUpDown className="w-4 h-4 opacity-70" />
+                                )}
+                              </div>
+                            </TableHead>
                             <TableHead className="text-[#F6E9CA] arabic-text text-right font-bold text-base">الإجراءات</TableHead>
                           </TableRow>
                         </TableHeader>
@@ -962,7 +1056,7 @@ export function InvoicesPage({ onCreateInvoice, onViewInvoiceDetails, onMarkAsPa
                                   {getStatusLabel(invoice.status)}
                                 </Badge>
                               </TableCell>
-                              <TableCell onClick={(e) => e.stopPropagation()}>
+                              <TableCell onClick={(e: React.MouseEvent) => e.stopPropagation()}>
                                 <div className="flex items-center gap-2">
                                   <Button
                                     size="sm"
@@ -1052,7 +1146,7 @@ export function InvoicesPage({ onCreateInvoice, onViewInvoiceDetails, onMarkAsPa
                               <div className="absolute top-3 left-3">
                                 <Button
                                   size="sm"
-                                  onClick={(e) => {
+                                  onClick={(e: React.MouseEvent) => {
                                     e.stopPropagation();
                                     handleMarkAsPaid(invoice);
                                   }}
@@ -1098,7 +1192,7 @@ export function InvoicesPage({ onCreateInvoice, onViewInvoiceDetails, onMarkAsPa
                             </div>
                             
                             {/* Action Buttons */}
-                            <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
+                            <div className="flex gap-2" onClick={(e: React.MouseEvent) => e.stopPropagation()}>
                               <Button
                                 size="sm"
                                 variant="outline"
@@ -1297,9 +1391,9 @@ export function InvoicesPage({ onCreateInvoice, onViewInvoiceDetails, onMarkAsPa
         <InvoiceDetailsDialog
           isOpen={isDetailsDialogOpen}
           onOpenChange={setIsDetailsDialogOpen}
-          invoice={selectedInvoice}
+          invoice={selectedInvoice!}
         />
       )}
-    </div>
+    </>
   );
 }

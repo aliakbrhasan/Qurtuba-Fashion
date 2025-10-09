@@ -83,6 +83,10 @@ export class DatabaseService {
     invoiceItems: []
   };
 
+  // Local persistence keys for browser fallback
+  private readonly LOCAL_INVOICES_KEY = 'qf_local_invoices';
+  private readonly LOCAL_INVOICE_ITEMS_KEY = 'qf_local_invoice_items';
+
   private constructor() {
     this.initializeLocalData();
   }
@@ -165,6 +169,33 @@ export class DatabaseService {
         createdAt: '2024-01-01'
       }
     ];
+
+    // Attempt to load persisted invoices/items for browser fallback
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        const storedInvoices = window.localStorage.getItem(this.LOCAL_INVOICES_KEY);
+        if (storedInvoices) {
+          this.localData.invoices = JSON.parse(storedInvoices);
+        }
+        const storedInvoiceItems = window.localStorage.getItem(this.LOCAL_INVOICE_ITEMS_KEY);
+        if (storedInvoiceItems) {
+          this.localData.invoiceItems = JSON.parse(storedInvoiceItems);
+        }
+      }
+    } catch (error) {
+      console.warn('Failed to load local invoices from storage:', error);
+    }
+  }
+
+  private persistInvoicesToStorage() {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.setItem(this.LOCAL_INVOICES_KEY, JSON.stringify(this.localData.invoices));
+        window.localStorage.setItem(this.LOCAL_INVOICE_ITEMS_KEY, JSON.stringify(this.localData.invoiceItems));
+      }
+    } catch (error) {
+      console.warn('Failed to persist invoices to storage:', error);
+    }
   }
 
   // Users operations
@@ -524,6 +555,7 @@ export class DatabaseService {
         updated_at: new Date().toISOString()
       };
       this.localData.invoices.push(newInvoice);
+      this.persistInvoicesToStorage();
       return newInvoice;
     }
   }
@@ -570,6 +602,7 @@ export class DatabaseService {
         console.log('Updating local data...');
         this.localData.invoices[invoiceIndex] = { ...this.localData.invoices[invoiceIndex], ...updates };
         console.log('Local data updated:', this.localData.invoices[invoiceIndex]);
+        this.persistInvoicesToStorage();
         return this.localData.invoices[invoiceIndex];
       }
       throw new Error('Invoice not found');
@@ -587,6 +620,7 @@ export class DatabaseService {
     } catch (error) {
       console.warn('Supabase error, using local data:', error);
       this.localData.invoices = this.localData.invoices.filter(i => i.id !== id);
+      this.persistInvoicesToStorage();
     }
   }
 
@@ -635,6 +669,7 @@ export class DatabaseService {
         created_at: new Date().toISOString()
       };
       this.localData.invoiceItems.push(newItem);
+      this.persistInvoicesToStorage();
       return newItem;
     }
   }
@@ -661,6 +696,7 @@ export class DatabaseService {
       const itemIndex = this.localData.invoiceItems.findIndex(item => item.id === id);
       if (itemIndex !== -1) {
         this.localData.invoiceItems[itemIndex] = { ...this.localData.invoiceItems[itemIndex], ...updates };
+        this.persistInvoicesToStorage();
         return this.localData.invoiceItems[itemIndex];
       }
       throw new Error('Invoice item not found');
@@ -678,6 +714,7 @@ export class DatabaseService {
     } catch (error) {
       console.warn('Supabase error, using local data:', error);
       this.localData.invoiceItems = this.localData.invoiceItems.filter(item => item.id !== id);
+      this.persistInvoicesToStorage();
     }
   }
 
@@ -832,9 +869,9 @@ export class DatabaseService {
 
   private mapSupabaseInvoiceToInvoice(data: any): Invoice {
     return {
-      id: data.id,
+      id: String(data.id),
       invoice_number: data.invoice_number,
-      customer_id: data.customer_id,
+      customer_id: data.customer_id != null ? String(data.customer_id) : undefined,
       customer_name: data.customer_name,
       customer_phone: data.customer_phone,
       customer_address: data.customer_address,

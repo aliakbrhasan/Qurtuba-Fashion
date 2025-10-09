@@ -63,7 +63,12 @@ export function UsersManagementPage({ onNavigate }: UsersManagementPageProps) {
           return;
         }
         const usersData = await authService.getUsers();
-        setUsers(usersData);
+        // Ensure UI state carries sanitized Arabic fields
+        setUsers(usersData.map(u => ({
+          ...u,
+          name: u.name,
+          role: u.role
+        })));
       } catch (error) {
         console.error('Error loading users:', error);
         const msg = (error as Error)?.message || '';
@@ -85,7 +90,7 @@ export function UsersManagementPage({ onNavigate }: UsersManagementPageProps) {
     const loadRoles = async () => {
       try {
         const rolesData = await rolesService.getRoles();
-        setRoles(rolesData);
+        setRoles(rolesData.map(r => ({ ...r, name: r.name })));
       } catch (error) {
         console.error('Error loading roles:', error);
       }

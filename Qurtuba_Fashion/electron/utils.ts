@@ -1,6 +1,7 @@
 import { app } from 'electron';
 
-export const isDev = process.env.NODE_ENV === 'development';
+// Consider development when the app is not packaged (safer than NODE_ENV)
+export const isDev = !app.isPackaged;
 
 export const getAppPath = (): string => {
   return app.getAppPath();

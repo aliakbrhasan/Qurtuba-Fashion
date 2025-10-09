@@ -1,4 +1,5 @@
 import { app, BrowserWindow, ipcMain, dialog, shell, Menu, Tray, nativeImage } from 'electron';
+import { existsSync } from 'fs';
 import { join } from 'path';
 import { isDev } from './utils';
 import { LocalDatabase } from './local-database';
@@ -20,7 +21,6 @@ const createWindow = (): void => {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      enableRemoteModule: false,
       preload: join(__dirname, 'preload.js'),
     },
     icon: join(__dirname, '../assets/icon.png'), // Optional: add app icon
@@ -34,7 +34,24 @@ const createWindow = (): void => {
     // Open DevTools in development
     mainWindow.webContents.openDevTools();
   } else {
-    mainWindow.loadFile(join(__dirname, '../build/index.html'));
+    // In production, locate build/index.html from several candidates
+    const candidates = [
+      join(__dirname, '../build/index.html'),
+      join(app.getAppPath(), 'build', 'index.html'),
+      join(process.cwd(), 'build', 'index.html'),
+      join(__dirname, '../../build/index.html'),
+    ];
+    const found = candidates.find(p => existsSync(p));
+    if (found) {
+      mainWindow.loadFile(found).catch((err) => {
+        console.error('Failed to load index.html:', err);
+        dialog.showErrorBox('خطأ في تشغيل التطبيق', 'تعذر تحميل واجهة التطبيق. تأكد من وجود مجلد build ثم أعد المحاولة.');
+      });
+    } else {
+      const message = `تعذر العثور على build/index.html\nيرجى تشغيل: npm run build\nالمسارات التي تم البحث فيها:\n${candidates.join('\n')}`;
+      console.error(message);
+      dialog.showErrorBox('الملفات غير موجودة', message);
+    }
   }
 
   // Show window when ready to prevent visual flash
@@ -84,9 +101,9 @@ app.on('window-all-closed', () => {
 });
 
 // Security: Prevent new window creation
-app.on('web-contents-created', (_, contents) => {
-  contents.on('new-window', (event) => {
-    event.preventDefault();
+app.on('web-contents-created', (_evt, contents) => {
+  contents.setWindowOpenHandler(() => {
+    return { action: 'deny' };
   });
 });
 
@@ -174,7 +191,16 @@ ipcMain.handle('sync:forceSync', async () => {
 
 // Offline handlers
 ipcMain.handle('offline:isOnline', () => {
-  return require('os').networkInterfaces();
+  try {
+    const dns = require('dns');
+    return new Promise<boolean>((resolve) => {
+      dns.lookup('supabase.io', (err: any) => {
+        resolve(!err);
+      });
+    });
+  } catch {
+    return false;
+  }
 });
 
 ipcMain.handle('offline:getOfflineData', async () => {

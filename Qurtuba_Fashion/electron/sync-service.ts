@@ -35,8 +35,12 @@ export class SyncService {
   }
 
   private initializeSupabase(): void {
-    const supabaseUrl = process.env.VITE_SUPABASE_URL;
-    const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY;
+    // Fallbacks allow sync even if env vars are missing in Electron
+    const fallbackSupabaseUrl = 'https://dbjaogpesmyrqjwtzzwr.supabase.co';
+    const fallbackSupabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRiamFvZ3Blc215cnFqd3R6endyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg0Nzk1MzksImV4cCI6MjA3NDA1NTUzOX0.mioc1bAd_RYxcKS546MuBB3-DpLdyxxJiumJW4zv6Rw';
+
+    const supabaseUrl = process.env.VITE_SUPABASE_URL || fallbackSupabaseUrl;
+    const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY || fallbackSupabaseAnonKey;
     
     if (supabaseUrl && supabaseKey) {
       this.supabase = createClient(supabaseUrl, supabaseKey);
@@ -90,8 +94,8 @@ export class SyncService {
               name: customer.name,
               phone: customer.phone,
               address: customer.address,
-              total_spent: customer.total_spent,
-              last_order: customer.last_order,
+              total_spent: (customer as any).total_spent ?? (customer as any).totalSpent ?? 0,
+              last_order: (customer as any).last_order ?? (customer as any).lastOrder ?? null,
               label: customer.label,
               measurements: customer.measurements ? JSON.parse(customer.measurements) : null,
               notes: customer.notes,
@@ -201,25 +205,19 @@ export class SyncService {
 
       if (customers) {
         for (const customer of customers) {
-          // Check if local version exists and is older
-          const localCustomers = await this.localDB.getCustomers();
-          const localCustomer = localCustomers.find(c => c.id === customer.id);
-          
-          if (!localCustomer || new Date(customer.updated_at) > new Date(localCustomer.updated_at)) {
-            // Update local database
-            if (localCustomer) {
-              await this.localDB.updateCustomer(customer.id, {
-                name: customer.name,
-                phone: customer.phone,
-                address: customer.address,
-                totalSpent: customer.total_spent,
-                lastOrder: customer.last_order,
-                label: customer.label,
-                measurements: customer.measurements,
-                notes: customer.notes
-              });
-            }
-          }
+          await (this.localDB as any).upsertCustomerFromCloud?.({
+            id: customer.id,
+            name: customer.name,
+            phone: customer.phone,
+            address: customer.address,
+            total_spent: customer.total_spent,
+            last_order: customer.last_order,
+            label: customer.label,
+            measurements: customer.measurements,
+            notes: customer.notes,
+            created_at: customer.created_at,
+            updated_at: customer.updated_at
+          });
         }
       }
 
@@ -231,26 +229,23 @@ export class SyncService {
 
       if (invoices) {
         for (const invoice of invoices) {
-          const localInvoices = await this.localDB.getInvoices();
-          const localInvoice = localInvoices.find(i => i.id === invoice.id);
-          
-          if (!localInvoice || new Date(invoice.updated_at) > new Date(localInvoice.updated_at)) {
-            if (localInvoice) {
-              await this.localDB.updateInvoice(invoice.id, {
-                customer_id: invoice.customer_id,
-                customer_name: invoice.customer_name,
-                customer_phone: invoice.customer_phone,
-                customer_address: invoice.customer_address,
-                total: invoice.total,
-                paid_amount: invoice.paid_amount,
-                status: invoice.status,
-                invoice_date: invoice.invoice_date,
-                due_date: invoice.due_date,
-                notes: invoice.notes,
-                fabric_image_url: invoice.fabric_image_url
-              });
-            }
-          }
+          await (this.localDB as any).upsertInvoiceFromCloud?.({
+            id: invoice.id,
+            invoice_number: invoice.invoice_number,
+            customer_id: invoice.customer_id,
+            customer_name: invoice.customer_name,
+            customer_phone: invoice.customer_phone,
+            customer_address: invoice.customer_address,
+            total: invoice.total,
+            paid_amount: invoice.paid_amount,
+            status: invoice.status,
+            invoice_date: invoice.invoice_date,
+            due_date: invoice.due_date,
+            notes: invoice.notes,
+            fabric_image_url: invoice.fabric_image_url,
+            created_at: invoice.created_at,
+            updated_at: invoice.updated_at
+          });
         }
       }
 
@@ -262,21 +257,17 @@ export class SyncService {
 
       if (orders) {
         for (const order of orders) {
-          const localOrders = await this.localDB.getOrders();
-          const localOrder = localOrders.find(o => o.id === order.id);
-          
-          if (!localOrder || new Date(order.updated_at) > new Date(localOrder.updated_at)) {
-            if (localOrder) {
-              await this.localDB.updateOrder(order.id, {
-                customer_id: order.customer_id,
-                order_date: order.order_date,
-                delivery_date: order.delivery_date,
-                status: order.status,
-                total: order.total,
-                notes: order.notes
-              });
-            }
-          }
+          await (this.localDB as any).upsertOrderFromCloud?.({
+            id: order.id,
+            customer_id: order.customer_id,
+            order_date: order.order_date,
+            delivery_date: order.delivery_date,
+            status: order.status,
+            total: order.total,
+            notes: order.notes,
+            created_at: order.created_at,
+            updated_at: order.updated_at
+          });
         }
       }
 
