@@ -18,12 +18,16 @@ import {
   CreditCard,
   Wallet,
   FileText,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Pencil
 } from 'lucide-react';
 import { formatCurrency, formatDate, PrintableInvoiceData, PrintableInvoice } from './PrintableInvoice';
 import { openPrintWindow } from './print/PrintUtils';
 import { useImages } from '@/hooks/useImages';
 import { useInvoiceDetails } from '@/hooks/useInvoiceDetails';
+import { useRef, useState } from 'react';
+import { ImageService } from '@/services/image.service';
+import { InvoiceService } from '@/services/invoice.service';
 
 interface InvoiceDetailsPageProps {
   invoiceId: string;
@@ -33,6 +37,12 @@ interface InvoiceDetailsPageProps {
 
 export function InvoiceDetailsPage({ invoiceId, onBack, onMarkAsPaid }: InvoiceDetailsPageProps) {
   const { invoiceDetails, isLoading, error } = useInvoiceDetails(invoiceId);
+  // Ensure hooks order is stable across renders
+  const { images, loading: imagesLoading } = useImages('invoice', invoiceId);
+  // Hooks must be declared before any early returns
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [imageError, setImageError] = useState<string | null>(null);
 
   // حالة التحميل
   if (isLoading) {
@@ -64,7 +74,6 @@ export function InvoiceDetailsPage({ invoiceId, onBack, onMarkAsPaid }: InvoiceD
   }
 
   const invoice = invoiceDetails;
-  const { images, loading: imagesLoading } = useImages('invoice', invoice.id);
   const remaining = Math.max(invoice.total - invoice.paid_amount, 0);
   const isPaid = invoice.status === 'مدفوع';
   const isPartiallyPaid = invoice.status === 'جزئي';
@@ -117,6 +126,35 @@ export function InvoiceDetailsPage({ invoiceId, onBack, onMarkAsPaid }: InvoiceD
   const handleMarkAsPaid = () => {
     if (onMarkAsPaid) {
       onMarkAsPaid(invoice.id);
+    }
+  };
+
+  // Change fabric image
+  const triggerChangeImage = () => {
+    setImageError(null);
+    fileInputRef.current?.click();
+  };
+
+  const onChangeImageFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      setIsUploadingImage(true);
+      setImageError(null);
+      // Upload to local storage (folder-only path to avoid remote DB dependency)
+      const uploaded = await ImageService.uploadImage(file, 'fabric-images');
+      const newUrl = (uploaded as any).publicUrl || (uploaded as any).url || '';
+      if (!newUrl) throw new Error('فشل في رفع الصورة');
+      // Update invoice with new image URL in local DB
+      await InvoiceService.updateInvoice(invoice.id, { fabric_image_url: newUrl } as any);
+      // Optimistically update current view
+      (invoice as any).fabric_image_url = newUrl;
+    } catch (err: any) {
+      setImageError(err?.message || 'حدث خطأ أثناء تغيير الصورة');
+    } finally {
+      setIsUploadingImage(false);
+      // reset input value to allow re-selecting same file later
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
@@ -392,27 +430,62 @@ export function InvoiceDetailsPage({ invoiceId, onBack, onMarkAsPaid }: InvoiceD
                </CardTitle>
              </CardHeader>
             <CardContent>
-              <div className="bg-[#f9fafb] rounded-lg p-8 border border-[#e5e7eb] flex flex-col items-center justify-center gap-3 min-h-[140px]">
+              <div className="bg-[#f9fafb] rounded-lg p-8 border border-[#e5e7eb] flex flex-col items-center justify-center gap-3 min-h-[140px] relative">
                 {imagesLoading && !invoice.fabricImageUrl ? (
                   <Loader2 className="w-6 h-6 animate-spin text-[#9ca3af]" />
                 ) : (images && images.length > 0) ? (
-                  <img
-                    src={images[0].data_url}
-                    alt="صورة القماش"
-                    className="max-w-full h-auto max-h-48 rounded-lg shadow-md"
-                  />
+                  <div className="w-full h-48 flex items-center justify-center overflow-hidden">
+                    <img
+                      src={images[0].data_url}
+                      alt="صورة القماش"
+                      className="max-h-full max-w-full object-contain rounded-lg shadow-md"
+                    />
+                  </div>
                 ) : (invoice as any).fabric_image_url || (invoice as any).fabricImageUrl ? (
-                  <img
-                    src={(invoice as any).fabric_image_url || (invoice as any).fabricImageUrl}
-                    alt="صورة القماش"
-                    className="max-w-full h-auto max-h-48 rounded-lg shadow-md"
-                  />
+                  <div className="w-full h-48 flex items-center justify-center overflow-hidden">
+                    <img
+                      src={(invoice as any).fabric_image_url || (invoice as any).fabricImageUrl}
+                      alt="صورة القماش"
+                      className="max-h-full max-w-full object-contain rounded-lg shadow-md"
+                    />
+                  </div>
                 ) : (
                   <>
                     <ImageIcon className="w-12 h-12 text-[#9ca3af]" />
                     <p className="text-[#6b7280] text-center arabic-text">لا توجد صورة للقماش</p>
                   </>
                 )}
+                {/* Change image button */}
+                <div className="absolute top-2 left-2 flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={triggerChangeImage}
+                    className="bg-white/80 hover:bg-white"
+                    disabled={isUploadingImage}
+                  >
+                    {isUploadingImage ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <>
+                        <Pencil className="w-4 h-4 mr-1" />
+                        تغيير الصورة
+                      </>
+                    )}
+                  </Button>
+                </div>
+                {imageError && (
+                  <p className="text-red-600 text-xs arabic-text absolute bottom-2 left-2 right-2 text-center">
+                    {imageError}
+                  </p>
+                )}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={onChangeImageFile}
+                  className="hidden"
+                />
               </div>
             </CardContent>
           </Card>

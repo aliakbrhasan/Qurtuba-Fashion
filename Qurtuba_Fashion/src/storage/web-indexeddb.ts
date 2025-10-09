@@ -147,9 +147,33 @@ export class WebIndexedDBStorage implements StoragePort {
 
 	async getUnsyncedRecords(): Promise<UnsyncedBundle> { return { customers: [...this.customersArr], invoices: [...this.invoicesArr], orders: [...this.ordersArr] }; }
 	async markAsSynced(): Promise<void> { /* noop */ }
-	async upsertCustomerFromCloud(): Promise<void> { /* noop */ }
-	async upsertInvoiceFromCloud(): Promise<void> { /* noop */ }
-	async upsertOrderFromCloud(): Promise<void> { /* noop */ }
+	async upsertCustomerFromCloud(payload: any): Promise<void> {
+		const idx = this.customersArr.findIndex(c => String(c.id) === String(payload.id));
+		if (idx === -1) {
+			this.customersArr.unshift(payload as Customer);
+		} else {
+			this.customersArr[idx] = { ...this.customersArr[idx], ...payload } as Customer;
+		}
+		this.persistAll();
+	}
+	async upsertInvoiceFromCloud(payload: any): Promise<void> {
+		const idx = this.invoicesArr.findIndex(i => String(i.id) === String(payload.id));
+		if (idx === -1) {
+			this.invoicesArr.unshift(payload as Invoice);
+		} else {
+			this.invoicesArr[idx] = { ...this.invoicesArr[idx], ...payload } as Invoice;
+		}
+		this.persistAll();
+	}
+	async upsertOrderFromCloud(payload: any): Promise<void> {
+		const idx = this.ordersArr.findIndex(o => String(o.id) === String(payload.id));
+		if (idx === -1) {
+			this.ordersArr.unshift(payload as Order);
+		} else {
+			this.ordersArr[idx] = { ...this.ordersArr[idx], ...payload } as Order;
+		}
+		this.persistAll();
+	}
 }
 
 

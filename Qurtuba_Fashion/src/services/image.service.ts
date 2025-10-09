@@ -19,7 +19,6 @@ export interface ImageRecord {
 }
 
 export class ImageService {
-  private static readonly BUCKET_NAME = 'invoice-images';
   private static readonly MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
   private static readonly ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
   private static readonly MAX_DIMENSION = 4000; // pixels
@@ -74,14 +73,19 @@ export class ImageService {
 
   // List entity images from DB
   static async getEntityImages(entityType: 'invoice'|'customer'|'order', entityId: string): Promise<ImageRecord[]> {
-    const { data, error } = await supabase
-      .from('images')
-      .select('*')
-      .eq('entity_type', entityType)
-      .eq('entity_id', entityId)
-      .order('created_at', { ascending: false });
-    if (error) throw error;
-    return (data || []) as ImageRecord[];
+    try {
+      const { data, error } = await supabase
+        .from('images')
+        .select('*')
+        .eq('entity_type', entityType)
+        .eq('entity_id', entityId)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return (data || []) as ImageRecord[];
+    } catch {
+      // In environments without Supabase or table, silently fall back
+      return [];
+    }
   }
 
   // Delete image: remove from storage then DB
@@ -93,10 +97,15 @@ export class ImageService {
       if (error) throw error;
       filenamePath = (data as any)?.filename;
     }
-    const api = (window as any).electronAPI;
-    const delRes = await api.images.delete(filenamePath);
-    if (!delRes?.ok) throw new Error(delRes?.error || 'فشل في حذف الصورة');
-    await supabase.from('images').delete().eq('filename', filenamePath);
+    const api = (typeof window !== 'undefined' ? (window as any).electronAPI : undefined);
+    if (api?.images?.delete) {
+      const delRes = await api.images.delete(filenamePath);
+      if (!delRes?.ok) throw new Error(delRes?.error || 'فشل في حذف الصورة');
+      await supabase.from('images').delete().eq('filename', filenamePath);
+    } else {
+      // Browser-only fallback: nothing to delete on disk; best-effort DB cleanup
+      try { await supabase.from('images').delete().eq('filename', filenamePath); } catch {}
+    }
   }
 
   // Move image between entities
@@ -110,10 +119,15 @@ export class ImageService {
 
   // Get image URL (public)
   static async getImageUrl(path: string): Promise<string> {
-    const api = (window as any).electronAPI;
-    const res = await api.images.getPublicUrl(path);
-    if (res?.ok) return res.data as string;
-    throw new Error(res?.error || 'فشل في جلب رابط الصورة');
+    const api = (typeof window !== 'undefined' ? (window as any).electronAPI : undefined);
+    if (api?.images?.getPublicUrl) {
+      const res = await api.images.getPublicUrl(path);
+      if (res?.ok) return res.data as string;
+      throw new Error(res?.error || 'فشل في جلب رابط الصورة');
+    }
+    // Browser fallback: if path already a data URL or absolute URL, return as-is
+    if (/^data:|^blob:|^https?:|^file:/i.test(path)) return path;
+    return path;
   }
 
   // Internal: upload to storage via IPC
@@ -125,15 +139,27 @@ export class ImageService {
         throw new Error('أبعاد الصورة كبيرة جداً');
       }
       const timestamp = Date.now();
-      const randomString = crypto.getRandomValues(new Uint32Array(1))[0].toString(36);
+      const randomString = (typeof crypto !== 'undefined' && (crypto as any).getRandomValues)
+        ? (crypto.getRandomValues(new Uint32Array(1))[0].toString(36))
+        : Math.random().toString(36).slice(2);
       const fileExtension = file.name.split('.').pop() || 'jpg';
       const safeFolder = folder.replace(/[^a-zA-Z0-9-_\/]/g, '').slice(0, 128) || 'images';
       const fileName = `${safeFolder}/${timestamp}-${randomString}.${fileExtension}`;
-      const buffer = await file.arrayBuffer();
-      const api = (window as any).electronAPI;
-      const res = await api.images.upload(Array.from(new Uint8Array(buffer)), file.type, fileName);
-      if (!res?.ok) throw new Error(res?.error || 'فشل في رفع الصورة');
-      return res.data as ImageUploadResult;
+      const api = (typeof window !== 'undefined' ? (window as any).electronAPI : undefined);
+      if (api?.images?.upload) {
+        const buffer = await file.arrayBuffer();
+        const res = await api.images.upload(Array.from(new Uint8Array(buffer)), file.type, fileName);
+        if (!res?.ok) throw new Error(res?.error || 'فشل في رفع الصورة');
+        return res.data as ImageUploadResult;
+      }
+      // Browser fallback: embed as data URL so it persists in local DB
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = () => reject(new Error('فشل في قراءة الملف'));
+        reader.readAsDataURL(file);
+      });
+      return { url: `inline:${fileName}`, path: fileName, publicUrl: dataUrl };
     } catch (error) {
       console.error('Error uploading image:', error);
       throw error;

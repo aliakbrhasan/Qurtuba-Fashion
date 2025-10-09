@@ -1,0 +1,71 @@
+directories:
+  output: dist
+  buildResources: build
+appId: com.qurtuba.fashion
+productName: أزياء قرطبة
+files:
+  - filter:
+      - build/**/*
+      - dist-electron/**/*
+extraResources:
+  - from: build/fonts
+    to: fonts
+  - from: resources
+    to: resources
+    filter:
+      - '**/*'
+  - from: build/icon.ico
+    to: icon.ico
+asar: true
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  icon: build/icon.ico
+  requestedExecutionLevel: asInvoker
+  forceCodeSigning: false
+mac:
+  target:
+    - target: dmg
+      arch:
+        - x64
+        - arm64
+    - target: zip
+      arch:
+        - x64
+        - arm64
+  category: public.app-category.business
+linux:
+  target:
+    - target: AppImage
+      arch:
+        - x64
+    - target: deb
+      arch:
+        - x64
+    - target: rpm
+      arch:
+        - x64
+  category: Office
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: أزياء قرطبة
+  allowElevation: true
+  include: build/nsis/install-fonts.nsh
+dmg:
+  title: أزياء قرطبة
+  contents:
+    - x: 130
+      'y': 220
+    - x: 410
+      'y': 220
+      type: link
+      path: /Applications
+publish: null
+copyright: Copyright © 2024 أزياء قرطبة
+electronVersion: 32.3.3

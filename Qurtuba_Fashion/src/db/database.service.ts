@@ -374,6 +374,7 @@ export class DatabaseService {
       this.localData.customers = [created, ...this.localData.customers];
       this.persistAllToStorage();
       (syncEngine as any).schedule?.();
+      try { await (syncEngine as any).sync?.(); } catch {}
       try {
         const { notifications } = await import('@/services/notifications.service');
         notifications.emit({
@@ -409,6 +410,7 @@ export class DatabaseService {
       if (idx !== -1) this.localData.customers[idx] = updated; else this.localData.customers.unshift(updated);
       this.persistAllToStorage();
       (syncEngine as any).schedule?.();
+      try { await (syncEngine as any).sync?.(); } catch {}
       try {
         const { notifications } = await import('@/services/notifications.service');
         notifications.emit({
@@ -440,25 +442,34 @@ export class DatabaseService {
     }
   }
 
-  async deleteCustomer(id: string): Promise<void> { await (storage as any).deleteCustomer?.(id); this.localData.customers = this.localData.customers.filter(c => c.id !== id); this.persistAllToStorage(); (syncEngine as any).schedule?.(); }
+  async deleteCustomer(id: string): Promise<void> { await (storage as any).deleteCustomer?.(id); this.localData.customers = this.localData.customers.filter(c => c.id !== id); this.persistAllToStorage(); (syncEngine as any).schedule?.(); try { await (syncEngine as any).sync?.(); } catch {} }
 
   // Orders operations (local-first)
   async getOrders(): Promise<Order[]> { try { const rows = await storage.getOrders(); this.localData.orders = rows; this.persistAllToStorage(); return rows; } catch { return this.localData.orders; } }
 
   async getOrdersByCustomer(customerId: string): Promise<Order[]> { const all = await this.getOrders(); return all.filter(o => (o as any).customer_id === customerId); }
 
-  async createOrder(order: NewOrder): Promise<Order> { const created = await storage.createOrder(order); this.localData.orders = [created, ...this.localData.orders]; this.persistAllToStorage(); (syncEngine as any).schedule?.(); return created; }
+  async createOrder(order: NewOrder): Promise<Order> { const created = await storage.createOrder(order); this.localData.orders = [created, ...this.localData.orders]; this.persistAllToStorage(); (syncEngine as any).schedule?.(); try { await (syncEngine as any).sync?.(); } catch {}; return created; }
 
   // Invoice operations (local-first)
   async getInvoices(): Promise<Invoice[]> { try { const rows = await storage.getInvoices(); this.localData.invoices = rows; this.persistAllToStorage(); return rows; } catch { return this.localData.invoices; } }
 
   async getInvoiceById(id: string): Promise<Invoice | null> { const all = await this.getInvoices(); return all.find(i => i.id === id) || null; }
 
-  async createInvoice(invoice: NewInvoice): Promise<Invoice> { const created = await storage.createInvoice(invoice as any); this.localData.invoices = [created, ...this.localData.invoices]; this.persistAllToStorage(); (syncEngine as any).schedule?.(); return created; }
+  async createInvoice(invoice: NewInvoice): Promise<Invoice> {
+    // Local-first write for instant UX
+    const created = await storage.createInvoice(invoice as any);
+    this.localData.invoices = [created, ...this.localData.invoices];
+    this.persistAllToStorage();
+    // Schedule sync and run non-blocking in background
+    (syncEngine as any).schedule?.();
+    try { (syncEngine as any).sync?.().catch?.(() => {}); } catch {}
+    return created;
+  }
 
-  async updateInvoice(id: string, updates: Partial<Invoice>): Promise<Invoice> { const updated = await storage.updateInvoice(id, updates as any); const idx = this.localData.invoices.findIndex(i => i.id === id); if (idx !== -1) this.localData.invoices[idx] = updated; this.persistAllToStorage(); (syncEngine as any).schedule?.(); return updated; }
+  async updateInvoice(id: string, updates: Partial<Invoice>): Promise<Invoice> { const updated = await storage.updateInvoice(id, updates as any); const idx = this.localData.invoices.findIndex(i => i.id === id); if (idx !== -1) this.localData.invoices[idx] = updated; this.persistAllToStorage(); (syncEngine as any).schedule?.(); try { await (syncEngine as any).sync?.(); } catch {}; return updated; }
 
-  async deleteInvoice(id: string): Promise<void> { await storage.deleteInvoice(id); this.localData.invoices = this.localData.invoices.filter(i => i.id !== id); this.persistAllToStorage(); (syncEngine as any).schedule?.(); }
+  async deleteInvoice(id: string): Promise<void> { await storage.deleteInvoice(id); this.localData.invoices = this.localData.invoices.filter(i => i.id !== id); this.persistAllToStorage(); (syncEngine as any).schedule?.(); try { await (syncEngine as any).sync?.(); } catch {} }
 
   // Invoice items operations
   async getInvoiceItems(invoiceId: string): Promise<InvoiceItem[]> { if ((storage as any).getInvoiceItems) { const items = await (storage as any).getInvoiceItems(invoiceId); const others = this.localData.invoiceItems.filter(i => i.invoice_id !== invoiceId); this.localData.invoiceItems = [...items, ...others]; this.persistAllToStorage(); return items; } return this.localData.invoiceItems.filter(i => i.invoice_id === invoiceId); }

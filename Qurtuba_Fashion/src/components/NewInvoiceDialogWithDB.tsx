@@ -319,8 +319,9 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated 
       let fabricImageUrl = '';
       if (fabricImage && fabricImageFile) {
         try {
-          const uploadResult = await ImageService.uploadImage(fabricImageFile, 'invoice');
-          fabricImageUrl = uploadResult.publicUrl;
+          // Upload to a generic folder before invoice ID exists
+          const uploadResult = await ImageService.uploadImage(fabricImageFile, 'fabric-images');
+          fabricImageUrl = (uploadResult as any).publicUrl || (uploadResult as any).url || '';
         } catch (imageError) {
           console.warn('Failed to upload fabric image, continuing without image:', imageError);
           // Continue without image URL; invoice will still be saved (Supabase or local fallback)

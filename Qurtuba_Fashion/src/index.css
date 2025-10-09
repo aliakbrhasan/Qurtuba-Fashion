@@ -130,6 +130,10 @@
   }
 }
 
+/* Private fonts disabled; using Google Fonts loaded in index.html */
+:root { --app-font: 'Cairo', system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+body { font-family: var(--app-font); }
+
 @layer base {
   *, :after, :before, ::backdrop {
     box-sizing: border-box;

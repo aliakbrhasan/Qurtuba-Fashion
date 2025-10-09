@@ -1,7 +1,8 @@
 import { app, BrowserWindow, ipcMain, dialog, shell, Menu, Tray, nativeImage } from 'electron';
 import { createClient } from '@supabase/supabase-js';
-import { existsSync } from 'fs';
-import { join } from 'path';
+import { existsSync, mkdirSync, readdirSync, copyFileSync, lstatSync, writeFileSync, unlinkSync } from 'fs';
+import { join, dirname } from 'path';
+import { pathToFileURL } from 'url';
 import { isDev } from './utils';
 import { LocalDatabase } from './local-database';
 import { SyncService } from './sync-service';
@@ -31,7 +32,7 @@ const createWindow = (): void => {
       spellcheck: false,
       preload: join(__dirname, 'preload.js'),
     },
-    icon: join(process.resourcesPath || __dirname, 'icon.ico'),
+    icon: app.isPackaged ? join(process.resourcesPath, 'icon.ico') : join(__dirname, '../build/icon.ico'),
     titleBarStyle: 'default',
     show: false, // Don't show until ready
   });
@@ -112,6 +113,23 @@ app.whenReady().then(async () => {
     console.error('Startup force sync failed:', err);
   });
   
+  // Copy bundled resources to userData on first run
+  try {
+    const bundledResources = app.isPackaged ? join(process.resourcesPath, 'resources') : join(__dirname, '../resources');
+    const targetResources = join(app.getPath('userData'), 'resources');
+    const ensure = (p: string): void => { try { mkdirSync(p, { recursive: true }); } catch {} };
+    const copyRecursive = (src: string, dest: string): void => {
+      if (!existsSync(src)) return;
+      ensure(dest);
+      for (const name of readdirSync(src)) {
+        const s = join(src, name);
+        const d = join(dest, name);
+        if (lstatSync(s).isDirectory()) copyRecursive(s, d); else copyFileSync(s, d);
+      }
+    };
+    if (!existsSync(targetResources)) copyRecursive(bundledResources, targetResources);
+  } catch {}
+
   createWindow();
   createTray();
   createMenu();
@@ -296,24 +314,33 @@ ipcMain.handle('auth:deleteUser', async (_evt, id: string) => ok(async () => {
 
 // IMAGE STORAGE IPC
 ipcMain.handle('image:upload', async (_evt, args: { buffer: number[]; contentType: string; fileName: string }) => ok(async () => {
+  // Save image locally under userData/images
+  const baseDir = join(app.getPath('userData'), 'images');
+  const targetPath = join(baseDir, args.fileName);
+  const dir = dirname(targetPath);
+  try { mkdirSync(dir, { recursive: true }); } catch {}
   const buf = Buffer.from(args.buffer);
-  const { data, error } = await supabaseMain.storage.from('invoice-images').upload(args.fileName, buf, {
-    cacheControl: '3600', upsert: false, contentType: args.contentType,
-  });
-  if (error) throw error;
-  const { data: pub } = supabaseMain.storage.from('invoice-images').getPublicUrl(args.fileName);
-  return { url: data?.path, path: args.fileName, publicUrl: pub.publicUrl };
+  writeFileSync(targetPath, buf);
+  const fileUrl = pathToFileURL(targetPath).toString();
+  return { url: targetPath, path: args.fileName, publicUrl: fileUrl };
 }));
 
 ipcMain.handle('image:delete', async (_evt, path: string) => ok(async () => {
-  const { error } = await supabaseMain.storage.from('invoice-images').remove([path]);
-  if (error) throw error;
+  // Remove local file
+  const baseDir = join(app.getPath('userData'), 'images');
+  const targetPath = join(baseDir, path);
+  try {
+    if (existsSync(targetPath)) unlinkSync(targetPath);
+  } catch (e) {
+    throw e;
+  }
   return true;
 }));
 
 ipcMain.handle('image:getPublicUrl', async (_evt, path: string) => ok(async () => {
-  const { data } = supabaseMain.storage.from('invoice-images').getPublicUrl(path);
-  return data.publicUrl;
+  const baseDir = join(app.getPath('userData'), 'images');
+  const targetPath = join(baseDir, path);
+  return pathToFileURL(targetPath).toString();
 }));
 
 // Handle app protocol for deep linking (optional)
@@ -321,7 +348,7 @@ app.setAsDefaultProtocolClient('qurtuba-fashion');
 
 // Create system tray
 const createTray = (): void => {
-  const trayIconPath = join(process.resourcesPath || __dirname, 'icon.ico');
+  const trayIconPath = app.isPackaged ? join(process.resourcesPath, 'icon.ico') : join(__dirname, '../build/icon.ico');
   tray = new Tray(nativeImage.createFromPath(trayIconPath));
   
   const contextMenu = Menu.buildFromTemplate([

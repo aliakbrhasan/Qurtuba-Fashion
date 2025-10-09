@@ -19,7 +19,7 @@ import {
   MessageCircle,
   X
 } from 'lucide-react';
-import PrintableInvoice, { formatCurrency, formatDate, PrintableInvoiceData } from './PrintableInvoice';
+import { PrintableInvoice, formatCurrency, formatDate, PrintableInvoiceData } from './PrintableInvoice';
 import { openPrintWindow } from './print/PrintUtils';
 
 interface InvoiceDetailsDialogProps {
