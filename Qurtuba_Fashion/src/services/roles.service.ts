@@ -1,4 +1,5 @@
 import { supabase } from '../db/client';
+import { sanitizeAction, sanitizePage, sanitizeRole, sanitizeArabicText } from '../utils/encoding';
 
 export interface Role {
   id: string;
@@ -51,6 +52,10 @@ class RolesService {
     return RolesService.instance;
   }
 
+  private isUuid(id: string): boolean {
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+  }
+
   private initializeLocalData(): void {
     // Default pages
     this.localData.pages = [
@@ -58,7 +63,6 @@ class RolesService {
       { id: 'invoices', name: 'الفواتير', description: 'إدارة الفواتير', category: 'المبيعات', isActive: true },
       { id: 'customers', name: 'الزبائن', description: 'إدارة العملاء', category: 'المبيعات', isActive: true },
       { id: 'financial', name: 'المالية', description: 'الإدارة المالية', category: 'المالية', isActive: true },
-      { id: 'reports', name: 'التقارير', description: 'تقارير النظام', category: 'التقارير', isActive: true },
       { id: 'users', name: 'إدارة المستخدمين', description: 'إدارة المستخدمين والأدوار', category: 'الإدارة', isActive: true }
     ];
 
@@ -103,7 +107,7 @@ class RolesService {
         name: 'مدير النظام',
         description: 'صلاحيات كاملة في النظام',
         permissions: ['إدارة المستخدمين', 'إدارة الفواتير', 'إدارة العملاء', 'التقارير', 'الإعدادات'],
-        allowedPages: ['dashboard', 'invoices', 'customers', 'financial', 'reports', 'users'],
+        allowedPages: ['dashboard', 'invoices', 'customers', 'financial', 'users'],
         allowedActions: ['create_invoice', 'edit_invoice', 'delete_invoice', 'change_invoice_status', 'mark_invoice_paid', 'print_invoice', 'print_invoices_list', 'create_customer', 'edit_customer', 'delete_customer', 'view_customer_details', 'print_customers_list', 'view_financial_reports', 'manage_payments', 'view_income_statement', 'generate_sales_report', 'generate_customer_report', 'generate_financial_report', 'manage_users', 'manage_roles', 'system_settings'],
         isActive: true,
         created_at: new Date().toISOString()
@@ -113,7 +117,7 @@ class RolesService {
         name: 'مندوب مبيعات',
         description: 'إدارة المبيعات والعملاء',
         permissions: ['إدارة العملاء', 'إنشاء الفواتير', 'عرض التقارير'],
-        allowedPages: ['dashboard', 'invoices', 'customers', 'reports'],
+        allowedPages: ['dashboard', 'invoices', 'customers'],
         allowedActions: ['create_invoice', 'edit_invoice', 'change_invoice_status', 'print_invoice', 'print_invoices_list', 'create_customer', 'edit_customer', 'view_customer_details', 'print_customers_list', 'generate_sales_report', 'generate_customer_report'],
         isActive: true,
         created_at: new Date().toISOString()
@@ -123,7 +127,7 @@ class RolesService {
         name: 'محاسب رئيسي',
         description: 'إدارة الحسابات والمالية',
         permissions: ['إدارة الفواتير', 'التقارير المالية', 'إدارة المدفوعات'],
-        allowedPages: ['dashboard', 'invoices', 'financial', 'reports'],
+        allowedPages: ['dashboard', 'invoices', 'financial'],
         allowedActions: ['create_invoice', 'edit_invoice', 'delete_invoice', 'change_invoice_status', 'mark_invoice_paid', 'print_invoice', 'print_invoices_list', 'view_financial_reports', 'manage_payments', 'view_income_statement', 'generate_sales_report', 'generate_financial_report'],
         isActive: true,
         created_at: new Date().toISOString()
@@ -151,6 +155,11 @@ class RolesService {
   // Get role by ID
   async getRoleById(id: string): Promise<Role | null> {
     try {
+      // If id is not a UUID, prefer local seed roles
+      if (!this.isUuid(id)) {
+        const localRole = this.localData.roles.find(role => role.id === id) || null;
+        return localRole ? sanitizeRole(localRole) : null;
+      }
       const { data, error } = await supabase
         .from('roles')
         .select('*')
@@ -198,6 +207,20 @@ class RolesService {
   // Update role
   async updateRole(id: string, updates: Partial<Role>): Promise<Role> {
     try {
+      // Update local default roles (non-UUID) without hitting Supabase
+      if (!this.isUuid(id)) {
+        const idx = this.localData.roles.findIndex(r => r.id === id);
+        if (idx !== -1) {
+          this.localData.roles[idx] = {
+            ...this.localData.roles[idx],
+            ...updates,
+            name: sanitizeArabicText(updates.name ?? this.localData.roles[idx].name),
+            description: sanitizeArabicText(updates.description ?? this.localData.roles[idx].description),
+            updated_at: new Date().toISOString()
+          };
+          return sanitizeRole(this.localData.roles[idx]);
+        }
+      }
       const { data, error } = await supabase
         .from('roles')
         .update({
@@ -222,11 +245,26 @@ class RolesService {
         this.localData.roles[roleIndex] = { 
           ...this.localData.roles[roleIndex], 
           ...updates,
+          name: sanitizeArabicText(updates.name ?? this.localData.roles[roleIndex].name),
+          description: sanitizeArabicText(updates.description ?? this.localData.roles[roleIndex].description),
           updated_at: new Date().toISOString()
         };
-        return this.localData.roles[roleIndex];
+        return sanitizeRole(this.localData.roles[roleIndex]);
       }
-      throw new Error('Role not found');
+      // If the role doesn't exist locally, synthesize a safe object to keep UI responsive
+      const synthesized: Role = {
+        id,
+        name: sanitizeArabicText(updates.name || 'دور بدون اسم'),
+        description: sanitizeArabicText(updates.description || ''),
+        permissions: updates.permissions || [],
+        allowedPages: updates.allowedPages || [],
+        allowedActions: updates.allowedActions || [],
+        isActive: updates.isActive ?? true,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+      this.localData.roles.push(synthesized);
+      return sanitizeRole(synthesized);
     }
   }
 
@@ -255,7 +293,7 @@ class RolesService {
         .order('name');
 
       if (error) throw error;
-      return data || [];
+      return (data || []).map((p: any) => sanitizePage(p));
     } catch (error) {
       console.warn('Supabase error, using local data:', error);
       return this.localData.pages;
@@ -273,7 +311,7 @@ class RolesService {
         .order('name');
 
       if (error) throw error;
-      return data || [];
+      return (data || []).map((a: any) => sanitizeAction(a));
     } catch (error) {
       console.warn('Supabase error, using local data:', error);
       return this.localData.actions;
@@ -326,10 +364,10 @@ class RolesService {
 
   // Map Supabase role to Role interface
   private mapSupabaseRoleToRole(data: any): Role {
-    return {
+    const role: Role = {
       id: data.id,
-      name: data.name,
-      description: data.description,
+      name: sanitizeArabicText(data.name),
+      description: sanitizeArabicText(data.description),
       permissions: data.permissions || [],
       allowedPages: data.allowed_pages || [],
       allowedActions: data.allowed_actions || [],
@@ -337,6 +375,7 @@ class RolesService {
       created_at: data.created_at,
       updated_at: data.updated_at
     };
+    return sanitizeRole(role);
   }
 }
 

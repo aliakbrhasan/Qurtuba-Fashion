@@ -100,19 +100,46 @@ class AuthService {
         if (error || !users) {
           // Fallback to local auth
           console.log('Database unavailable, using local authentication');
-          return await localAuthService.login(credentials);
+          const localResult = await localAuthService.login(credentials);
+          if (localResult.success && localResult.user) {
+            this.currentUser = localResult.user;
+            if (rememberMe) {
+              const authData = { user: localResult.user, timestamp: Date.now() };
+              localStorage.setItem(this.STORAGE_KEY, JSON.stringify(authData));
+              localStorage.setItem(this.REMEMBER_KEY, 'true');
+            }
+          }
+          return localResult;
         }
 
         // Verify password or fallback to local auth for dev setup
         if (!users.password_hash) {
           console.warn('User found without password_hash. Falling back to local auth.');
-          return await localAuthService.login(credentials);
+          const localResult = await localAuthService.login(credentials);
+          if (localResult.success && localResult.user) {
+            this.currentUser = localResult.user;
+            if (rememberMe) {
+              const authData = { user: localResult.user, timestamp: Date.now() };
+              localStorage.setItem(this.STORAGE_KEY, JSON.stringify(authData));
+              localStorage.setItem(this.REMEMBER_KEY, 'true');
+            }
+          }
+          return localResult;
         }
 
         const isValidPassword = await this.verifyPassword(password, users.password_hash);
         if (!isValidPassword) {
           console.warn('Password hash mismatch. Falling back to local auth.');
-          return await localAuthService.login(credentials);
+          const localResult = await localAuthService.login(credentials);
+          if (localResult.success && localResult.user) {
+            this.currentUser = localResult.user;
+            if (rememberMe) {
+              const authData = { user: localResult.user, timestamp: Date.now() };
+              localStorage.setItem(this.STORAGE_KEY, JSON.stringify(authData));
+              localStorage.setItem(this.REMEMBER_KEY, 'true');
+            }
+          }
+          return localResult;
         }
 
         // Update last login
@@ -142,7 +169,16 @@ class AuthService {
       } catch (dbError) {
         console.log('Database error, using local authentication:', dbError);
         // Fallback to local auth
-        return await localAuthService.login(credentials);
+        const localResult = await localAuthService.login(credentials);
+        if (localResult.success && localResult.user) {
+          this.currentUser = localResult.user;
+          if (rememberMe) {
+            const authData = { user: localResult.user, timestamp: Date.now() };
+            localStorage.setItem(this.STORAGE_KEY, JSON.stringify(authData));
+            localStorage.setItem(this.REMEMBER_KEY, 'true');
+          }
+        }
+        return localResult;
       }
 
     } catch (error) {

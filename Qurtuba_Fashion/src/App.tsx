@@ -1,10 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Layout } from './components/Layout';
 import { LoginPage } from './components/LoginPage';
 import { Dashboard } from './components/Dashboard';
 import { InvoicesPageWithDB } from './components/InvoicesPageWithDB';
 import { CustomersPage } from './components/CustomersPage';
-import { ReportsPage } from './components/ReportsPage';
 import { FinancialPage } from './components/FinancialPage';
 import { CustomerDetailsPageWithDB } from './components/CustomerDetailsPageWithDB';
 import { InvoiceDetailsPage } from './components/InvoiceDetailsPage';
@@ -14,7 +13,7 @@ import { RolesManagementPage } from './components/RolesManagementPage';
 import { Toaster } from './components/ui/sonner';
 import { AppProviders } from './app/AppProviders';
 import { Customer } from './types/customer';
-import { databaseService, Customer as DatabaseCustomer } from './db/database.service';
+import { databaseService } from './db/database.service';
 import { authService, User } from './services/auth.service';
 import './db/init'; // Initialize database
 
@@ -247,7 +246,7 @@ export default function App() {
   const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
   const [isNewInvoiceDialogOpen, setIsNewInvoiceDialogOpen] = useState(false);
   const [customers, setCustomers] = useState<Customer[]>([]);
-  const [dbCustomers, setDbCustomers] = useState<DatabaseCustomer[]>([]);
+  
   const [loading, setLoading] = useState(true);
 
   // Load customers from database
@@ -255,8 +254,7 @@ export default function App() {
     const loadCustomers = async () => {
       try {
         setLoading(true);
-        const dbCustomersData = await databaseService.getCustomers();
-        setDbCustomers(dbCustomersData);
+        await databaseService.getCustomers();
         // For now, keep using the hardcoded data for the UI
         setCustomers(customersData);
       } catch (error) {
@@ -389,8 +387,6 @@ export default function App() {
         ) : (
           <InvoicesPageWithDB onCreateInvoice={handleCreateInvoice} onViewInvoiceDetails={handleViewInvoiceDetails} onMarkAsPaid={handleMarkAsPaid} />
         );
-      case 'reports':
-        return <ReportsPage />;
       case 'financial':
         return <FinancialPage />;
       case 'users':

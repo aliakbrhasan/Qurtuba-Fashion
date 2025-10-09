@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Badge } from './ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
 import { authService, User as AuthUser } from '../services/auth.service';
+import { rolesService, Role } from '../services/roles.service';
 import { toast } from 'sonner';
 
 
@@ -46,6 +47,7 @@ export function UsersManagementPage({ onNavigate }: UsersManagementPageProps) {
   const [isSubmittingAdd, setIsSubmittingAdd] = useState(false);
   const [isSavingUser, setIsSavingUser] = useState(false);
   const [isChangingPasswordSubmitting, setIsChangingPasswordSubmitting] = useState(false);
+  const [roles, setRoles] = useState<Role[]>([]);
 
   // Load users from auth service
   useEffect(() => {
@@ -76,6 +78,19 @@ export function UsersManagementPage({ onNavigate }: UsersManagementPageProps) {
     };
 
     loadUsers();
+  }, []);
+
+  // Load roles for selects
+  useEffect(() => {
+    const loadRoles = async () => {
+      try {
+        const rolesData = await rolesService.getRoles();
+        setRoles(rolesData);
+      } catch (error) {
+        console.error('Error loading roles:', error);
+      }
+    };
+    loadRoles();
   }, []);
 
   const handleAddUser = async () => {
@@ -425,11 +440,19 @@ export function UsersManagementPage({ onNavigate }: UsersManagementPageProps) {
                         <SelectValue placeholder="اختر الدور" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="مدير النظام">مدير النظام</SelectItem>
-                        <SelectItem value="مندوب مبيعات">مندوب مبيعات</SelectItem>
-                        <SelectItem value="محاسب رئيسي">محاسب رئيسي</SelectItem>
-                        <SelectItem value="محاسب مالي">محاسب مالي</SelectItem>
-                        <SelectItem value="موظف استقبال">موظف استقبال</SelectItem>
+                        {roles.length > 0 ? (
+                          roles.map((r) => (
+                            <SelectItem key={r.id} value={r.name}>{r.name}</SelectItem>
+                          ))
+                        ) : (
+                          <>
+                            <SelectItem value="مدير النظام">مدير النظام</SelectItem>
+                            <SelectItem value="مندوب مبيعات">مندوب مبيعات</SelectItem>
+                            <SelectItem value="محاسب رئيسي">محاسب رئيسي</SelectItem>
+                            <SelectItem value="محاسب مالي">محاسب مالي</SelectItem>
+                            <SelectItem value="موظف استقبال">موظف استقبال</SelectItem>
+                          </>
+                        )}
                       </SelectContent>
                     </Select>
                   </div>
@@ -712,11 +735,19 @@ export function UsersManagementPage({ onNavigate }: UsersManagementPageProps) {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="مدير النظام">مدير النظام</SelectItem>
-                      <SelectItem value="مندوب مبيعات">مندوب مبيعات</SelectItem>
-                      <SelectItem value="محاسب رئيسي">محاسب رئيسي</SelectItem>
-                      <SelectItem value="محاسب مالي">محاسب مالي</SelectItem>
-                      <SelectItem value="موظف استقبال">موظف استقبال</SelectItem>
+                      {roles.length > 0 ? (
+                        roles.map((r) => (
+                          <SelectItem key={r.id} value={r.name}>{r.name}</SelectItem>
+                        ))
+                      ) : (
+                        <>
+                          <SelectItem value="مدير النظام">مدير النظام</SelectItem>
+                          <SelectItem value="مندوب مبيعات">مندوب مبيعات</SelectItem>
+                          <SelectItem value="محاسب رئيسي">محاسب رئيسي</SelectItem>
+                          <SelectItem value="محاسب مالي">محاسب مالي</SelectItem>
+                          <SelectItem value="موظف استقبال">موظف استقبال</SelectItem>
+                        </>
+                      )}
                     </SelectContent>
                   </Select>
                 </div>

@@ -159,7 +159,7 @@ export class DatabaseService {
         name: 'مدير النظام',
         description: 'مدير النظام الكامل',
         permissions: ['all'],
-        allowedPages: ['dashboard', 'customers', 'orders', 'invoices', 'reports', 'users', 'roles'],
+        allowedPages: ['dashboard', 'customers', 'orders', 'invoices', 'users', 'roles'],
         allowedActions: ['create', 'read', 'update', 'delete', 'export', 'print'],
         isActive: true,
         createdAt: '2024-01-01'
