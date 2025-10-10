@@ -9,10 +9,64 @@ const LS_KEYS = {
 	items: 'qf_web_invoice_items',
 };
 
+// Attempt to read legacy keys from older builds and migrate to new keys transparently
+const LEGACY_KEYS = {
+	invoices: 'qf_local_invoices',
+	items: 'qf_local_invoice_items',
+	cache: 'qf_local_db_cache_v1',
+};
+
 function load<T>(key: string, fallback: T): T {
 	try {
 		const raw = typeof window !== 'undefined' ? window.localStorage.getItem(key) : null;
-		return raw ? (JSON.parse(raw) as T) : fallback;
+		if (raw) return JSON.parse(raw) as T;
+
+		// Legacy migration paths
+		if (typeof window !== 'undefined') {
+			// Invoices
+			if (key === LS_KEYS.invoices) {
+				const legacy = window.localStorage.getItem(LEGACY_KEYS.invoices);
+				if (legacy) {
+					const parsed = JSON.parse(legacy) as T;
+					// Migrate forward
+					window.localStorage.setItem(LS_KEYS.invoices, legacy);
+					return parsed;
+				}
+				const cache = window.localStorage.getItem(LEGACY_KEYS.cache);
+				if (cache) {
+					const parsedCache = JSON.parse(cache);
+					if (Array.isArray(parsedCache?.invoices)) {
+						const arr = parsedCache.invoices as T;
+						window.localStorage.setItem(LS_KEYS.invoices, JSON.stringify(arr));
+						return arr;
+					}
+				}
+			}
+
+			// Invoice items
+			if (key === LS_KEYS.items) {
+				const legacyItems = window.localStorage.getItem(LEGACY_KEYS.items);
+				if (legacyItems) {
+					window.localStorage.setItem(LS_KEYS.items, legacyItems);
+					return JSON.parse(legacyItems) as T;
+				}
+			}
+
+			// Customers (cached inside legacy cache blob)
+			if (key === LS_KEYS.customers) {
+				const cache = window.localStorage.getItem(LEGACY_KEYS.cache);
+				if (cache) {
+					const parsedCache = JSON.parse(cache);
+					if (Array.isArray(parsedCache?.customers)) {
+						const arr = parsedCache.customers as T;
+						window.localStorage.setItem(LS_KEYS.customers, JSON.stringify(arr));
+						return arr;
+					}
+				}
+			}
+		}
+
+		return fallback;
 	} catch { return fallback; }
 }
 
@@ -23,7 +77,12 @@ function save<T>(key: string, value: T): void {
 }
 
 function generateId(): string {
-	return Date.now().toString(36) + Math.random().toString(36).slice(2);
+    try {
+        if (typeof crypto !== 'undefined' && (crypto as any).randomUUID) {
+            return (crypto as any).randomUUID();
+        }
+    } catch {}
+    return Date.now().toString(36) + Math.random().toString(36).slice(2);
 }
 
 export class WebIndexedDBStorage implements StoragePort {
@@ -172,6 +231,25 @@ export class WebIndexedDBStorage implements StoragePort {
 		} else {
 			this.ordersArr[idx] = { ...this.ordersArr[idx], ...payload } as Order;
 		}
+		this.persistAll();
+	}
+
+	// Backup/restore
+	async exportAll() {
+		return {
+			customers: [...this.customersArr],
+			invoices: [...this.invoicesArr],
+			orders: [...this.ordersArr],
+			items: [...this.itemsArr],
+			meta: { exportedAt: new Date().toISOString(), version: 1 }
+		};
+	}
+
+	async importAll(data: { customers?: Customer[]; invoices?: Invoice[]; orders?: Order[]; items?: InvoiceItem[] }) {
+		if (Array.isArray(data.customers)) this.customersArr = [...data.customers];
+		if (Array.isArray(data.invoices)) this.invoicesArr = [...data.invoices];
+		if (Array.isArray(data.orders)) this.ordersArr = [...data.orders];
+		if (Array.isArray(data.items)) this.itemsArr = [...data.items];
 		this.persistAll();
 	}
 }

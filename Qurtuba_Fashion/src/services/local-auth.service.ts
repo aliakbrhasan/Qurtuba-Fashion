@@ -6,6 +6,7 @@ class LocalAuthService {
   private currentUser: User | null = null;
   private readonly STORAGE_KEY = 'qurtuba_auth';
   private readonly REMEMBER_KEY = 'qurtuba_remember';
+  private readonly USERS_STORAGE_KEY = 'qurtuba_users_store_v1';
 
   // Mock users for local testing
   private mockUsers: User[] = [
@@ -49,6 +50,7 @@ class LocalAuthService {
 
   private constructor() {
     this.initializeAuth();
+    this.loadUsersFromStorage();
   }
 
   public static getInstance(): LocalAuthService {
@@ -80,6 +82,30 @@ class LocalAuthService {
     } catch (error) {
       console.error('Error initializing auth:', error);
     }
+  }
+
+  private loadUsersFromStorage(): void {
+    try {
+      const raw = localStorage.getItem(this.USERS_STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          this.mockUsers = parsed as User[];
+        }
+      } else {
+        // Seed initial users into storage on first run
+        this.saveUsersToStorage();
+      }
+    } catch (e) {
+      // If storage is corrupted, reset to defaults
+      try { this.saveUsersToStorage(); } catch {}
+    }
+  }
+
+  private saveUsersToStorage(): void {
+    try {
+      localStorage.setItem(this.USERS_STORAGE_KEY, JSON.stringify(this.mockUsers));
+    } catch {}
   }
 
   // Hash password using Web Crypto API (currently unused in local auth)
@@ -206,7 +232,8 @@ class LocalAuthService {
       if (!this.isAdmin()) {
         throw new Error('ليس لديك صلاحية لعرض المستخدمين');
       }
-      return this.mockUsers;
+      // Return a copy to avoid accidental external mutation
+      return [...this.mockUsers];
     } catch (error) {
       console.error('Get users error:', error);
       throw error;
@@ -264,6 +291,7 @@ class LocalAuthService {
       };
 
       this.mockUsers.push(newUser);
+      this.saveUsersToStorage();
 
       return {
         success: true,
@@ -298,6 +326,7 @@ class LocalAuthService {
       }
 
       this.mockUsers[userIndex] = { ...this.mockUsers[userIndex], ...updates };
+      this.saveUsersToStorage();
 
       // Update current user if it's the same user
       if (this.currentUser?.id === userId) {
@@ -344,6 +373,7 @@ class LocalAuthService {
       }
 
       this.mockUsers.splice(userIndex, 1);
+      this.saveUsersToStorage();
 
       return { success: true };
 

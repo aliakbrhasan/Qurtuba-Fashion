@@ -1,5 +1,5 @@
 import React from 'react';
-import { Home, Receipt, Users, Menu, Settings, User, LogOut, DollarSign, Bell } from 'lucide-react';
+import { Home, Receipt, Users, Menu, Settings, User, LogOut, DollarSign, Bell, Download, Upload, HardDrive } from 'lucide-react';
 import { Button } from './ui/button';
 import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle, SheetDescription } from './ui/sheet';
 import { User as UserType } from '../services/auth.service';
@@ -22,6 +22,41 @@ export function Layout({ children, currentPage, onNavigate, isLoggedIn, onLogout
   const { hasPagePermission } = usePermissions(currentUser ?? null);
   const { unreadCount } = useNotifications();
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [importing, setImporting] = useState(false);
+
+  const handleExport = async () => {
+    try {
+      setExporting(true);
+      const { storage } = await import('@/storage');
+      if (typeof (storage as any).exportAll === 'function') {
+        const data = await (storage as any).exportAll();
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `qurtuba-backup-${new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+      }
+    } finally { setExporting(false); }
+  };
+
+  const handleImport = async (file: File) => {
+    try {
+      setImporting(true);
+      const text = await file.text();
+      const json = JSON.parse(text);
+      const { storage } = await import('@/storage');
+      if (typeof (storage as any).importAll === 'function') {
+        await (storage as any).importAll(json);
+        // Hard reload caches
+        window.location.reload();
+      }
+    } catch (e) {
+      console.error('Import failed:', e);
+    } finally { setImporting(false); }
+  };
 
   // All possible navigation items
   const allNavigationItems = [
@@ -88,6 +123,20 @@ export function Layout({ children, currentPage, onNavigate, isLoggedIn, onLogout
             )}
             
             <div className="flex flex-col gap-4 mt-4">
+              <div className="p-4 bg-[#155446] rounded-lg">
+                <div className="flex items-center gap-2 text-[#F6E9CA] mb-3"><HardDrive size={18} /><span className="arabic-text">إدارة البيانات المحلية</span></div>
+                <div className="flex gap-2">
+                  <button onClick={handleExport} disabled={exporting} className="inline-flex items-center gap-2 bg-[#C69A72] text-[#13312A] rounded px-3 py-2 text-sm">
+                    <Download size={16} />
+                    <span className="arabic-text">تصدير</span>
+                  </button>
+                  <label className="inline-flex items-center gap-2 bg-[#C69A72] text-[#13312A] rounded px-3 py-2 text-sm cursor-pointer" title={importing ? 'جاري الاستيراد...' : 'استيراد نسخة احتياطية'}>
+                    <Upload size={16} />
+                    <span className="arabic-text">استيراد</span>
+                    <input type="file" accept="application/json" className="hidden" onChange={(e) => e.target.files && e.target.files[0] && handleImport(e.target.files[0])} />
+                  </label>
+                </div>
+              </div>
               {/* Show additional pages based on permissions */}
               {hasPagePermission('users') && (
                 <Button

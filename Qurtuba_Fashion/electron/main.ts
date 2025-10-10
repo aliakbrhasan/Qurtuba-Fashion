@@ -1,18 +1,17 @@
 import { app, BrowserWindow, ipcMain, dialog, shell, Menu, Tray, nativeImage } from 'electron';
-import { createClient } from '@supabase/supabase-js';
+// Supabase disabled in local-only mode
 import { existsSync, mkdirSync, readdirSync, copyFileSync, lstatSync, writeFileSync, unlinkSync } from 'fs';
 import { join, dirname } from 'path';
 import { pathToFileURL } from 'url';
 import { isDev } from './utils';
 import { LocalDatabase } from './local-database';
-import { SyncService } from './sync-service';
 
 // Keep a global reference of the window object
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let localDB: LocalDatabase;
-let syncService: SyncService;
-let supabaseMain: any;
+// Sync and remote DB disabled in local-only mode
+let supabaseMain: any = null;
 
 const createWindow = (): void => {
   // Create the browser window
@@ -94,24 +93,7 @@ app.whenReady().then(async () => {
   localDB = new LocalDatabase();
   await localDB.initialize();
   
-  // Initialize sync service
-  syncService = new SyncService(localDB);
-  // Initialize Supabase client for main process services
-  try {
-    const fallbackSupabaseUrl = 'https://dbjaogpesmyrqjwtzzwr.supabase.co';
-    const fallbackSupabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRiamFvZ3Blc215cnFqd3R6endyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg0Nzk1MzksImV4cCI6MjA3NDA1NTUzOX0.mioc1bAd_RYxcKS546MuBB3-DpLdyxxJiumJW4zv6Rw';
-    const supabaseUrl = process.env.VITE_SUPABASE_URL || fallbackSupabaseUrl;
-    const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY || fallbackSupabaseAnonKey;
-    supabaseMain = createClient(supabaseUrl, supabaseKey);
-  } catch (e) {
-    console.warn('Failed to initialize Supabase in main process:', e);
-  }
-  // Start periodic auto-sync in the background
-  await syncService.startAutoSync();
-  // Kick off an immediate sync on startup (non-blocking)
-  syncService.forceSync().catch((err) => {
-    console.error('Startup force sync failed:', err);
-  });
+  // Local-only: disable sync and supabase initialization
   
   // Copy bundled resources to userData on first run
   try {
@@ -234,83 +216,42 @@ ipcMain.handle('local:updateRole', async (_evt, id, updates) => ok(() => (localD
 
 ipcMain.handle('local:deleteRole', async (_evt, id) => ok(() => (localDB as any).deleteRole(id)));
 
-// Sync handlers
-ipcMain.handle('sync:start', async () => ok(() => syncService.syncAll()));
+// Backup/export/import handlers
+ipcMain.handle('local:exportAll', async () => ok(async () => {
+  const data = await localDB.exportAll();
+  return data;
+}));
 
-ipcMain.handle('sync:getStatus', async () => ok(() => syncService.getStatus()));
+ipcMain.handle('local:importAll', async (_evt, data) => ok(async () => {
+  const res = await localDB.importAll(data);
+  return res;
+}));
 
-ipcMain.handle('sync:forceSync', async () => ok(() => syncService.forceSync()));
-
-ipcMain.handle('sync:runOnce', async () => ok(() => syncService.syncAll()));
+// Sync handlers (no-op in local-only mode)
+ipcMain.handle('sync:start', async () => ok(() => ({ success: true, message: 'local-only', syncedCount: 0 })));
+ipcMain.handle('sync:getStatus', async () => ok(() => ({ isOnline: false, lastSync: null, pendingChanges: 0, isSyncing: false })));
+ipcMain.handle('sync:forceSync', async () => ok(() => ({ success: true })));
+ipcMain.handle('sync:runOnce', async () => ok(() => ({ success: true })));
 
 // Offline handlers
 ipcMain.handle('offline:isOnline', () => ok(async () => {
-  const dns = require('dns');
-  return await new Promise<boolean>((resolve) => {
-    dns.lookup('supabase.io', (err: any) => resolve(!err));
-  });
+  // Local-only: always offline regarding cloud sync
+  return false;
 }));
 
 ipcMain.handle('offline:getOfflineData', async () => ok(() => localDB.getAllOfflineData()));
 
-// AUTH IPC (main uses supabaseMain)
-ipcMain.handle('auth:getRoleIdByName', async (_evt, name: string) => ok(async () => {
-  const { data, error } = await supabaseMain.from('roles').select('id').eq('name', name).single();
-  if (error || !data) return null;
-  return String((data as any).id);
-}));
-
-ipcMain.handle('auth:findUserByEmail', async (_evt, email: string) => ok(async () => {
-  const { data, error } = await supabaseMain.from('users').select('*').eq('email', email.toLowerCase().trim()).eq('is_active', true).single();
-  if (error) throw error;
-  return data;
-}));
-
-ipcMain.handle('auth:updateLastLogin', async (_evt, id: string) => ok(async () => {
-  const { error } = await supabaseMain.from('users').update({ last_login: new Date().toISOString() }).eq('id', id);
-  if (error) throw error;
-  return true;
-}));
-
-ipcMain.handle('auth:checkEmailExists', async (_evt, email: string) => ok(async () => {
-  const { data } = await supabaseMain.from('users').select('id').eq('email', email.toLowerCase().trim()).maybeSingle?.() ?? { data: null };
-  return !!data;
-}));
-
-ipcMain.handle('auth:checkCodeExists', async (_evt, code: string) => ok(async () => {
-  const { data } = await supabaseMain.from('users').select('id').eq('code', code).maybeSingle?.() ?? { data: null };
-  return !!data;
-}));
-
-ipcMain.handle('auth:createUser', async (_evt, payload: any) => ok(async () => {
-  const { data, error } = await supabaseMain.from('users').insert(payload).select().single();
-  if (error) throw error;
-  return data;
-}));
-
-ipcMain.handle('auth:updatePassword', async (_evt, id: string, password_hash: string) => ok(async () => {
-  const { error } = await supabaseMain.from('users').update({ password_hash }).eq('id', id);
-  if (error) throw error;
-  return true;
-}));
-
-ipcMain.handle('auth:listUsers', async () => ok(async () => {
-  const { data, error } = await supabaseMain.from('users').select('*').order('created_at', { ascending: false });
-  if (error) throw error;
-  return data || [];
-}));
-
-ipcMain.handle('auth:updateUser', async (_evt, id: string, updates: any) => ok(async () => {
-  const { data, error } = await supabaseMain.from('users').update(updates).eq('id', id).select('*').single();
-  if (error) throw error;
-  return data;
-}));
-
-ipcMain.handle('auth:deleteUser', async (_evt, id: string) => ok(async () => {
-  const { error } = await supabaseMain.from('users').delete().eq('id', id);
-  if (error) throw error;
-  return true;
-}));
+// AUTH IPC (local-only stubs)
+ipcMain.handle('auth:getRoleIdByName', async (_evt, _name: string) => ok(async () => null));
+ipcMain.handle('auth:findUserByEmail', async (_evt, _email: string) => ok(async () => null));
+ipcMain.handle('auth:updateLastLogin', async (_evt, _id: string) => ok(async () => true));
+ipcMain.handle('auth:checkEmailExists', async (_evt, _email: string) => ok(async () => false));
+ipcMain.handle('auth:checkCodeExists', async (_evt, _code: string) => ok(async () => false));
+ipcMain.handle('auth:createUser', async (_evt, payload: any) => ok(async () => ({ ...payload, id: Date.now().toString(), created_at: new Date().toISOString() })));
+ipcMain.handle('auth:updatePassword', async (_evt, _id: string, _password_hash: string) => ok(async () => true));
+ipcMain.handle('auth:listUsers', async () => ok(async () => []));
+ipcMain.handle('auth:updateUser', async (_evt, _id: string, updates: any) => ok(async () => ({ ...updates })));
+ipcMain.handle('auth:deleteUser', async (_evt, _id: string) => ok(async () => true));
 
 // IMAGE STORAGE IPC
 ipcMain.handle('image:upload', async (_evt, args: { buffer: number[]; contentType: string; fileName: string }) => ok(async () => {
@@ -361,19 +302,7 @@ const createTray = (): void => {
         }
       }
     },
-    {
-      label: 'مزامنة البيانات',
-      click: async () => {
-        try {
-          await syncService.syncAll();
-          if (mainWindow) {
-            mainWindow.webContents.send('sync-completed');
-          }
-        } catch (error) {
-          console.error('Sync error:', error);
-        }
-      }
-    },
+    // Sync removed in local-only mode
     {
       label: 'اختبار القاعدة المحلية',
       click: async () => {
@@ -410,15 +339,9 @@ const createMenu = (): void => {
       label: 'ملف',
       submenu: [
         {
-          label: 'مزامنة البيانات',
+          label: 'مزامنة البيانات (معطلة محلياً)',
           accelerator: 'CmdOrCtrl+S',
-          click: async () => {
-            try {
-              await syncService.syncAll();
-            } catch (error) {
-              console.error('Sync error:', error);
-            }
-          }
+          enabled: false
         },
         {
           label: 'اختبار القاعدة المحلية',

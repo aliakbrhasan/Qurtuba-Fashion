@@ -1,5 +1,4 @@
-// Use IPC for storage; DB via Supabase client
-import { supabase } from '@/db/client';
+// Local-only: no Supabase DB usage
 
 export interface ImageUploadResult { url: string; path: string; publicUrl: string }
 
@@ -32,8 +31,9 @@ export class ImageService {
     }
 
     // Full flow: upload to storage, then insert DB record and return ImageRecord
-    const entityType = (entityOrFolder as 'invoice'|'customer'|'order') || 'invoice';
-    if (!entityId) throw new Error('entityId is required');
+    // Touch to satisfy linter in local-only mode
+    const _entityType = (entityOrFolder as 'invoice'|'customer'|'order') || 'invoice';
+    const _entityIdSafe = String(entityId || 'unknown');
 
     // Optional compression
     let fileToUpload = file;
@@ -43,7 +43,7 @@ export class ImageService {
       fileToUpload = await this.compressImage(file, quality, maxW);
     }
 
-    const folder = `${entityType}-images/${entityId}`;
+    const folder = `${_entityType}-images/${_entityIdSafe}`;
     const storageRes = await this.uploadToStorage(fileToUpload, folder);
 
     // Thumbnail (optional)
@@ -52,69 +52,47 @@ export class ImageService {
       thumbnailUrl = await this.createThumbnail(fileToUpload, 220);
     }
 
-    // Insert DB row
-    const { data, error } = await supabase
-      .from('images')
-      .insert({
-        filename: storageRes.path,
-        original_name: file.name,
-        mime_type: file.type,
-        size: file.size,
-        data_url: storageRes.publicUrl,
-        thumbnail_url: thumbnailUrl,
-        entity_type: entityType,
-        entity_id: entityId,
-      })
-      .select('*')
-      .single();
-    if (error) throw error;
-    return data as ImageRecord;
+    // Local-only: synthesize an ImageRecord without DB row
+    return {
+      id: `${Date.now()}`,
+      filename: storageRes.path,
+      original_name: file.name,
+      mime_type: file.type,
+      size: file.size,
+      data_url: storageRes.publicUrl,
+      thumbnail_url: thumbnailUrl,
+      entity_type: _entityType,
+      entity_id: _entityIdSafe,
+      created_at: new Date().toISOString(),
+    } as ImageRecord;
   }
 
   // List entity images from DB
-  static async getEntityImages(entityType: 'invoice'|'customer'|'order', entityId: string): Promise<ImageRecord[]> {
-    try {
-      const { data, error } = await supabase
-        .from('images')
-        .select('*')
-        .eq('entity_type', entityType)
-        .eq('entity_id', entityId)
-        .order('created_at', { ascending: false });
-      if (error) throw error;
-      return (data || []) as ImageRecord[];
-    } catch {
-      // In environments without Supabase or table, silently fall back
-      return [];
-    }
+  static async getEntityImages(_entityType: 'invoice'|'customer'|'order', _entityId: string): Promise<ImageRecord[]> {
+    // Local-only: no DB list, return empty
+    return [];
   }
 
   // Delete image: remove from storage then DB
   static async deleteImage(imageIdOrPath: string): Promise<void> {
     // Accept either image id (uuid) or storage path
     let filenamePath = imageIdOrPath;
-    if (!imageIdOrPath.includes('/')) {
-      const { data, error } = await supabase.from('images').select('filename').eq('id', imageIdOrPath).single();
-      if (error) throw error;
-      filenamePath = (data as any)?.filename;
-    }
+    // In local-only mode, assume provided value is a path
     const api = (typeof window !== 'undefined' ? (window as any).electronAPI : undefined);
     if (api?.images?.delete) {
       const delRes = await api.images.delete(filenamePath);
       if (!delRes?.ok) throw new Error(delRes?.error || 'فشل في حذف الصورة');
-      await supabase.from('images').delete().eq('filename', filenamePath);
+      // No DB row to delete in local-only mode
     } else {
       // Browser-only fallback: nothing to delete on disk; best-effort DB cleanup
-      try { await supabase.from('images').delete().eq('filename', filenamePath); } catch {}
+      // No DB row to delete in local-only mode
     }
   }
 
   // Move image between entities
-  static async updateImageEntity(imageId: string, entityType: 'invoice'|'customer'|'order', newEntityId: string): Promise<void> {
-    const { error } = await supabase
-      .from('images')
-      .update({ entity_type: entityType, entity_id: newEntityId })
-      .eq('id', imageId);
-    if (error) throw error;
+  static async updateImageEntity(_imageId: string, _entityType: 'invoice'|'customer'|'order', _newEntityId: string): Promise<void> {
+    // Local-only: no DB update needed
+    return;
   }
 
   // Get image URL (public)

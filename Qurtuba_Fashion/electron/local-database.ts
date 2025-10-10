@@ -359,6 +359,16 @@ export class LocalDatabase {
     return this.all<LocalOrder>('SELECT * FROM orders WHERE deleted = 0 ORDER BY created_at DESC');
   }
 
+  async getCustomerById(id: string): Promise<LocalCustomer | null> {
+    if (!this.db) throw new Error('Database not initialized');
+    try {
+      const row = this.get<LocalCustomer | undefined>('SELECT * FROM customers WHERE id = ? AND deleted = 0', [id]);
+      return row ?? null;
+    } catch {
+      return null;
+    }
+  }
+
   async createOrder(order: Omit<LocalOrder, 'id' | 'created_at' | 'updated_at' | 'synced'>): Promise<LocalOrder> {
     if (!this.db) throw new Error('Database not initialized');
     
@@ -438,6 +448,118 @@ export class LocalDatabase {
       orders: this.all<LocalOrder>('SELECT * FROM orders'),
       invoiceItems: this.all<any>('SELECT * FROM invoice_items')
     };
+  }
+
+  // Export all tables as a JSON object
+  async exportAll(): Promise<{ customers: any[]; invoices: any[]; orders: any[]; invoiceItems: any[]; meta: any }> {
+    const data = await this.getAllOfflineData();
+    return {
+      customers: data.customers,
+      invoices: data.invoices,
+      orders: data.orders,
+      invoiceItems: data.invoiceItems,
+      meta: { exportedAt: new Date().toISOString(), version: 1 }
+    };
+  }
+
+  // Import all tables from a JSON object (replace strategy)
+  async importAll(payload: { customers?: any[]; invoices?: any[]; orders?: any[]; invoiceItems?: any[] }): Promise<{ imported: { customers: number; invoices: number; orders: number; invoiceItems: number } }> {
+    if (!this.db) throw new Error('Database not initialized');
+    const customers = Array.isArray(payload.customers) ? payload.customers : [];
+    const invoices = Array.isArray(payload.invoices) ? payload.invoices : [];
+    const orders = Array.isArray(payload.orders) ? payload.orders : [];
+    const items = Array.isArray(payload.invoiceItems) ? payload.invoiceItems : [];
+
+    // Simple replace-all strategy
+    this.run('DELETE FROM invoice_items');
+    this.run('DELETE FROM orders');
+    this.run('DELETE FROM invoices');
+    this.run('DELETE FROM customers');
+
+    for (const c of customers) {
+      this.run(`
+        INSERT INTO customers (id, name, phone, address, total_spent, last_order, label, measurements, notes, version, deleted, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [
+        c.id,
+        c.name || '',
+        c.phone || null,
+        c.address || null,
+        (c.total_spent ?? c.totalSpent) || 0,
+        c.last_order || c.lastOrder || null,
+        c.label || null,
+        JSON.stringify(c.measurements ?? null),
+        c.notes || null,
+        (c.version ?? 1),
+        (c.deleted ?? 0),
+        c.created_at || new Date().toISOString(),
+        c.updated_at || new Date().toISOString(),
+      ]);
+    }
+
+    for (const inv of invoices) {
+      this.run(`
+        INSERT INTO invoices (id, invoice_number, customer_id, customer_name, customer_phone, customer_address,
+                             total, paid_amount, status, invoice_date, due_date, notes, fabric_image_url, paid_at, version, deleted, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [
+        inv.id,
+        inv.invoice_number || `INV-${Date.now()}`,
+        inv.customer_id || null,
+        inv.customer_name || '',
+        inv.customer_phone || null,
+        inv.customer_address || null,
+        Number(inv.total || 0),
+        Number(inv.paid_amount || 0),
+        inv.status || 'معلق',
+        inv.invoice_date || new Date().toISOString(),
+        inv.due_date || null,
+        inv.notes || null,
+        inv.fabric_image_url || null,
+        inv.paid_at || null,
+        (inv.version ?? 1),
+        (inv.deleted ?? 0),
+        inv.created_at || new Date().toISOString(),
+        inv.updated_at || new Date().toISOString(),
+      ]);
+    }
+
+    for (const o of orders) {
+      this.run(`
+        INSERT INTO orders (id, customer_id, order_date, delivery_date, status, total, notes, version, deleted, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [
+        o.id,
+        o.customer_id || null,
+        o.order_date || o.created_at || new Date().toISOString(),
+        o.delivery_date || o.order_date || o.created_at || new Date().toISOString(),
+        o.status || 'معلق',
+        Number(o.total || 0),
+        o.notes || null,
+        (o.version ?? 1),
+        (o.deleted ?? 0),
+        o.created_at || new Date().toISOString(),
+        o.updated_at || new Date().toISOString(),
+      ]);
+    }
+
+    for (const it of items) {
+      this.run(`
+        INSERT INTO invoice_items (id, invoice_id, item_name, description, quantity, unit_price, total_price, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `, [
+        it.id || this.generateId(),
+        it.invoice_id,
+        it.item_name || '',
+        it.description || null,
+        Number(it.quantity || 1),
+        Number(it.unit_price || 0),
+        Number(it.total_price || (Number(it.quantity || 1) * Number(it.unit_price || 0))),
+        it.created_at || new Date().toISOString(),
+      ]);
+    }
+
+    return { imported: { customers: customers.length, invoices: invoices.length, orders: orders.length, invoiceItems: items.length } };
   }
 
   // Helper methods

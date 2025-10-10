@@ -206,9 +206,18 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false }: 
     return String(a ?? '').localeCompare(String(b ?? ''), 'ar', { sensitivity: 'base' }) * multiplier;
   };
 
+  // Ensure unique customers by id to avoid duplicate keys from legacy data
+  const uniqueCustomers = useMemo(() => {
+    const map = new Map<string, Customer>();
+    for (const c of customers) {
+      map.set(String(c.id), c);
+    }
+    return Array.from(map.values());
+  }, [customers]);
+
   // Enhanced filtering and sorting logic
   const filteredAndSortedCustomers = useMemo(() => {
-    let filtered = customers.filter(customer => {
+    let filtered = uniqueCustomers.filter(customer => {
       // Search filter
       const matchesSearch = customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                            customer.phone.includes(searchTerm) ||
@@ -241,7 +250,7 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false }: 
           return 0;
       }
     });
-  }, [customers, searchTerm, filterLabel, sortField, sortDirection]);
+  }, [uniqueCustomers, searchTerm, filterLabel, sortField, sortDirection]);
 
   // Statistics
   const stats = useMemo(() => {
@@ -473,7 +482,7 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false }: 
                     value={newCustomer.label}
                     onValueChange={(value: string) => setNewCustomer({...newCustomer, label: value})}
                   >
-                    <SelectTrigger className="bg-white border-[#C69A72]">
+                  <SelectTrigger className="bg-white border-[#C69A72]" aria-label="تصنيف الزبون" title="تصنيف الزبون">
                       <SelectValue placeholder="اختر التصنيف" />
                     </SelectTrigger>
                     <SelectContent>
@@ -634,7 +643,7 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false }: 
               </div>
               <div className="flex flex-wrap gap-3">
                 <Select value={sortField} onValueChange={(val: string) => { setSortField(val); setSortDirection(defaultDescFields.has(val) ? 'desc' : 'asc'); }}>
-                  <SelectTrigger className="w-48 border-2 border-[#C69A72]/30 rounded-xl">
+                  <SelectTrigger className="w-48 border-2 border-[#C69A72]/30 rounded-xl" aria-label="ترتيب حسب" title="ترتيب حسب">
                     <SelectValue placeholder="ترتيب حسب" />
                   </SelectTrigger>
                   <SelectContent>
@@ -652,6 +661,8 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false }: 
                     size="sm"
                     onClick={() => setViewMode('table')}
                     className="flex items-center gap-2"
+                    aria-label="عرض بشكل جدول"
+                    title="عرض بشكل جدول"
                   >
                     <List className="w-4 h-4" />
                     <span className="hidden sm:inline arabic-text">جدول</span>
@@ -661,6 +672,8 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false }: 
                     size="sm"
                     onClick={() => setViewMode('grid')}
                     className="flex items-center gap-2"
+                    aria-label="عرض بشكل شبكة"
+                    title="عرض بشكل شبكة"
                   >
                     <Grid3X3 className="w-4 h-4" />
                     <span className="hidden sm:inline arabic-text">شبكة</span>
@@ -694,7 +707,7 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false }: 
                 <div>
                   <Label className="text-[#155446] arabic-text font-semibold mb-2 block">تصنيف الزبون</Label>
                   <Select value={filterLabel} onValueChange={setFilterLabel}>
-                    <SelectTrigger className="border-2 border-[#C69A72]/30 rounded-xl">
+                    <SelectTrigger className="border-2 border-[#C69A72]/30 rounded-xl" aria-label="تصفية حسب التصنيف" title="تصفية حسب التصنيف">
                       <SelectValue placeholder="اختر التصنيف" />
                     </SelectTrigger>
                     <SelectContent>
@@ -835,7 +848,7 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false }: 
                                   </Button>
                                   
                                   <DropdownMenu>
-                                    <DropdownMenuTrigger className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground h-8 px-3">
+                                    <DropdownMenuTrigger className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground h-8 px-3" aria-label={`مزید إجراءات لـ ${customer.name}`} title={`مزید إجراءات لـ ${customer.name}`}>
                                       <MoreVertical className="w-4 h-4" />
                                     </DropdownMenuTrigger>
                                     <DropdownMenuContent align="end" className="bg-white border-[#C69A72] rounded-xl shadow-lg">
@@ -919,12 +932,13 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false }: 
                                 variant="outline"
                                 onClick={() => onCustomerSelect(customer)}
                                 className="border-[#C69A72] text-[#13312A] hover:bg-[#C69A72] hover:text-white rounded-lg"
+                                aria-label={`عرض تفاصيل ${customer.name}`}
                               >
                                 <Eye className="w-4 h-4" />
                               </Button>
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
-                                  <Button size="sm" variant="outline" className="border-[#C69A72] text-[#13312A] hover:bg-[#C69A72] hover:text-white rounded-lg">
+                                  <Button size="sm" variant="outline" className="border-[#C69A72] text-[#13312A] hover:bg-[#C69A72] hover:text-white rounded-lg" aria-label={`مزید إجراءات لـ ${customer.name}`} title={`مزید إجراءات لـ ${customer.name}`}>
                                     <MoreVertical className="w-4 h-4" />
                                   </Button>
                                 </DropdownMenuTrigger>

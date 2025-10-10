@@ -61,7 +61,12 @@ export function useCustomers() {
 	} = useQuery({
 		// Share cache with invoices page
 		queryKey: ['invoices'],
-		queryFn: () => databaseService.getInvoices(),
+		queryFn: async () => {
+			const rows = await databaseService.getInvoices();
+			// Keep customers table up-to-date from invoices
+			try { await databaseService.reconcileCustomersFromInvoices(rows); } catch {}
+			return rows;
+		},
 		staleTime: 60 * 1000,
 		refetchInterval: 30 * 1000,
 	});

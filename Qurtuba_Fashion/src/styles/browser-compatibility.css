@@ -17,6 +17,14 @@ html, body {
   user-select: none;
 }
 
+/* Sonner toast swipe: ensure Safari support for user-select */
+[data-sonner-toast][data-swiped="true"] {
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+
 /* Additional browser compatibility fixes */
 * {
   -webkit-box-sizing: border-box;

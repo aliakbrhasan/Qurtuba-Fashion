@@ -1,23 +1,17 @@
-import { createClient } from '@supabase/supabase-js';
-
-// Prefer environment variables, but fall back to a known project in dev to ensure writes always go to cloud
-const fallbackSupabaseUrl = 'https://dbjaogpesmyrqjwtzzwr.supabase.co';
-const fallbackSupabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRiamFvZ3Blc215cnFqd3R6endyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg0Nzk1MzksImV4cCI6MjA3NDA1NTUzOX0.mioc1bAd_RYxcKS546MuBB3-DpLdyxxJiumJW4zv6Rw';
-
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || fallbackSupabaseUrl;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || fallbackSupabaseAnonKey;
-
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    persistSession: true,
+// Local-only: provide a minimal stub to avoid runtime errors
+export const supabase = {
+  from() {
+    return {
+      select: () => ({ data: null, error: null }),
+      insert: () => ({ data: null, error: null }),
+      update: () => ({ data: null, error: null }),
+      delete: () => ({ data: null, error: null }),
+      upsert: () => ({ data: null, error: null }),
+      eq: () => ({ data: null, error: null }),
+      order: () => ({ data: null, error: null }),
+      single: () => ({ data: null, error: null }),
+      maybeSingle: () => ({ data: null, error: null }),
+    } as any;
   },
-  db: {
-    schema: 'public',
-  },
-  global: {
-    headers: {
-      'Content-Type': 'application/json; charset=utf-8',
-    },
-  },
-});
+} as any;
 

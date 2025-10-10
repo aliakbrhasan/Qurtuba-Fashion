@@ -383,7 +383,7 @@ export function CustomerDetailsPageWithDB({
                 <div>
                   <Label className="text-[#13312A] arabic-text">نوع التصميم</Label>
                   <Select>
-                    <SelectTrigger className="bg-white border-[#C69A72] text-right">
+                    <SelectTrigger className="bg-white border-[#C69A72] text-right" aria-label="تصنيف الزبون" title="تصنيف الزبون">
                       <SelectValue placeholder="اختر نوع التصميم" />
                     </SelectTrigger>
                     <SelectContent>
@@ -397,7 +397,7 @@ export function CustomerDetailsPageWithDB({
                 <div>
                   <Label className="text-[#13312A] arabic-text">نوع القماش</Label>
                   <Select>
-                    <SelectTrigger className="bg-white border-[#C69A72] text-right">
+                    <SelectTrigger className="bg-white border-[#C69A72] text-right" aria-label="تصنيف الزبون" title="تصنيف الزبون">
                       <SelectValue placeholder="اختر نوع القماش" />
                     </SelectTrigger>
                     <SelectContent>

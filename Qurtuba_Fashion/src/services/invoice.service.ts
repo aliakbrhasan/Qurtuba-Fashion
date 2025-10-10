@@ -77,6 +77,13 @@ export class InvoiceService {
           message: `تم إنشاء فاتورة للعميل ${formData.customerName}`,
           target: { page: 'invoices', id: (created as any).id },
         });
+        // Nudge reactive views (dashboard, customers) without full reload
+        try {
+          const { queryClient } = await import('@/app/queryClient');
+          queryClient.setQueryData(['invoices'], (oldData: Invoice[] = []) => [created, ...(oldData || [])]);
+          queryClient.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === 'dashboard-stats' });
+          queryClient.invalidateQueries({ queryKey: ['customers'] });
+        } catch {}
       } catch {}
       return created;
     } catch (error) {

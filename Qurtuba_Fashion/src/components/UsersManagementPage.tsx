@@ -418,6 +418,8 @@ export function UsersManagementPage({ onNavigate }: UsersManagementPageProps) {
                         size="sm"
                         className="absolute left-0 top-0 h-full px-3 py-2 hover:bg-transparent"
                         onClick={() => setShowPassword(!showPassword)}
+                        aria-label={showPassword ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'}
+                        title={showPassword ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'}
                       >
                         {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                       </Button>
@@ -426,7 +428,7 @@ export function UsersManagementPage({ onNavigate }: UsersManagementPageProps) {
                   <div>
                     <Label htmlFor="userStatus" className="arabic-text">الحالة *</Label>
                     <Select value={newUser.status} onValueChange={(value: 'ادمن' | 'موظف' | 'محاسب') => setNewUser({ ...newUser, status: value })}>
-                      <SelectTrigger>
+                      <SelectTrigger aria-label="تحديد الدور" title="تحديد الدور">
                         <SelectValue placeholder="اختر الحالة" />
                       </SelectTrigger>
                       <SelectContent>
@@ -441,7 +443,7 @@ export function UsersManagementPage({ onNavigate }: UsersManagementPageProps) {
                   <div>
                     <Label htmlFor="userRole" className="arabic-text">الدور *</Label>
                     <Select value={newUser.role} onValueChange={(value: string) => setNewUser({ ...newUser, role: value })}>
-                      <SelectTrigger>
+                      <SelectTrigger aria-label="حالة الحساب" title="حالة الحساب">
                         <SelectValue placeholder="اختر الدور" />
                       </SelectTrigger>
                       <SelectContent>
@@ -847,6 +849,8 @@ export function UsersManagementPage({ onNavigate }: UsersManagementPageProps) {
                       size="sm"
                       className="absolute left-0 top-0 h-full px-3 py-2 hover:bg-transparent"
                       onClick={() => setShowNewPassword(!showNewPassword)}
+                      aria-label={showNewPassword ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'}
+                      title={showNewPassword ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'}
                     >
                       {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </Button>
@@ -878,6 +882,8 @@ export function UsersManagementPage({ onNavigate }: UsersManagementPageProps) {
                       size="sm"
                       className="absolute left-0 top-0 h-full px-3 py-2 hover:bg-transparent"
                       onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      aria-label={showConfirmPassword ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'}
+                      title={showConfirmPassword ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'}
                     >
                       {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </Button>

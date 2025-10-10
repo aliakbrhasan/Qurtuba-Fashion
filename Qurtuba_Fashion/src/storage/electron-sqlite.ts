@@ -72,6 +72,38 @@ export class ElectronSQLiteStorage implements StoragePort {
 	async upsertCustomerFromCloud(): Promise<void> { /* no-op */ }
 	async upsertInvoiceFromCloud(): Promise<void> { /* no-op */ }
 	async upsertOrderFromCloud(): Promise<void> { /* no-op */ }
+
+	// Backup/restore via IPC if available
+	async exportAll() {
+		const api = this.ensureApi();
+		if (api?.local?.exportAll) {
+			const res = await api.local.exportAll();
+			return res?.ok ? res.data : res;
+		}
+		// Fallback: fetch through individual calls
+		const [customers, invoices, orders] = await Promise.all([
+			this.getCustomers(), this.getInvoices(), this.getOrders()
+		]);
+		return { customers, invoices, orders, items: [] as any[] };
+	}
+
+	async importAll(data: { customers?: Customer[]; invoices?: Invoice[]; orders?: Order[]; items?: InvoiceItem[] }) {
+		const api = this.ensureApi();
+		if (api?.local?.importAll) {
+			const res = await api.local.importAll(data);
+			return res?.ok ? res.data : res;
+		}
+		// Fallback: naive replace-by-loop
+		if (Array.isArray(data.customers)) {
+			for (const c of data.customers) { try { await this.createCustomer({ ...(c as any), created_at: c.created_at } as any); } catch {} }
+		}
+		if (Array.isArray(data.invoices)) {
+			for (const i of data.invoices) { try { await this.createInvoice(i as any); } catch {} }
+		}
+		if (Array.isArray(data.orders)) {
+			for (const o of data.orders) { try { await this.createOrder(o as any); } catch {} }
+		}
+	}
 }
 
 // Helper to traverse object by dotted path like 'local.getCustomers'

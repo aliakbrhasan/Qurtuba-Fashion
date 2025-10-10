@@ -316,26 +316,26 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated 
       }
 
       // Upload fabric image first if any
-      let fabricImageUrl = '';
-      if (fabricImage && fabricImageFile) {
+      // نبدأ بحفظ الفاتورة محلياً أولاً ثم نرفع الصورة بالخلفية إن وُجدت
+      // 1) Create invoice locally first (non-blocking of any uploads)
+      const created = await createInvoice(formData);
+
+      // 2) Fire-and-forget image upload linked to created invoice id (background)
+      if (fabricImage && fabricImageFile && created?.id) {
         try {
-          // Upload to a generic folder before invoice ID exists
-          const uploadResult = await ImageService.uploadImage(fabricImageFile, 'fabric-images');
-          fabricImageUrl = (uploadResult as any).publicUrl || (uploadResult as any).url || '';
+          // Do not await; upload in background and associate to invoice entity
+          void ImageService.uploadImage(
+            fabricImageFile,
+            'invoice',
+            created.id,
+            { createThumbnail: true }
+          ).catch((imageError) => {
+            console.warn('Background fabric image upload failed:', imageError);
+          });
         } catch (imageError) {
-          console.warn('Failed to upload fabric image, continuing without image:', imageError);
-          // Continue without image URL; invoice will still be saved (Supabase or local fallback)
+          console.warn('Failed to start background image upload:', imageError);
         }
       }
-
-      // Update form data with fabric image URL
-      const formDataWithImage = {
-        ...formData,
-        fabricImageUrl
-      };
-
-      // Create invoice with image URL
-      await createInvoice(formDataWithImage);
       
       // Close dialog
       onOpenChange(false);
@@ -956,7 +956,7 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated 
                     value={formData.status}
                     onValueChange={(value: string) => setFormData(prev => ({ ...prev, status: value }))}
                   >
-                    <SelectTrigger className="bg-white border-[#C69A72] text-right">
+                    <SelectTrigger className="bg-white border-[#C69A72] text-right" aria-label="اختيار الزبون" title="اختيار الزبون">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>

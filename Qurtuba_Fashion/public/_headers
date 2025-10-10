@@ -1,11 +1,13 @@
 /*
-  X-Frame-Options: DENY
+  Content-Type: text/html; charset=utf-8
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
+  Content-Security-Policy: frame-ancestors 'none'; object-src 'none'; base-uri 'self'
   Cross-Origin-Opener-Policy: same-origin
   Cross-Origin-Resource-Policy: same-origin
   Permissions-Policy: geolocation=(), microphone=(), camera=(), payment=(), usb=()
   Strict-Transport-Security: max-age=63072000; includeSubDomains; preload
+  # App-level CSP (kept, simplified frame-ancestors now above)
   Content-Security-Policy: default-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' https://*.supabase.co; font-src 'self' data:; object-src 'none'; frame-src 'none'; upgrade-insecure-requests
 
 /static/*

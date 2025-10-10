@@ -781,7 +781,7 @@ export function InvoicesPageWithDB({ onCreateInvoice, onViewInvoiceDetails, onMa
               </div>
               <div className="flex flex-wrap gap-3">
                 <Select value={sortField} onValueChange={(val: string) => { setSortField(val); setSortDirection(defaultDescFields.has(val) ? 'desc' : 'asc'); }}>
-                  <SelectTrigger className="w-48 border-2 border-[#C69A72]/30 rounded-xl">
+                <SelectTrigger className="w-48 border-2 border-[#C69A72]/30 rounded-xl" aria-label="ترتيب حسب" title="ترتيب حسب">
                     <SelectValue placeholder="ترتيب حسب" />
                   </SelectTrigger>
                   <SelectContent>
@@ -820,7 +820,7 @@ export function InvoicesPageWithDB({ onCreateInvoice, onViewInvoiceDetails, onMa
                 <div>
                   <Label className="text-black arabic-text font-semibold mb-2 block">حالة الفاتورة</Label>
                   <Select value={statusFilter} onValueChange={setStatusFilter}>
-                    <SelectTrigger className="border-2 border-[#C69A72]/30 rounded-xl">
+                <SelectTrigger className="border-2 border-[#C69A72]/30 rounded-xl" aria-label="تصفية حسب الحالة" title="تصفية حسب الحالة">
                       <SelectValue placeholder="اختر الحالة" />
                     </SelectTrigger>
                     <SelectContent>
@@ -835,7 +835,7 @@ export function InvoicesPageWithDB({ onCreateInvoice, onViewInvoiceDetails, onMa
                 <div>
                   <Label className="text-black arabic-text font-semibold mb-2 block">الفترة الزمنية</Label>
                   <Select value={dateFilter} onValueChange={setDateFilter}>
-                    <SelectTrigger className="border-2 border-[#C69A72]/30 rounded-xl">
+                <SelectTrigger className="border-2 border-[#C69A72]/30 rounded-xl" aria-label="تصفية حسب المدة" title="تصفية حسب المدة">
                       <SelectValue placeholder="اختر الفترة" />
                     </SelectTrigger>
                     <SelectContent>

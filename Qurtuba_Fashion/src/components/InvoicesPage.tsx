@@ -173,7 +173,7 @@ export function InvoicesPage({ onCreateInvoice, onViewInvoiceDetails, onMarkAsPa
   const invoices: Invoice[] = dbInvoices.map(invoice => ({
     id: invoice.id,
     customerName: invoice.customer_name,
-    phone: invoice.customer_phone || '',
+    phone: invoice.customer_phone ?? '',
     address: invoice.customer_address || '',
     total: invoice.total,
     paid: invoice.paid_amount,
@@ -356,7 +356,7 @@ export function InvoicesPage({ onCreateInvoice, onViewInvoiceDetails, onMarkAsPa
     let filtered = invoices.filter(invoice => {
       // Search filter
       const matchesSearch = invoice.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        invoice.phone.includes(searchTerm) ||
+        (invoice.phone?.includes?.(searchTerm) ?? false) ||
         invoice.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (invoice.address?.toLowerCase().includes(searchTerm.toLowerCase()) ?? false);
       
@@ -695,7 +695,8 @@ export function InvoicesPage({ onCreateInvoice, onViewInvoiceDetails, onMarkAsPa
       `تاريخ التسليم: ${formatDate(invoice.deliveryDate)}`,
     ].join('\n');
 
-    const whatsappUrl = `https://wa.me/${invoice.phone.replace(/^0/, '964')}?text=${encodeURIComponent(message)}`;
+    const phone = (invoice.phone || '').replace(/^0/, '964');
+    const whatsappUrl = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
     window.open(whatsappUrl, '_blank');
   };
 
@@ -798,6 +799,8 @@ export function InvoicesPage({ onCreateInvoice, onViewInvoiceDetails, onMarkAsPa
                 size="sm"
                 onClick={() => setViewMode('table')}
                 className="flex items-center gap-2"
+                aria-label="عرض بشكل جدول"
+                title="عرض بشكل جدول"
               >
                 <List className="w-4 h-4" />
                 <span className="hidden sm:inline arabic-text">جدول</span>
@@ -807,6 +810,8 @@ export function InvoicesPage({ onCreateInvoice, onViewInvoiceDetails, onMarkAsPa
                 size="sm"
                 onClick={() => setViewMode('grid')}
                 className="flex items-center gap-2"
+                aria-label="عرض بشكل شبكة"
+                title="عرض بشكل شبكة"
               >
                 <Grid3X3 className="w-4 h-4" />
                 <span className="hidden sm:inline arabic-text">شبكة</span>
@@ -833,7 +838,7 @@ export function InvoicesPage({ onCreateInvoice, onViewInvoiceDetails, onMarkAsPa
                   setSortField(val);
                   setSortDirection(defaultDescFields.has(val) ? 'desc' : 'asc');
                 }}>
-                  <SelectTrigger className="w-48 border-2 border-[#C69A72]/30 rounded-xl">
+                <SelectTrigger className="w-48 border-2 border-[#C69A72]/30 rounded-xl" aria-label="ترتيب حسب" title="ترتيب حسب">
                     <SelectValue placeholder="ترتيب حسب" />
                   </SelectTrigger>
                   <SelectContent>
@@ -872,7 +877,7 @@ export function InvoicesPage({ onCreateInvoice, onViewInvoiceDetails, onMarkAsPa
                 <div>
                   <Label className="text-[#155446] arabic-text font-semibold mb-2 block">حالة الفاتورة</Label>
                   <Select value={statusFilter} onValueChange={setStatusFilter}>
-                    <SelectTrigger className="border-2 border-[#C69A72]/30 rounded-xl">
+                <SelectTrigger className="border-2 border-[#C69A72]/30 rounded-xl" aria-label="تصفية حسب الحالة" title="تصفية حسب الحالة">
                       <SelectValue placeholder="اختر الحالة" />
                     </SelectTrigger>
                     <SelectContent>
@@ -887,7 +892,7 @@ export function InvoicesPage({ onCreateInvoice, onViewInvoiceDetails, onMarkAsPa
                 <div>
                   <Label className="text-[#155446] arabic-text font-semibold mb-2 block">الفترة الزمنية</Label>
                   <Select value={dateFilter} onValueChange={setDateFilter}>
-                    <SelectTrigger className="border-2 border-[#C69A72]/30 rounded-xl">
+                <SelectTrigger className="border-2 border-[#C69A72]/30 rounded-xl" aria-label="تصفية حسب المدة" title="تصفية حسب المدة">
                       <SelectValue placeholder="اختر الفترة" />
                     </SelectTrigger>
                     <SelectContent>
@@ -1088,7 +1093,7 @@ export function InvoicesPage({ onCreateInvoice, onViewInvoiceDetails, onMarkAsPa
                                   )}
                                   
                                   <DropdownMenu>
-                                    <DropdownMenuTrigger className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground h-8 px-3">
+                                    <DropdownMenuTrigger className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground h-8 px-3" aria-label={`مزید إجراءات لفاتورة ${invoice.id}`} title={`مزید إجراءات لفاتورة ${invoice.id}`}>
                                       <MoreVertical className="w-4 h-4" />
                                     </DropdownMenuTrigger>
                                     <DropdownMenuContent align="end" className="bg-white border-[#C69A72] rounded-xl shadow-lg">
@@ -1206,6 +1211,7 @@ export function InvoicesPage({ onCreateInvoice, onViewInvoiceDetails, onMarkAsPa
                                 variant="outline"
                                 onClick={() => handlePrintInvoice(invoice)}
                                 className="flex-1 border-[#C69A72] text-[#13312A] hover:bg-[#C69A72] hover:text-white rounded-lg"
+                                aria-label={`طباعة فاتورة ${invoice.customerName}`}
                               >
                                 <Printer className="w-4 h-4 ml-1" />
                                 <span className="arabic-text">طباعة</span>
@@ -1221,7 +1227,7 @@ export function InvoicesPage({ onCreateInvoice, onViewInvoiceDetails, onMarkAsPa
                               </Button>
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
-                                  <Button size="sm" variant="outline" className="border-[#C69A72] text-[#13312A] hover:bg-[#C69A72] hover:text-white rounded-lg">
+                                  <Button size="sm" variant="outline" className="border-[#C69A72] text-[#13312A] hover:bg-[#C69A72] hover:text-white rounded-lg" aria-label={`مزید إجراءات لفاتورة ${invoice.id}`} title={`مزید إجراءات لفاتورة ${invoice.id}`}>
                                     <MoreVertical className="w-4 h-4" />
                                   </Button>
                                 </DropdownMenuTrigger>

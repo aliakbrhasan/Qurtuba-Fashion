@@ -121,15 +121,32 @@ export class SyncService {
               await this.supabase.from('invoices').update({ deleted: 1, updated_at: payload.updated_at }).eq('id', payload.id);
             }
           } else if (entry.table_name === 'orders') {
+            // Normalize payload for Supabase schema
+            const isValidUuid = typeof payload.id === 'string' && /^(?:[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$/.test(payload.id);
+            const normalized: any = {
+              customer_id: payload.customer_id ?? null,
+              customer_name: payload.customer_name || 'غير معروف',
+              total: payload.total,
+              status: payload.status || 'معلق',
+              order_date: payload.order_date || payload.created_at,
+              delivery_date: payload.delivery_date || payload.order_date || payload.created_at,
+              notes: payload.notes ?? null,
+              created_at: payload.created_at,
+              updated_at: payload.updated_at || new Date().toISOString(),
+            };
             if (entry.action === 'insert') {
-              const { error } = await this.supabase.from('orders').insert(payload as any);
-              if (error && String(error.message || '').toLowerCase().includes('duplicate')) {
-                await this.supabase.from('orders').update(payload as any).eq('id', payload.id);
+              if (isValidUuid) {
+                const { error } = await this.supabase.from('orders').upsert({ id: payload.id, ...normalized });
+                if (error && String(error.message || '').toLowerCase().includes('duplicate')) {
+                  await this.supabase.from('orders').update(normalized).eq('id', payload.id);
+                }
+              } else {
+                await this.supabase.from('orders').insert(normalized);
               }
             } else if (entry.action === 'update') {
-              await this.supabase.from('orders').update(payload as any).eq('id', payload.id);
+              await this.supabase.from('orders').update(normalized).eq('id', payload.id);
             } else if (entry.action === 'delete') {
-              await this.supabase.from('orders').update({ deleted: 1, updated_at: payload.updated_at }).eq('id', payload.id);
+              await this.supabase.from('orders').update({ deleted: 1, updated_at: normalized.updated_at }).eq('id', payload.id);
             }
           } else if (entry.table_name === 'roles') {
             if (entry.action === 'insert') {

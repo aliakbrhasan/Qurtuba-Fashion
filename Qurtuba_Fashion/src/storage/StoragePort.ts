@@ -51,6 +51,10 @@ export interface StoragePort {
 	upsertCustomerFromCloud?(payload: any): Promise<void>;
 	upsertInvoiceFromCloud?(payload: any): Promise<void>;
 	upsertOrderFromCloud?(payload: any): Promise<void>;
+
+	// Backup/restore helpers
+	exportAll?(): Promise<{ customers: Customer[]; invoices: Invoice[]; orders: Order[]; items?: InvoiceItem[]; meta?: any }>;
+	importAll?(data: { customers?: Customer[]; invoices?: Invoice[]; orders?: Order[]; items?: InvoiceItem[] }): Promise<void>;
 }
 
 export function isElectronRuntime(): boolean {

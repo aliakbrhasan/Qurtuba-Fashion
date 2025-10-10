@@ -71,6 +71,7 @@ export interface NewInvoice {
 // Database service that handles both local and Supabase operations
 export class DatabaseService {
   private static instance: DatabaseService;
+  private localOnly = true;
   private localData: {
     users: User[];
     roles: Role[];
@@ -145,6 +146,12 @@ export class DatabaseService {
     }
     return DatabaseService.instance;
   }
+
+  // Enable/disable Supabase usage globally
+  public setLocalOnlyMode(enabled: boolean) {
+    this.localOnly = !!enabled;
+  }
+  public isLocalOnlyMode(): boolean { return this.localOnly; }
 
   private initializeLocalData() {
     // Initialize with default data
@@ -222,17 +229,11 @@ export class DatabaseService {
   }
 
   // Replace local cache only when remote returns non-empty data
-  private replaceIfNonEmpty<T>(incoming: T[] | null | undefined, assign: (arr: T[]) => void): T[] | null {
-    if (Array.isArray(incoming) && incoming.length > 0) {
-      assign(incoming);
-      this.persistAllToStorage();
-      return incoming;
-    }
-    return null;
-  }
+  // Removed remote replace helper in local-only mode
 
   // Users operations
   async getUsers(): Promise<User[]> {
+    if (this.localOnly) return this.localData.users;
     try {
       const { data, error } = await supabase
         .from('users')
@@ -251,6 +252,12 @@ export class DatabaseService {
   }
 
   async createUser(user: Omit<User, 'id' | 'createdAt'>): Promise<User> {
+    if (this.localOnly) {
+      const newUser: User = { ...user, id: Date.now(), createdAt: new Date().toISOString() } as any;
+      this.localData.users.unshift(newUser);
+      this.persistAllToStorage();
+      return newUser;
+    }
     try {
       const { data, error } = await supabase
         .from('users')
@@ -286,6 +293,15 @@ export class DatabaseService {
   }
 
   async updateUser(id: number, updates: Partial<User>): Promise<User> {
+    if (this.localOnly) {
+      const idx = this.localData.users.findIndex(u => u.id === id);
+      if (idx !== -1) {
+        this.localData.users[idx] = { ...this.localData.users[idx], ...updates } as any;
+        this.persistAllToStorage();
+        return this.localData.users[idx];
+      }
+      throw new Error('User not found');
+    }
     try {
       const { data, error } = await supabase
         .from('users')
@@ -322,6 +338,11 @@ export class DatabaseService {
   }
 
   async deleteUser(id: number): Promise<void> {
+    if (this.localOnly) {
+      this.localData.users = this.localData.users.filter(u => u.id !== id);
+      this.persistAllToStorage();
+      return;
+    }
     try {
       const { error } = await supabase
         .from('users')
@@ -338,6 +359,7 @@ export class DatabaseService {
 
   // Roles operations
   async getRoles(): Promise<Role[]> {
+    if (this.localOnly) return this.localData.roles;
     try {
       const { data, error } = await supabase
         .from('roles')
@@ -452,7 +474,31 @@ export class DatabaseService {
   async createOrder(order: NewOrder): Promise<Order> { const created = await storage.createOrder(order); this.localData.orders = [created, ...this.localData.orders]; this.persistAllToStorage(); (syncEngine as any).schedule?.(); try { await (syncEngine as any).sync?.(); } catch {}; return created; }
 
   // Invoice operations (local-first)
-  async getInvoices(): Promise<Invoice[]> { try { const rows = await storage.getInvoices(); this.localData.invoices = rows; this.persistAllToStorage(); return rows; } catch { return this.localData.invoices; } }
+  async getInvoices(): Promise<Invoice[]> {
+    try {
+      let rows = await storage.getInvoices();
+      // Fallback: migrate legacy localStorage keys if current storage is empty
+      if ((!rows || rows.length === 0) && typeof window !== 'undefined' && (window as any).localStorage) {
+        try {
+          const legacy = window.localStorage.getItem('qf_local_invoices');
+          if (legacy) {
+            rows = JSON.parse(legacy);
+          } else {
+            const cache = window.localStorage.getItem('qf_local_db_cache_v1');
+            if (cache) {
+              const parsed = JSON.parse(cache);
+              if (Array.isArray(parsed?.invoices)) rows = parsed.invoices;
+            }
+          }
+        } catch {}
+      }
+      this.localData.invoices = rows || [];
+      this.persistAllToStorage();
+      return this.localData.invoices;
+    } catch {
+      return this.localData.invoices;
+    }
+  }
 
   async getInvoiceById(id: string): Promise<Invoice | null> { const all = await this.getInvoices(); return all.find(i => i.id === id) || null; }
 
@@ -461,15 +507,74 @@ export class DatabaseService {
     const created = await storage.createInvoice(invoice as any);
     this.localData.invoices = [created, ...this.localData.invoices];
     this.persistAllToStorage();
+    
+    // Auto-upsert customer from the created invoice to keep lists linked
+    try {
+      const customerName = (created as any).customer_name?.trim?.() || invoice.customer_name?.trim?.();
+      const customerPhone = (created as any).customer_phone?.trim?.() || invoice.customer_phone?.trim?.();
+      const customerAddress = (created as any).customer_address?.trim?.() || invoice.customer_address?.trim?.();
+      const candidateId = (created as any).customer_id || invoice.customer_id;
+
+      const existing = this.localData.customers.find(c => String(c.id) === String(candidateId))
+        || (customerPhone ? this.localData.customers.find(c => (c.phone || '').trim() === customerPhone) : undefined)
+        || (customerName ? this.localData.customers.find(c => (c.name || '').trim() === customerName) : undefined);
+
+      const lastOrderDate = (created as any).invoice_date || (created as any).created_at;
+      const paid = (created as any).paid_amount || 0;
+
+      if (existing) {
+        await this.updateCustomer(String((existing as any).id), {
+          name: customerName || existing.name,
+          phone: customerPhone || existing.phone,
+          address: customerAddress || existing.address,
+          lastOrder: lastOrderDate,
+          totalSpent: (existing.totalSpent || 0) + paid,
+        });
+      } else if (customerName) {
+        await this.createCustomer({
+          name: customerName,
+          phone: customerPhone || '',
+          address: customerAddress || '',
+          label: 'جديد',
+          totalSpent: paid,
+          lastOrder: lastOrderDate,
+          measurements: { height: 0, shoulder: 0, waist: 0, chest: 0 },
+          notes: '',
+          created_at: (created as any).created_at,
+        } as any);
+      }
+    } catch (e) {
+      console.warn('Auto-upsert customer from invoice failed (non-fatal):', e);
+    }
     // Schedule sync and run non-blocking in background
-    (syncEngine as any).schedule?.();
-    try { (syncEngine as any).sync?.().catch?.(() => {}); } catch {}
+    if (!this.localOnly) {
+      (syncEngine as any).schedule?.();
+      try { (syncEngine as any).sync?.().catch?.(() => {}); } catch {}
+    }
     return created;
   }
 
-  async updateInvoice(id: string, updates: Partial<Invoice>): Promise<Invoice> { const updated = await storage.updateInvoice(id, updates as any); const idx = this.localData.invoices.findIndex(i => i.id === id); if (idx !== -1) this.localData.invoices[idx] = updated; this.persistAllToStorage(); (syncEngine as any).schedule?.(); try { await (syncEngine as any).sync?.(); } catch {}; return updated; }
+  async updateInvoice(id: string, updates: Partial<Invoice>): Promise<Invoice> {
+    const updated = await storage.updateInvoice(id, updates as any);
+    const idx = this.localData.invoices.findIndex(i => i.id === id);
+    if (idx !== -1) this.localData.invoices[idx] = updated;
+    this.persistAllToStorage();
+    if (!this.localOnly) {
+      (syncEngine as any).schedule?.();
+      try { await (syncEngine as any).sync?.(); } catch {}
+    }
+    return updated;
+  }
 
-  async deleteInvoice(id: string): Promise<void> { await storage.deleteInvoice(id); this.localData.invoices = this.localData.invoices.filter(i => i.id !== id); this.persistAllToStorage(); (syncEngine as any).schedule?.(); try { await (syncEngine as any).sync?.(); } catch {} }
+  async deleteInvoice(id: string): Promise<void> {
+    await storage.deleteInvoice(id);
+    this.localData.invoices = this.localData.invoices.filter(i => i.id !== id);
+    this.persistAllToStorage();
+    if (!this.localOnly) {
+      (syncEngine as any).schedule?.();
+      try { await (syncEngine as any).sync?.(); } catch {}
+    }
+  }
 
   // Invoice items operations
   async getInvoiceItems(invoiceId: string): Promise<InvoiceItem[]> { if ((storage as any).getInvoiceItems) { const items = await (storage as any).getInvoiceItems(invoiceId); const others = this.localData.invoiceItems.filter(i => i.invoice_id !== invoiceId); this.localData.invoiceItems = [...items, ...others]; this.persistAllToStorage(); return items; } return this.localData.invoiceItems.filter(i => i.invoice_id === invoiceId); }
@@ -481,86 +586,100 @@ export class DatabaseService {
   async deleteInvoiceItem(id: string): Promise<void> { if ((storage as any).deleteInvoiceItem) await (storage as any).deleteInvoiceItem(id); this.localData.invoiceItems = this.localData.invoiceItems.filter(i => i.id !== id); this.persistAllToStorage(); (syncEngine as any).schedule?.(); }
 
   // Customer measurements operations
-  async getCustomerMeasurements(customerId: number): Promise<any[]> {
-    try {
-      const { data, error } = await supabase
-        .from('customer_measurements')
-        .select('*')
-        .eq('customer_id', customerId)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      return data || [];
-    } catch (error) {
-      console.warn('Supabase error, using local data:', error);
-      return [];
-    }
-  }
+  async getCustomerMeasurements(_customerId: number): Promise<any[]> { return []; }
 
   async createCustomerMeasurement(customerId: number, measurements: any): Promise<any> {
+    // Store minimal measurement snapshot inside local customers cache if present
     try {
-      const { data, error } = await supabase
-        .from('customer_measurements')
-        .insert({
-          customer_id: customerId,
-          height: measurements.height,
-          shoulder: measurements.shoulder,
-          waist: measurements.waist,
-          chest: measurements.chest
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-      return data;
-    } catch (error) {
-      console.warn('Supabase error, using local data:', error);
-      return {
-        id: Date.now(),
-        customer_id: customerId,
-        ...measurements,
-        created_at: new Date().toISOString()
-      };
-    }
+      const idx = this.localData.customers.findIndex(c => Number((c as any).id) === Number(customerId) || String((c as any).id) === String(customerId));
+      if (idx !== -1) {
+        const current = this.localData.customers[idx];
+        const next = { ...current, measurements: { ...(current as any).measurements, ...measurements } } as any;
+        this.localData.customers[idx] = next;
+        this.persistAllToStorage();
+      }
+    } catch {}
+    return {
+      id: Date.now(),
+      customer_id: customerId,
+      ...measurements,
+      created_at: new Date().toISOString()
+    };
   }
 
   async updateCustomerMeasurement(id: string, measurements: any): Promise<any> {
-    try {
-      const { data, error } = await supabase
-        .from('customer_measurements')
-        .update({
-          height: measurements.height,
-          shoulder: measurements.shoulder,
-          waist: measurements.waist,
-          chest: measurements.chest
-        })
-        .eq('id', id)
-        .select()
-        .single();
-
-      if (error) throw error;
-      return data;
-    } catch (error) {
-      console.warn('Supabase error, using local data:', error);
-      return { id, ...measurements };
-    }
+    // Local-only: return merged object
+    return { id, ...measurements };
   }
 
-  async deleteCustomerMeasurement(id: string): Promise<void> {
-    try {
-      const { error } = await supabase
-        .from('customer_measurements')
-        .delete()
-        .eq('id', id);
+  async deleteCustomerMeasurement(_id: string): Promise<void> { return; }
 
-      if (error) throw error;
-    } catch (error) {
-      console.warn('Supabase error, using local data:', error);
+  // Ensure customers table reflects all invoices (past and future)
+  async reconcileCustomersFromInvoices(invoices: Invoice[]): Promise<void> {
+    try {
+      // Load current customers snapshot
+      const existing = await this.getCustomers();
+      const byId = new Map<string, Customer>();
+      const byAlias = new Map<string, Customer>();
+      for (const c of existing) {
+        byId.set(String((c as any).id), c);
+        const alias = `${(c.name || '').trim()}|${(c.phone || '').trim()}`;
+        if (alias !== '|') byAlias.set(alias, c);
+      }
+
+      for (const inv of invoices) {
+        const customerId = (inv as any).customer_id ? String((inv as any).customer_id) : '';
+        const name = (inv.customer_name || '').trim();
+        const phone = (inv.customer_phone || '').trim();
+        const address = (inv.customer_address || '').trim();
+        const alias = `${name}|${phone}`;
+
+        let target: Customer | undefined = undefined;
+        if (customerId && byId.has(customerId)) target = byId.get(customerId);
+        else if (byAlias.has(alias)) target = byAlias.get(alias);
+
+        const paid = Number((inv as any).paid_amount || 0) || 0;
+        const lastOrderDate = inv.invoice_date || inv.created_at || new Date().toISOString();
+
+        if (!target) {
+          // Create a new customer derived from invoice
+          const created = await this.createCustomer({
+            name,
+            phone,
+            address,
+            label: 'جديد',
+            totalSpent: paid,
+            lastOrder: lastOrderDate,
+            measurements: { height: 0, shoulder: 0, waist: 0, chest: 0 },
+            notes: '',
+            created_at: inv.created_at,
+          } as any);
+          byId.set(String((created as any).id), created);
+          if (alias !== '|') byAlias.set(alias, created);
+        } else {
+          // Update existing aggregate fields
+          const nextTotal = (target.totalSpent || 0) + paid;
+          const newerDate = !target.lastOrder || new Date(lastOrderDate) > new Date(target.lastOrder) ? lastOrderDate : target.lastOrder;
+          await this.updateCustomer(String((target as any).id), {
+            name: name || target.name,
+            phone: phone || target.phone,
+            address: address || target.address,
+            totalSpent: nextTotal,
+            lastOrder: newerDate,
+          });
+        }
+      }
+    } catch (e) {
+      console.warn('reconcileCustomersFromInvoices failed (non-fatal):', e);
     }
   }
 
   // Sync local data with Supabase
   async syncWithSupabase(): Promise<void> {
+    if (this.localOnly) {
+      // No-op in local-only mode
+      return;
+    }
     try {
       // Sync users
       const users = await this.getUsers();

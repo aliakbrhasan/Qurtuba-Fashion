@@ -62,10 +62,15 @@ const electronAPI = {
     createRole: (role: any) => ipcRenderer.invoke('local:createRole', role),
     updateRole: (id: string, updates: any) => ipcRenderer.invoke('local:updateRole', id, updates),
     deleteRole: (id: string) => ipcRenderer.invoke('local:deleteRole', id),
+
+    // Backup/export
+    exportAll: () => ipcRenderer.invoke('local:exportAll'),
+    importAll: (data: any) => ipcRenderer.invoke('local:importAll', data),
   },
 
   // Sync functions
   sync: {
+    // Local-only: return no-op results
     start: () => ipcRenderer.invoke('sync:start'),
     getStatus: () => ipcRenderer.invoke('sync:getStatus'),
     forceSync: () => ipcRenderer.invoke('sync:forceSync'),
