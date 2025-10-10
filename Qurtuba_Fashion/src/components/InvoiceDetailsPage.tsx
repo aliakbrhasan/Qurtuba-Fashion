@@ -414,8 +414,8 @@ export function InvoiceDetailsPage({ invoiceId, onBack, onMarkAsPaid }: InvoiceD
                        : 'لم يتم التحديد'}
                    </p>
                  </div>
-                 <div className="space-y-1">
-                   <p className="text-[#6b7280] text-sm arabic-text">نهاية الكم</p>
+                <div className="space-y-1">
+                  <p className="text-[#6b7280] text-sm arabic-text">نهاية الردن</p>
                    <p className="text-[#1a1a1a] text-sm arabic-text">
                      {invoice.designDetails?.sleeveEnd && invoice.designDetails.sleeveEnd.length > 0 
                        ? invoice.designDetails.sleeveEnd.join(', ') 

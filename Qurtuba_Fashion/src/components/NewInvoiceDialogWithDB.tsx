@@ -228,10 +228,10 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated,
 
   // Sleeve end options - single selection
   const [sleeveEndOptions, setSleeveEndOptions] = useState<FabricOption[]>([
-    { id: 'cuff', label: 'كم بحاشية' },
-    { id: 'plain', label: 'كم عادي' },
-    { id: 'short', label: 'كم قصير' },
-    { id: 'long', label: 'كم طويل' },
+    { id: 'cuff', label: 'ردن بحاشية' },
+    { id: 'plain', label: 'ردن عادي' },
+    { id: 'short', label: 'ردن قصير' },
+    { id: 'long', label: 'ردن طويل' },
   ]);
   const [selectedSleeveEndOption, setSelectedSleeveEndOption] = useState<string>('');
   const [isSleeveEndPopoverOpen, setIsSleeveEndPopoverOpen] = useState(false);
@@ -1314,7 +1314,7 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated,
                 </Popover>
               </div>
               <div>
-                <Label className="text-[#13312A] arabic-text">نهاية الكم</Label>
+                <Label className="text-[#13312A] arabic-text">نهاية الردن</Label>
                 <Popover open={isSleeveEndPopoverOpen} onOpenChange={setIsSleeveEndPopoverOpen}>
                   <PopoverTrigger asChild>
                     <Button
@@ -1328,14 +1328,14 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated,
                       <span className="flex-1 text-right truncate">
                         {selectedSleeveEndOption 
                           ? sleeveEndOptions.find(o => o.id === selectedSleeveEndOption)?.label || ''
-                          : 'اختر نهاية الكم'}
+                          : 'اختر نهاية الردن'}
                       </span>
                       <ChevronDown className="ml-2 h-4 w-4 shrink-0" />
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-72 p-0 bg-[#F6E9CA] border-[#C69A72]">
                     <Command className="arabic-text text-right">
-                      <CommandInput placeholder="ابحث عن نهاية الكم..." className="text-right" />
+                      <CommandInput placeholder="ابحث عن نهاية الردن..." className="text-right" />
                       <CommandList className="text-right">
                         <CommandEmpty>لا توجد أنماط مطابقة</CommandEmpty>
                         <CommandItem
@@ -2024,9 +2024,9 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated,
         <DialogOverlay className="fixed inset-0 z-[1000] bg-black/50 backdrop-blur-sm" />
         <DialogContent className="max-w-md bg-[#F6E9CA] border-[#C69A72] rounded-xl shadow-2xl">
           <DialogHeader className="pb-3">
-            <DialogTitle className="text-[#13312A] arabic-text text-lg">تعديل أنماط نهاية الكم</DialogTitle>
+            <DialogTitle className="text-[#13312A] arabic-text text-lg">تعديل أنماط نهاية الردن</DialogTitle>
             <DialogDescription className="text-[#155446] arabic-text text-sm">
-              قم بإضافة أو تعديل أو حذف أنماط نهاية الكم
+              قم بإضافة أو تعديل أو حذف أنماط نهاية الردن
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={submitSleeveEndOptions} className="space-y-3">
@@ -2091,7 +2091,7 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated,
         <DialogOverlay className="fixed inset-0 z-[1000] bg-black/50 backdrop-blur-sm" />
         <DialogContent className="max-w-sm bg-[#F6E9CA] border-[#C69A72] rounded-xl shadow-2xl">
           <DialogHeader className="pb-3">
-            <DialogTitle className="text-[#13312A] arabic-text text-lg">إضافة نمط نهاية كم جديد</DialogTitle>
+            <DialogTitle className="text-[#13312A] arabic-text text-lg">إضافة نمط نهاية ردن جديد</DialogTitle>
             <DialogDescription className="text-[#155446] arabic-text text-sm">
               أضف نمطاً جديداً للقائمة
             </DialogDescription>

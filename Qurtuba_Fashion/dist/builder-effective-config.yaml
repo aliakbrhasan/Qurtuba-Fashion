@@ -7,6 +7,11 @@ files:
   - filter:
       - build/**/*
       - dist-electron/**/*
+      - node_modules/**/*
+      - package.json
+asarUnpack:
+  - node_modules/better-sqlite3/**
+  - '**/*.node'
 extraResources:
   - from: build/fonts
     to: fonts

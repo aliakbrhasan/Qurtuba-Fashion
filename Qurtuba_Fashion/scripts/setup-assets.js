@@ -2,6 +2,7 @@
   Copies required runtime assets into the built web folder after Vite build:
   - Copies the application icon from assets/icon.ico to build/icon.ico
   - Copies any fonts from common source folders into build/fonts
+  - Copies NSIS scripts from installer/nsis to build/nsis (Vite clears build/)
 */
 
 const { existsSync, mkdirSync, readdirSync, copyFileSync, statSync, readFileSync } = require('fs');
@@ -81,10 +82,28 @@ function copyFonts(projectRoot) {
   }
 }
 
+function copyNsis(projectRoot) {
+  const srcNsis = join(projectRoot, 'installer', 'nsis');
+  const destNsis = join(projectRoot, 'build', 'nsis');
+  if (!existsSync(srcNsis)) {
+    console.warn('[assets] installer/nsis not found. Skipping NSIS copy.');
+    return;
+  }
+  ensureDir(destNsis);
+  for (const name of readdirSync(srcNsis)) {
+    const src = join(srcNsis, name);
+    if (statSync(src).isDirectory()) continue;
+    const dest = join(destNsis, name);
+    copyFileSync(src, dest);
+    console.log(`[assets] Copied NSIS ${name} -> ${dest}`);
+  }
+}
+
 function main() {
   const projectRoot = resolve(__dirname, '..');
   copyIcon(projectRoot);
   copyFonts(projectRoot);
+  copyNsis(projectRoot);
 }
 
 main();
