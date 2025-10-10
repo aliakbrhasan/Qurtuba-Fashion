@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -40,9 +40,11 @@ interface CustomersPageProps {
   customers: Customer[];
   onCustomerSelect: (customer: Customer) => void;
   loading?: boolean;
+  onCreateInvoiceForCustomer?: (customer: Customer) => void;
+  onEditCustomer?: (customer: Customer) => void;
 }
 
-export function CustomersPage({ customers, onCustomerSelect, loading = false }: CustomersPageProps) {
+export function CustomersPage({ customers, onCustomerSelect, loading = false, onCreateInvoiceForCustomer }: CustomersPageProps) {
   const [currentUser] = useState(authService.getCurrentUser());
   const { hasActionPermission } = usePermissions(currentUser);
   const [searchTerm, setSearchTerm] = useState('');
@@ -59,6 +61,17 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false }: 
     address: '',
     label: 'جديد'
   });
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [editCustomer, setEditCustomer] = useState<Customer | null>(null);
+  const [editDraft, setEditDraft] = useState<Customer | null>(null);
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+
+  useEffect(() => {
+    if (isEditOpen && editCustomer) {
+      // Initialize draft once per open to avoid re-mounts while typing
+      setEditDraft(JSON.parse(JSON.stringify(editCustomer)) as Customer);
+    }
+  }, [isEditOpen, editCustomer]);
 
   // Lightweight date formatter for human-readable dates
   const formatHumanDate = (dateString: string | null) => {
@@ -529,6 +542,152 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false }: 
     </Dialog>
   );
 
+  const EditCustomerDialog = () => (
+    <Dialog open={isEditOpen} onOpenChange={(open) => { setIsEditOpen(open); if (!open) setEditDraft(null); }}>
+      <DialogContent className="max-w-2xl bg-[#F6E9CA] border-[#C69A72]">
+        <DialogHeader>
+          <DialogTitle className="text-[#13312A] arabic-text">تعديل بيانات الزبون</DialogTitle>
+          <DialogDescription className="text-[#155446] arabic-text">
+            عدّل الحقول المطلوبة ثم احفظ التغييرات
+          </DialogDescription>
+        </DialogHeader>
+        {editDraft && (
+          <form
+            className="space-y-6"
+            onSubmit={async (e) => {
+              e.preventDefault();
+              try {
+                setIsSavingEdit(true);
+                await databaseService.updateCustomer(String(editDraft.id), {
+                  name: editDraft.name,
+                  phone: editDraft.phone,
+                  address: editDraft.address,
+                  measurements: editDraft.measurements,
+                });
+                setIsEditOpen(false);
+              } catch (err) {
+                console.error('Error updating customer:', err);
+              } finally {
+                setIsSavingEdit(false);
+              }
+            }}
+          >
+            <Card className="bg-white border-[#C69A72]">
+              <CardHeader>
+                <CardTitle className="text-[#13312A] arabic-text text-lg">البيانات الأساسية</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <Label className="text-[#13312A] arabic-text">الاسم الكامل</Label>
+                  <Input
+                    className="bg-white border-[#C69A72] text-right"
+                    value={editDraft.name}
+                    onChange={(e) => setEditDraft({ ...(editDraft as Customer), name: e.target.value })}
+                    required
+                  />
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label className="text-[#13312A] arabic-text">رقم الهاتف</Label>
+                    <Input
+                      className="bg-white border-[#C69A72] text-right"
+                      value={editDraft.phone}
+                      onChange={(e) => setEditDraft({ ...(editDraft as Customer), phone: e.target.value })}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-[#13312A] arabic-text">العنوان</Label>
+                    <Input
+                      className="bg-white border-[#C69A72] text-right"
+                      value={editDraft.address}
+                      onChange={(e) => setEditDraft({ ...(editDraft as Customer), address: e.target.value })}
+                    />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-white border-[#C69A72]">
+              <CardHeader>
+                <CardTitle className="text-[#13312A] arabic-text text-lg">القياسات</CardTitle>
+              </CardHeader>
+              <CardContent className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div>
+                  <Label className="text-[#13312A] arabic-text">الطول (سم)</Label>
+                  <Input
+                    type="number"
+                    className="bg-white border-[#C69A72] text-right"
+                    value={editDraft.measurements?.height ?? 0}
+                    onChange={(e) => setEditDraft({
+                      ...(editDraft as Customer),
+                      measurements: { ...(editDraft.measurements || {}), height: Number(e.target.value) }
+                    })}
+                  />
+                </div>
+                <div>
+                  <Label className="text-[#13312A] arabic-text">الكتف (سم)</Label>
+                  <Input
+                    type="number"
+                    className="bg-white border-[#C69A72] text-right"
+                    value={editDraft.measurements?.shoulder ?? 0}
+                    onChange={(e) => setEditDraft({
+                      ...(editDraft as Customer),
+                      measurements: { ...(editDraft.measurements || {}), shoulder: Number(e.target.value) }
+                    })}
+                  />
+                </div>
+                <div>
+                  <Label className="text-[#13312A] arabic-text">الخصر (سم)</Label>
+                  <Input
+                    type="number"
+                    className="bg-white border-[#C69A72] text-right"
+                    value={editDraft.measurements?.waist ?? 0}
+                    onChange={(e) => setEditDraft({
+                      ...(editDraft as Customer),
+                      measurements: { ...(editDraft.measurements || {}), waist: Number(e.target.value) }
+                    })}
+                  />
+                </div>
+                <div>
+                  <Label className="text-[#13312A] arabic-text">الصدر (سم)</Label>
+                  <Input
+                    type="number"
+                    className="bg-white border-[#C69A72] text-right"
+                    value={editDraft.measurements?.chest ?? 0}
+                    onChange={(e) => setEditDraft({
+                      ...(editDraft as Customer),
+                      measurements: { ...(editDraft.measurements || {}), chest: Number(e.target.value) }
+                    })}
+                  />
+                </div>
+              </CardContent>
+            </Card>
+
+            <div className="flex gap-4 justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsEditOpen(false)}
+                className="border-[#C69A72] text-[#13312A] hover:bg-[#C69A72]"
+                disabled={isSavingEdit}
+              >
+                إلغاء
+              </Button>
+              <Button
+                type="submit"
+                className="bg-[#155446] hover:bg-[#13312A] text-[#F6E9CA]"
+                disabled={isSavingEdit}
+              >
+                {isSavingEdit ? 'جاري الحفظ...' : 'حفظ التغييرات'}
+              </Button>
+            </div>
+          </form>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#F6E9CA] to-[#FDFBF7]">
       <div className="container mx-auto p-4 space-y-6">
@@ -857,13 +1016,13 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false }: 
                                         عرض التفاصيل
                                       </DropdownMenuItem>
                                       {hasActionPermission('edit_customer') && (
-                                        <DropdownMenuItem className="arabic-text">
+                                        <DropdownMenuItem className="arabic-text" onClick={() => { setEditCustomer(customer); setIsEditOpen(true); }}>
                                           <Edit className="w-4 h-4 ml-2" />
                                           تعديل البيانات
                                         </DropdownMenuItem>
                                       )}
                                       {hasActionPermission('create_invoice') && (
-                                        <DropdownMenuItem className="arabic-text">
+                                        <DropdownMenuItem className="arabic-text" onClick={() => onCreateInvoiceForCustomer?.(customer)}>
                                           <Plus className="w-4 h-4 ml-2" />
                                           إضافة طلب جديد
                                         </DropdownMenuItem>
@@ -975,6 +1134,7 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false }: 
       </div>
 
       <NewCustomerDialog />
+      <EditCustomerDialog />
     </div>
   );
 }

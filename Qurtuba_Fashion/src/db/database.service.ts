@@ -425,30 +425,32 @@ export class DatabaseService {
     }
   }
 
-  async updateCustomer(id: string, updates: Partial<Customer>): Promise<Customer> {
+  async updateCustomer(id: string, updates: Partial<Customer>, options?: { silent?: boolean }): Promise<Customer> {
     try {
+      // Skip write if no actual change for provided keys
+      const idxExisting = this.localData.customers.findIndex(c => String(c.id) === String(id));
+      if (idxExisting !== -1) {
+        const current = this.localData.customers[idxExisting] as any;
+        let changed = false;
+        for (const key of Object.keys(updates || {})) {
+          const nextVal = (updates as any)[key];
+          const prevVal = current[key];
+          if (typeof nextVal === 'object' && nextVal !== null) {
+            if (JSON.stringify(prevVal) !== JSON.stringify(nextVal)) { changed = true; break; }
+          } else if (prevVal !== nextVal) { changed = true; break; }
+        }
+        if (!changed) {
+          return this.localData.customers[idxExisting];
+        }
+      }
+
       const updated = await storage.updateCustomer(id, updates as any);
-      const idx = this.localData.customers.findIndex(c => c.id === id);
+      const idx = this.localData.customers.findIndex(c => String(c.id) === String(id));
       if (idx !== -1) this.localData.customers[idx] = updated; else this.localData.customers.unshift(updated);
       this.persistAllToStorage();
       (syncEngine as any).schedule?.();
       try { await (syncEngine as any).sync?.(); } catch {}
-      try {
-        const { notifications } = await import('@/services/notifications.service');
-        notifications.emit({
-          type: 'info',
-          title: 'تعديل زبون',
-          message: `تم تعديل بيانات الزبون`,
-          target: { page: 'customers', id: id?.toString?.() },
-        });
-      } catch {}
-      return updated;
-    } catch (error) {
-      console.warn('Local storage error:', error);
-      const customerIndex = this.localData.customers.findIndex(c => c.id === id);
-      if (customerIndex !== -1) {
-        this.localData.customers[customerIndex] = { ...this.localData.customers[customerIndex], ...updates } as any;
-        this.persistAllToStorage();
+      if (!options?.silent) {
         try {
           const { notifications } = await import('@/services/notifications.service');
           notifications.emit({
@@ -458,6 +460,25 @@ export class DatabaseService {
             target: { page: 'customers', id: id?.toString?.() },
           });
         } catch {}
+      }
+      return updated;
+    } catch (error) {
+      console.warn('Local storage error:', error);
+      const customerIndex = this.localData.customers.findIndex(c => String(c.id) === String(id));
+      if (customerIndex !== -1) {
+        this.localData.customers[customerIndex] = { ...this.localData.customers[customerIndex], ...updates } as any;
+        this.persistAllToStorage();
+        if (!options?.silent) {
+          try {
+            const { notifications } = await import('@/services/notifications.service');
+            notifications.emit({
+              type: 'info',
+              title: 'تعديل زبون',
+              message: `تم تعديل بيانات الزبون`,
+              target: { page: 'customers', id: id?.toString?.() },
+            });
+          } catch {}
+        }
         return this.localData.customers[customerIndex];
       }
       throw new Error('Customer not found');
@@ -505,8 +526,11 @@ export class DatabaseService {
   async createInvoice(invoice: NewInvoice): Promise<Invoice> {
     // Local-first write for instant UX
     const created = await storage.createInvoice(invoice as any);
-    this.localData.invoices = [created, ...this.localData.invoices];
-    this.persistAllToStorage();
+    // Prevent duplicate push if same id already present (defensive)
+    if (!this.localData.invoices.find(i => String(i.id) === String((created as any).id))) {
+      this.localData.invoices = [created, ...this.localData.invoices];
+      this.persistAllToStorage();
+    }
     
     // Auto-upsert customer from the created invoice to keep lists linked
     try {
@@ -529,9 +553,9 @@ export class DatabaseService {
           address: customerAddress || existing.address,
           lastOrder: lastOrderDate,
           totalSpent: (existing.totalSpent || 0) + paid,
-        });
+        }, { silent: true });
       } else if (customerName) {
-        await this.createCustomer({
+        const createdCust = await this.createCustomer({
           name: customerName,
           phone: customerPhone || '',
           address: customerAddress || '',
@@ -542,6 +566,10 @@ export class DatabaseService {
           notes: '',
           created_at: (created as any).created_at,
         } as any);
+        // link invoice to created customer id for consistency
+        try {
+          await this.updateInvoice(String((created as any).id), { customer_id: String((createdCust as any).id) } as any);
+        } catch {}
       }
     } catch (e) {
       console.warn('Auto-upsert customer from invoice failed (non-fatal):', e);
@@ -551,6 +579,7 @@ export class DatabaseService {
       (syncEngine as any).schedule?.();
       try { (syncEngine as any).sync?.().catch?.(() => {}); } catch {}
     }
+    // Notification emit handled at InvoiceService layer to avoid duplicates
     return created;
   }
 
@@ -563,6 +592,7 @@ export class DatabaseService {
       (syncEngine as any).schedule?.();
       try { await (syncEngine as any).sync?.(); } catch {}
     }
+    // Notification emit handled at InvoiceService layer to avoid duplicates
     return updated;
   }
 
@@ -666,7 +696,7 @@ export class DatabaseService {
             address: address || target.address,
             totalSpent: nextTotal,
             lastOrder: newerDate,
-          });
+          }, { silent: true });
         }
       }
     } catch (e) {

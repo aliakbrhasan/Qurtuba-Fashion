@@ -67,8 +67,8 @@ export function useCustomers() {
 			try { await databaseService.reconcileCustomersFromInvoices(rows); } catch {}
 			return rows;
 		},
-		staleTime: 60 * 1000,
-		refetchInterval: 30 * 1000,
+		staleTime: 10 * 1000,
+		refetchInterval: 10 * 1000,
 	});
 
 	const customers: UiCustomer[] = useMemo(() => {

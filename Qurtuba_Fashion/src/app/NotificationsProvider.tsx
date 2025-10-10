@@ -17,6 +17,8 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
   const [items, setItems] = useState<AppNotification[]>([]);
 
   useEffect(() => {
+    // Prevent duplicate listeners across HMR/remounts
+    notificationsBus.removeAllListeners?.();
     const listener = (n: AppNotification) => {
       setItems((prev) => [n, ...prev]);
     };
@@ -25,8 +27,7 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
   }, []);
 
   const add: NotificationsContextValue['add'] = useCallback((n) => {
-    const created = notificationsBus.emit(n);
-    setItems((prev) => [created, ...prev]);
+    notificationsBus.emit(n);
   }, []);
 
   const markAsRead = useCallback((id: string) => {

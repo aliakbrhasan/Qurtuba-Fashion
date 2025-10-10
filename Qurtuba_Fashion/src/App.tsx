@@ -82,19 +82,18 @@ export default function App() {
     setCurrentPage('invoiceDetails');
   };
 
-  const handleMarkAsPaid = (invoiceId: string) => {
-    // Here you would typically update the invoice status in your data store
-    console.log('Marking invoice as paid:', invoiceId);
-    // For now, we'll just update the local state
-    if (selectedInvoice && selectedInvoice.id === invoiceId) {
-      setSelectedInvoice({
-        ...selectedInvoice,
-        status: 'مدفوع',
-        paid: selectedInvoice.total
-      });
+  const handleMarkAsPaid = async (invoiceId: string) => {
+    try {
+      const { InvoiceService } = await import('@/services/invoice.service');
+      const { queryClient } = await import('./app/queryClient');
+      await InvoiceService.markAsPaid(invoiceId);
+      try { queryClient.invalidateQueries({ queryKey: ['invoices'] }); } catch {}
+      if (selectedInvoice && selectedInvoice.id === invoiceId) {
+        setSelectedInvoice({ ...selectedInvoice, status: 'مدفوع' });
+      }
+    } catch (e) {
+      console.error('Failed to mark as paid:', e);
     }
-    // You would also update the invoices list here in a real application
-    // This is just for demonstration purposes
   };
 
   const renderCurrentPage = () => {

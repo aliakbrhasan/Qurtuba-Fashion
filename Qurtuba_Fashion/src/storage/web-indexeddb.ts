@@ -1,6 +1,7 @@
 import type { StoragePort, UnsyncedBundle } from './StoragePort';
 import type { Customer, Invoice, InvoiceItem } from '@/db/database.service';
 import type { Order, NewOrder } from '@/ports/orders';
+import { toIQD } from '@/utils/money';
 
 const LS_KEYS = {
 	customers: 'qf_web_customers',
@@ -125,7 +126,7 @@ export class WebIndexedDBStorage implements StoragePort {
 	async getOrders(): Promise<Order[]> { return [...this.ordersArr]; }
 
 	async createOrder(order: NewOrder): Promise<Order> {
-		const created: Order = { id: generateId(), customer_name: order.customer_name, total: order.total, created_at: new Date().toISOString() } as any;
+    const created: Order = { id: generateId(), customer_name: order.customer_name, total: toIQD(order.total as any), created_at: new Date().toISOString() } as any;
 		this.ordersArr.unshift(created);
 		this.persistAll();
 		return created;
@@ -146,15 +147,15 @@ export class WebIndexedDBStorage implements StoragePort {
 
 	async createInvoice(invoice: any): Promise<Invoice> {
 		const now = new Date().toISOString();
-		const created: Invoice = {
+    const created: Invoice = {
 			id: generateId(),
 			invoice_number: invoice.invoice_number || `INV-${Date.now()}`,
 			customer_id: invoice.customer_id,
 			customer_name: invoice.customer_name,
 			customer_phone: invoice.customer_phone,
 			customer_address: invoice.customer_address,
-			total: invoice.total,
-			paid_amount: invoice.paid_amount || 0,
+      total: toIQD(invoice.total),
+      paid_amount: toIQD(invoice.paid_amount || 0),
 			status: invoice.status || 'معلق',
 			invoice_date: invoice.invoice_date || now,
 			due_date: invoice.due_date,
@@ -172,7 +173,10 @@ export class WebIndexedDBStorage implements StoragePort {
 	async updateInvoice(id: string, updates: Partial<Invoice>): Promise<Invoice> {
 		const idx = this.invoicesArr.findIndex(i => String(i.id) === String(id));
 		if (idx === -1) throw new Error('Invoice not found');
-		const updated = { ...this.invoicesArr[idx], ...updates, updated_at: new Date().toISOString() } as Invoice;
+    const normalized: Partial<Invoice> = { ...updates } as any;
+    if (typeof normalized.total === 'number') normalized.total = toIQD(normalized.total);
+    if (typeof normalized.paid_amount === 'number') normalized.paid_amount = toIQD(normalized.paid_amount);
+    const updated = { ...this.invoicesArr[idx], ...normalized, updated_at: new Date().toISOString() } as Invoice;
 		this.invoicesArr[idx] = updated;
 		this.persistAll();
 		return updated;

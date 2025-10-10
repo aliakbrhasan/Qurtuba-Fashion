@@ -19,6 +19,7 @@ interface NewInvoiceDialogProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   onInvoiceCreated?: () => void;
+  prefillCustomer?: { name?: string; phone?: string; address?: string };
 }
 
 interface FabricOption {
@@ -27,16 +28,16 @@ interface FabricOption {
 }
 
 
-export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated }: NewInvoiceDialogProps) {
+export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated, prefillCustomer }: NewInvoiceDialogProps) {
   const { createInvoice } = useInvoices();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   
   // Form data
   const [formData, setFormData] = useState<InvoiceFormData>({
-    customerName: '',
-    customerPhone: '',
-    customerAddress: '',
+    customerName: prefillCustomer?.name || '',
+    customerPhone: prefillCustomer?.phone || '',
+    customerAddress: prefillCustomer?.address || '',
     total: 0,
     paidAmount: 0,
     status: 'معلق',
@@ -58,6 +59,18 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated 
       bunijaType: ''
     }
   });
+
+  // Update form data when prefill changes and dialog opens
+  useEffect(() => {
+    if (isOpen && prefillCustomer) {
+      setFormData(prev => ({
+        ...prev,
+        customerName: prefillCustomer.name || prev.customerName,
+        customerPhone: prefillCustomer.phone || prev.customerPhone,
+        customerAddress: prefillCustomer.address || prev.customerAddress,
+      }));
+    }
+  }, [isOpen, prefillCustomer]);
 
   // Payment calculation states
   const [remainingAmount, setRemainingAmount] = useState(0);
@@ -320,20 +333,21 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated 
       // 1) Create invoice locally first (non-blocking of any uploads)
       const created = await createInvoice(formData);
 
-      // 2) Fire-and-forget image upload linked to created invoice id (background)
+      // 2) Upload image and persist URL to invoice so it appears in details page
       if (fabricImage && fabricImageFile && created?.id) {
         try {
-          // Do not await; upload in background and associate to invoice entity
-          void ImageService.uploadImage(
+          const uploaded = await ImageService.uploadImage(
             fabricImageFile,
             'invoice',
             created.id,
             { createThumbnail: true }
-          ).catch((imageError) => {
-            console.warn('Background fabric image upload failed:', imageError);
-          });
+          );
+          const newUrl = (uploaded as any).publicUrl || (uploaded as any).data_url || (uploaded as any).url || '';
+          if (newUrl) {
+            try { await InvoiceService.updateInvoice(created.id, { fabric_image_url: newUrl } as any); } catch {}
+          }
         } catch (imageError) {
-          console.warn('Failed to start background image upload:', imageError);
+          console.warn('Fabric image upload failed:', imageError);
         }
       }
       

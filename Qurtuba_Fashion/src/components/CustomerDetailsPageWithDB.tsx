@@ -8,6 +8,7 @@ import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Customer } from '../types/customer';
+import { formatCurrency } from './PrintableInvoice';
 import { databaseService, Invoice } from '../db/database.service';
 import {
   Phone,
@@ -83,6 +84,7 @@ export function CustomerDetailsPageWithDB({
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
   const [isCreatingOrder, setIsCreatingOrder] = useState(false);
+  const [latestMeasurements, setLatestMeasurements] = useState<{ height?: number; shoulder?: number; waist?: number; chest?: number } | null>(null);
 
   // Load customer orders and invoices
   useEffect(() => {
@@ -100,6 +102,17 @@ export function CustomerDetailsPageWithDB({
           invoice.customer_name === customer.name
         );
         setInvoices(customerInvoices);
+        // Capture latest measurements from the newest invoice, fallback to saved customer
+        try {
+          const newest = [...customerInvoices].sort((a, b) => new Date(b.invoice_date).getTime() - new Date(a.invoice_date).getTime())[0];
+          const m: any = (newest as any)?.measurements || (customer as any)?.measurements || {};
+          setLatestMeasurements({
+            height: Number(m.length || m.height || 0),
+            shoulder: Number(m.shoulder || 0),
+            waist: Number(m.waist || 0),
+            chest: Number(m.chest || 0),
+          });
+        } catch {}
         
       } catch (error) {
         console.error('Error loading customer data:', error);
@@ -150,10 +163,10 @@ export function CustomerDetailsPageWithDB({
   };
 
   const measurementItems = [
-    { label: 'الطول', value: `${customer.measurements?.height || 0} سم` },
-    { label: 'الكتف', value: `${customer.measurements?.shoulder || 0} سم` },
-    { label: 'الخصر', value: `${customer.measurements?.waist || 0} سم` },
-    { label: 'الصدر', value: `${customer.measurements?.chest || 0} سم` },
+    { label: 'الطول', value: `${(latestMeasurements?.height ?? customer.measurements?.height ?? 0)} سم` },
+    { label: 'الكتف', value: `${(latestMeasurements?.shoulder ?? customer.measurements?.shoulder ?? 0)} سم` },
+    { label: 'الخصر', value: `${(latestMeasurements?.waist ?? customer.measurements?.waist ?? 0)} سم` },
+    { label: 'الصدر', value: `${(latestMeasurements?.chest ?? customer.measurements?.chest ?? 0)} سم` },
   ];
 
   const totalSpent = invoices.reduce((sum, invoice) => sum + (invoice.paid_amount || 0), 0);
@@ -223,7 +236,7 @@ export function CustomerDetailsPageWithDB({
             </div>
             <div className="flex items-center gap-2">
               <CreditCard className="w-4 h-4" />
-              <span className="arabic-text">إجمالي المصروف: {totalSpent.toLocaleString()} دينار عراقي</span>
+              <span className="arabic-text">إجمالي المصروف: {formatCurrency(totalSpent)}</span>
             </div>
             <div className="flex items-center gap-2">
               <ClipboardList className="w-4 h-4" />
@@ -267,7 +280,7 @@ export function CustomerDetailsPageWithDB({
         <CardContent className="space-y-4">
           {sortedInvoices.length > 0 ? (
             sortedInvoices.map((invoice) => {
-              const remaining = invoice.total - (invoice.paid_amount || 0);
+              const remaining = Math.max(invoice.total - (invoice.paid_amount || 0), 0);
               return (
                 <div
                   key={invoice.id}
@@ -295,11 +308,11 @@ export function CustomerDetailsPageWithDB({
                       )}
                       <div className="flex items-center gap-2">
                         <CreditCard className="w-4 h-4" />
-                        <span>المبلغ الكلي: {invoice.total.toLocaleString()} د.ع</span>
+                        <span>المبلغ الكلي: {formatCurrency(invoice.total)}</span>
                       </div>
                       <div className="flex items-center gap-2">
                         <CreditCard className="w-4 h-4" />
-                        <span>المتبقي: {remaining.toLocaleString()} د.ع</span>
+                        <span>المتبقي: {formatCurrency(remaining)}</span>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
@@ -380,6 +393,39 @@ export function CustomerDetailsPageWithDB({
                 <CardTitle className="text-[#13312A] arabic-text text-lg">تفاصيل الطلب</CardTitle>
               </CardHeader>
               <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Measurements prefill from latestMeasurements */}
+                <div>
+                  <Label className="text-[#13312A] arabic-text">الطول (سم)</Label>
+                  <Input
+                    type="number"
+                    defaultValue={latestMeasurements?.height ?? customer.measurements?.height ?? 0}
+                    className="bg-white border-[#C69A72] text-right"
+                  />
+                </div>
+                <div>
+                  <Label className="text-[#13312A] arabic-text">الكتف (سم)</Label>
+                  <Input
+                    type="number"
+                    defaultValue={latestMeasurements?.shoulder ?? customer.measurements?.shoulder ?? 0}
+                    className="bg-white border-[#C69A72] text-right"
+                  />
+                </div>
+                <div>
+                  <Label className="text-[#13312A] arabic-text">الخصر (سم)</Label>
+                  <Input
+                    type="number"
+                    defaultValue={latestMeasurements?.waist ?? customer.measurements?.waist ?? 0}
+                    className="bg-white border-[#C69A72] text-right"
+                  />
+                </div>
+                <div>
+                  <Label className="text-[#13312A] arabic-text">الصدر (سم)</Label>
+                  <Input
+                    type="number"
+                    defaultValue={latestMeasurements?.chest ?? customer.measurements?.chest ?? 0}
+                    className="bg-white border-[#C69A72] text-right"
+                  />
+                </div>
                 <div>
                   <Label className="text-[#13312A] arabic-text">نوع التصميم</Label>
                   <Select>

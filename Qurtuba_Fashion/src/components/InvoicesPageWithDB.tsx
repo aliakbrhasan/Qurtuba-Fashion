@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { Card, CardContent } from './ui/card';
 import { Button } from './ui/button';
@@ -27,6 +28,7 @@ import {
   FilterX,
   RefreshCw,
 } from 'lucide-react';
+import { Handshake } from 'lucide-react';
 import { ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
 import { InvoiceDetailsDialog } from './InvoiceDetailsDialog';
 import {
@@ -121,6 +123,7 @@ interface InvoicesPageProps {
 }
 
 export function InvoicesPageWithDB({ onCreateInvoice, onViewInvoiceDetails, onMarkAsPaid }: InvoicesPageProps) {
+  const queryClient = useQueryClient();
   const { invoices, loading, error, markAsPaid: markInvoiceAsPaid, loadInvoices } = useInvoices();
   const [currentUser] = useState(authService.getCurrentUser());
   const { hasActionPermission } = usePermissions(currentUser);
@@ -290,6 +293,15 @@ export function InvoicesPageWithDB({ onCreateInvoice, onViewInvoiceDetails, onMa
     return invoice.status === 'معلق' || invoice.status === 'جزئي';
   };
 
+  const canMarkAsDelivered = (invoice: any) => {
+    if (!invoice?.due_date) return false;
+    const dueDate = new Date(invoice.due_date);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const diffDays = Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    return diffDays > 0;
+  };
+
   // Handle mark as paid
   const handleMarkAsPaid = async (invoiceId: string) => {
     try {
@@ -346,6 +358,8 @@ export function InvoicesPageWithDB({ onCreateInvoice, onViewInvoiceDetails, onMa
       onViewInvoiceDetails(invoice.id);
     }
   };
+
+  // mark delivered action is inlined in the action button to avoid unused warnings
 
   // Handle create new invoice - delegate to parent to open the global dialog
   const handleCreateInvoice = () => {
@@ -1069,6 +1083,41 @@ export function InvoicesPageWithDB({ onCreateInvoice, onViewInvoiceDetails, onMa
                                 aria-label={`تم الدفع لفاتورة ${invoice.customer_name}`}
                               >
                                 <CheckCircle className="w-4 h-4" />
+                              </Button>
+                            )}
+                            {canMarkAsDelivered(invoice) && (
+                              <Button
+                                size="sm"
+                                onClick={async () => {
+                                  try {
+                                    const { InvoiceService } = await import('@/services/invoice.service');
+                                    await InvoiceService.markAsDelivered(invoice.id);
+                                    // Optimistically update the invoices cache so the button hides immediately
+                                    const today = new Date();
+                                    const yyyy = today.getFullYear();
+                                    const mm = String(today.getMonth() + 1).padStart(2, '0');
+                                    const dd = String(today.getDate()).padStart(2, '0');
+                                    const todayYmd = `${yyyy}-${mm}-${dd}`;
+                                    try {
+                                      queryClient.setQueryData(['invoices'], (oldData: any[] = []) =>
+                                        Array.isArray(oldData)
+                                          ? oldData.map((inv) => inv.id === invoice.id ? { ...inv, due_date: todayYmd } : inv)
+                                          : oldData
+                                      );
+                                    } catch {}
+                                    if (loadInvoices) {
+                                      await loadInvoices();
+                                    }
+                                  } catch (e) {
+                                    console.error(e);
+                                    alert('حدث خطأ أثناء تحديث تاريخ التسليم');
+                                  }
+                                }}
+                                className="bg-[#155446] hover:bg-[#13312A] text-[#F6E9CA] rounded-lg flex items-center gap-1 transition-all duration-200 hover:scale-105"
+                                aria-label={`تم التسليم لفاتورة ${invoice.customer_name}`}
+                                title="تم التسليم"
+                              >
+                                <Handshake className="w-4 h-4" />
                               </Button>
                             )}
                             

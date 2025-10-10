@@ -20,20 +20,7 @@ export function useInvoices() {
   // Mutation to create invoice
   const createInvoiceMutation = useMutation({
     mutationFn: InvoiceService.createInvoice,
-    onSuccess: (newInvoice) => {
-      // Update the cache with the new invoice
-      queryClient.setQueryData(['invoices'], (oldData: Invoice[] = []) => [
-        newInvoice,
-        ...oldData
-      ]);
-      // Keep related views in sync immediately
-      try {
-        queryClient.invalidateQueries({
-          predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === 'dashboard-stats',
-        });
-        queryClient.invalidateQueries({ queryKey: ['customers'] });
-      } catch {}
-    },
+    // Avoid duplicating cache updates; InvoiceService already updates/invalidate caches.
     onError: (error) => {
       console.error('Error creating invoice:', error);
     }

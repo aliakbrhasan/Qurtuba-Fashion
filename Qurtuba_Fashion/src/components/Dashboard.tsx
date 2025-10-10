@@ -67,19 +67,19 @@ export function Dashboard({ onNavigate, onCreateInvoice }: DashboardProps) {
           <div className="relative hidden md:block">
             <SyncStatus />
           </div>
-          <div className="relative">
+          <div>
             <Button 
-              className="bg-[#155446] hover:bg-[#13312A] text-[#F6E9CA] touch-target"
+              className="bg-[#155446] hover:bg-[#13312A] text-[#F6E9CA] touch-target relative"
               onClick={() => setIsNotificationOpen(true)}
             >
               <Bell className="w-4 h-4 ml-2" />
               <span className="arabic-text">الإشعارات</span>
+              {unreadCount > 0 && (
+                <span className="absolute top-0 right-0 translate-x-1/2 -translate-y-1/2 bg-red-600 text-white text-[10px] leading-none rounded-full py-[2px] px-[6px]">
+                  {unreadCount}
+                </span>
+              )}
             </Button>
-            {unreadCount > 0 && (
-              <span className="absolute -top-1 -right-1 bg-red-600 text-white text-[10px] leading-none rounded-full py-[2px] px-[6px]">
-                {unreadCount}
-              </span>
-            )}
           </div>
         </div>
       </div>

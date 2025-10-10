@@ -200,19 +200,19 @@ export function Layout({ children, currentPage, onNavigate, isLoggedIn, onLogout
           </div>
           
           <div className="flex items-center gap-4">
-            <div className="relative">
+            <div>
               <Button
                 variant="ghost"
                 onClick={() => setIsNotificationOpen(true)}
-                className="text-[#C69A72] hover:text-[#F6E9CA] hover:bg-[#155446] p-2 touch-target"
+                className="text-[#C69A72] hover:text-[#F6E9CA] hover:bg-[#155446] p-2 touch-target relative"
               >
                 <Bell size={18} />
+                {unreadCount > 0 && (
+                  <span className="absolute top-0 right-0 translate-x-1/2 -translate-y-1/2 bg-red-600 text-white text-[10px] leading-none rounded-full py-[2px] px-[6px]">
+                    {unreadCount}
+                  </span>
+                )}
               </Button>
-              {unreadCount > 0 && (
-                <span className="absolute -top-1 -right-1 bg-red-600 text-white text-[10px] leading-none rounded-full py-[2px] px-[6px]">
-                  {unreadCount}
-                </span>
-              )}
             </div>
             {currentUser && (
               <div className="flex items-center gap-2 text-[#F6E9CA]">

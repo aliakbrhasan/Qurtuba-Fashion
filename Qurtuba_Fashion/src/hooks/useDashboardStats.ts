@@ -87,13 +87,13 @@ export function useDashboardStats(params?: { startDate?: string; endDate?: strin
           .sort((a, b) => new Date(b.created_at || '').getTime() - new Date(a.created_at || '').getTime())
           .slice(0, 5);
 
-        // Upcoming deliveries (invoices with due dates in the next 7 days)
+        // Upcoming deliveries (due within next 7 days, excluding today)
         const upcomingDeliveries = filteredInvoices
           .filter(invoice => {
             if (!invoice.due_date) return false;
             const dueDate = new Date(invoice.due_date);
             const daysDiff = Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-            return daysDiff >= 0 && daysDiff <= 7;
+            return daysDiff > 0 && daysDiff <= 7;
           })
           .sort((a, b) => new Date(a.due_date!).getTime() - new Date(b.due_date!).getTime())
           .slice(0, 5);

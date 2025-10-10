@@ -21,6 +21,7 @@ import {
   Image as ImageIcon,
   Pencil
 } from 'lucide-react';
+import { Handshake } from 'lucide-react';
 import { formatCurrency, formatDate, PrintableInvoiceData, PrintableInvoice } from './PrintableInvoice';
 import { openPrintWindow } from './print/PrintUtils';
 import { useImages } from '@/hooks/useImages';
@@ -36,7 +37,7 @@ interface InvoiceDetailsPageProps {
 }
 
 export function InvoiceDetailsPage({ invoiceId, onBack, onMarkAsPaid }: InvoiceDetailsPageProps) {
-  const { invoiceDetails, isLoading, error } = useInvoiceDetails(invoiceId);
+  const { invoiceDetails, isLoading, error, refetch } = useInvoiceDetails(invoiceId);
   // Ensure hooks order is stable across renders
   const { images, loading: imagesLoading } = useImages('invoice', invoiceId);
   // Hooks must be declared before any early returns
@@ -123,9 +124,24 @@ export function InvoiceDetailsPage({ invoiceId, onBack, onMarkAsPaid }: InvoiceD
     handlePrint();
   };
 
-  const handleMarkAsPaid = () => {
-    if (onMarkAsPaid) {
-      onMarkAsPaid(invoice.id);
+  const handleMarkAsDelivered = async () => {
+    try {
+      await InvoiceService.markAsDelivered(invoice.id);
+      await refetch();
+    } catch (e) {
+      console.error('Failed to mark as delivered:', e);
+      alert('حدث خطأ أثناء تحديث تاريخ التسليم');
+    }
+  };
+
+  const handleMarkAsPaid = async () => {
+    try {
+      await InvoiceService.markAsPaid(invoice.id);
+      await refetch();
+      if (onMarkAsPaid) onMarkAsPaid(invoice.id);
+    } catch (e) {
+      console.error('Failed to mark as paid:', e);
+      alert('حدث خطأ أثناء تحديث حالة الفاتورة');
     }
   };
 
@@ -236,13 +252,28 @@ export function InvoiceDetailsPage({ invoiceId, onBack, onMarkAsPaid }: InvoiceD
                     تم الدفع
                   </Button>
                 )}
+                {(() => {
+                  const due = invoice.due_date ? new Date(invoice.due_date) : null;
+                  const today = new Date();
+                  today.setHours(0, 0, 0, 0);
+                  const show = due ? Math.ceil(((due as Date).getTime() - today.getTime()) / (1000 * 60 * 60 * 24)) > 0 : false;
+                  return show ? (
+                    <Button
+                      onClick={handleMarkAsDelivered}
+                      className="gap-2 bg-[#155446] hover:bg-[#13312A] text-[#F6E9CA]"
+                    >
+                      <Handshake className="h-4 w-4" />
+                      تم التسليم
+                    </Button>
+                  ) : null;
+                })()}
               </div>
             </div>
           </CardContent>
         </Card>
 
-         {/* Main Content Area - 3 Column Grid */}
-         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {/* Main Content Area - Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
            {/* Column 1 - Customer Information */}
            <Card className="shadow-md bg-white">
              <CardHeader className="pb-4">
@@ -341,7 +372,7 @@ export function InvoiceDetailsPage({ invoiceId, onBack, onMarkAsPaid }: InvoiceD
              </CardContent>
            </Card>
 
-           {/* Column 3 - Design Details */}
+          {/* Column 3 - Design Details */}
            <Card className="shadow-md bg-white">
              <CardHeader className="pb-4">
                <CardTitle className="flex items-center gap-2 text-[#1a1a1a] arabic-text">
@@ -402,35 +433,33 @@ export function InvoiceDetailsPage({ invoiceId, onBack, onMarkAsPaid }: InvoiceD
                </div>
              </CardContent>
            </Card>
-         </div>
 
-         {/* Footer Section - Notes and Fabric Image */}
-         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-           {/* Notes Card */}
-           <Card className="shadow-md bg-white">
-             <CardHeader className="pb-4">
-               <CardTitle className="flex items-center gap-2 text-[#1a1a1a] arabic-text">
-                 <MessageCircle className="w-5 h-5" />
-                 الملاحظات
-               </CardTitle>
-             </CardHeader>
+          {/* Column 4 - Fabric Image (moved next to design details) */}
+          <Card className="shadow-md bg-white">
+            <CardHeader className="pb-4 flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2 text-[#1a1a1a] arabic-text">
+                <ImageIcon className="w-5 h-5" />
+                صورة القماش
+              </CardTitle>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={triggerChangeImage}
+                className="bg-white hover:bg-[#f9fafb]"
+                disabled={isUploadingImage}
+              >
+                {isUploadingImage ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <>
+                    <Pencil className="w-4 h-4 ml-1" />
+                    تغيير الصورة
+                  </>
+                )}
+              </Button>
+            </CardHeader>
             <CardContent>
-              <div className="bg-[#f9fafb] rounded-lg p-4 border border-[#e5e7eb]">
-                <p className="text-[#6b7280] arabic-text">{invoice.notes || 'لا توجد ملاحظات'}</p>
-              </div>
-            </CardContent>
-          </Card>
-
-           {/* Fabric Image Card */}
-           <Card className="shadow-md bg-white">
-             <CardHeader className="pb-4">
-               <CardTitle className="flex items-center gap-2 text-[#1a1a1a] arabic-text">
-                 <ImageIcon className="w-5 h-5" />
-                 صورة القماش
-               </CardTitle>
-             </CardHeader>
-            <CardContent>
-              <div className="bg-[#f9fafb] rounded-lg p-8 border border-[#e5e7eb] flex flex-col items-center justify-center gap-3 min-h-[140px] relative">
+              <div className="bg-[#f9fafb] rounded-lg p-8 border border-[#e5e7eb] flex flex-col items-center justify-center gap-3 min-h-[140px]">
                 {imagesLoading && !invoice.fabricImageUrl ? (
                   <Loader2 className="w-6 h-6 animate-spin text-[#9ca3af]" />
                 ) : (images && images.length > 0) ? (
@@ -455,27 +484,8 @@ export function InvoiceDetailsPage({ invoiceId, onBack, onMarkAsPaid }: InvoiceD
                     <p className="text-[#6b7280] text-center arabic-text">لا توجد صورة للقماش</p>
                   </>
                 )}
-                {/* Change image button */}
-                <div className="absolute top-2 left-2 flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={triggerChangeImage}
-                    className="bg-white/80 hover:bg-white"
-                    disabled={isUploadingImage}
-                  >
-                    {isUploadingImage ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <>
-                        <Pencil className="w-4 h-4 mr-1" />
-                        تغيير الصورة
-                      </>
-                    )}
-                  </Button>
-                </div>
                 {imageError && (
-                  <p className="text-red-600 text-xs arabic-text absolute bottom-2 left-2 right-2 text-center">
+                  <p className="text-red-600 text-xs arabic-text text-center">
                     {imageError}
                   </p>
                 )}
@@ -489,7 +499,22 @@ export function InvoiceDetailsPage({ invoiceId, onBack, onMarkAsPaid }: InvoiceD
               </div>
             </CardContent>
           </Card>
-        </div>
+         </div>
+
+        {/* Notes Section - Full Width */}
+        <Card className="shadow-md bg-white mt-6">
+          <CardHeader className="pb-4">
+            <CardTitle className="flex items-center gap-2 text-[#1a1a1a] arabic-text">
+              <MessageCircle className="w-5 h-5" />
+              الملاحظات
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="bg-[#f9fafb] rounded-lg p-4 border border-[#e5e7eb]">
+              <p className="text-[#6b7280] arabic-text">{invoice.notes || 'لا توجد ملاحظات'}</p>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

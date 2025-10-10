@@ -28,6 +28,10 @@ class NotificationsService {
     this.listeners.delete(listener);
   }
 
+  public removeAllListeners(): void {
+    this.listeners.clear();
+  }
+
   public emit(input: Omit<AppNotification, 'id' | 'timestamp' | 'read'> & Partial<Pick<AppNotification, 'read'>>): AppNotification {
     const notification: AppNotification = {
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -52,7 +56,8 @@ class NotificationsService {
     return notification;
   }
 }
-
-export const notifications = new NotificationsService();
+// Ensure a single instance across HMR/Reloads
+const g = globalThis as any;
+export const notifications: NotificationsService = g.__qf_notifications || (g.__qf_notifications = new NotificationsService());
 
 
