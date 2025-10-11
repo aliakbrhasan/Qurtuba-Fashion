@@ -434,8 +434,8 @@ export function InvoicesPageWithDB({ onCreateInvoice, onViewInvoiceDetails, onMa
   const filteredAndSortedInvoices = useMemo(() => {
     let filtered = invoices.filter(invoice => {
       // Search filter
-      const matchesSearch = invoice.customer_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        invoice.invoice_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      const matchesSearch = (invoice.customer_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (invoice.invoice_number || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
         (invoice.customer_phone?.includes(searchTerm) ?? false) ||
         (invoice.customer_address?.toLowerCase().includes(searchTerm.toLowerCase()) ?? false);
       

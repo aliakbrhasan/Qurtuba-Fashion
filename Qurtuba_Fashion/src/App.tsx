@@ -174,6 +174,13 @@ export default function App() {
             <NewInvoiceDialogWithDB
               isOpen={isNewInvoiceDialogOpen}
               onOpenChange={setIsNewInvoiceDialogOpen}
+              onInvoiceCreated={async () => {
+                // Refresh invoices data after creating a new invoice
+                const { queryClient } = await import('./app/queryClient');
+                queryClient.invalidateQueries({ queryKey: ['invoices'] });
+                queryClient.invalidateQueries({ queryKey: ['customers'] });
+                queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+              }}
             />
           </Layout>
         )}

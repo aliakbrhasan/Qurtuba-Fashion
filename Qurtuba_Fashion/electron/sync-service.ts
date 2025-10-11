@@ -94,7 +94,7 @@ export class SyncService {
 
     try {
       // Push outbox ordered by created_at with idempotency
-      const batch = this.localDB.getOutboxBatch(100);
+      const batch = await this.localDB.getOutboxBatch(100);
       for (const entry of batch) {
         try {
           const payload = entry.payload;
@@ -273,7 +273,7 @@ export class SyncService {
 
   async getPendingChangesCount(): Promise<number> {
     try {
-      const outbox = this.localDB.getOutboxBatch(1000);
+      const outbox = await this.localDB.getOutboxBatch(1000);
       const count = outbox.length;
       (this as any)._lastPendingCount = count;
       return count;

@@ -12,13 +12,15 @@
     "package.json"
   ],
   "asarUnpack": [
-    "node_modules/better-sqlite3/**",
-    "**/*.node"
+    "node_modules/sqlite3/**",
+    "**/*.node",
+    "node_modules/sqlite3/build/Release/**"
   ],
   "extraResources": [
     { "from": "build/fonts", "to": "fonts" },
     { "from": "resources", "to": "resources", "filter": ["**/*"] },
-    { "from": "build/icon.ico", "to": "icon.ico" }
+    { "from": "build/icon.ico", "to": "icon.ico" },
+    { "from": "node_modules/sqlite3/build/Release", "to": "sqlite3" }
   ],
   "asar": true,
   "win": {
@@ -27,7 +29,10 @@
     ],
     "icon": "build/icon.ico",
     "requestedExecutionLevel": "asInvoker",
-    "forceCodeSigning": false
+    "forceCodeSigning": false,
+    "signAndEditExecutable": false,
+    "signDlls": false,
+    "publisherName": "Qurtuba Fashion Team"
   },
   "mac": {
     "target": [
@@ -67,7 +72,6 @@
     "createStartMenuShortcut": true,
     "shortcutName": "أزياء قرطبة",
     "allowElevation": true,
-    "include": "build/nsis/install-fonts.nsh"
   },
   "dmg": {
     "title": "أزياء قرطبة",
@@ -85,5 +89,8 @@
     ]
   },
   "publish": null,
-  "copyright": "Copyright © 2024 أزياء قرطبة"
+  "copyright": "Copyright © 2024 أزياء قرطبة",
+  "buildDependenciesFromSource": false,
+  "nodeGypRebuild": false,
+  "npmRebuild": false
 }

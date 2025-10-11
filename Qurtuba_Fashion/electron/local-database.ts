@@ -1,8 +1,78 @@
 import { app } from 'electron';
 import { join } from 'path';
-// Use require to avoid type resolution issues in environments without typings
+// Use sqlite3 instead of better-sqlite3 to avoid C++20 compilation issues
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const Database = require('better-sqlite3');
+const sqlite3 = require('sqlite3').verbose();
+
+// Ensure sqlite3 can find its native module in packaged app
+if (app.isPackaged) {
+  const sqlite3Path = join(process.resourcesPath, 'sqlite3', 'node_sqlite3.node');
+  console.log('Looking for sqlite3 native module at:', sqlite3Path);
+}
+
+// Wrapper class to match better-sqlite3 API
+const Database = class {
+  private db: any;
+  
+  constructor(path: string) {
+    this.db = new sqlite3.Database(path);
+  }
+  
+  static open(path: string) {
+    return new Database(path);
+  }
+  
+  exec(sql: string) {
+    return new Promise((resolve, reject) => {
+      this.db.exec(sql, (err: any) => {
+        if (err) reject(err);
+        else resolve(undefined);
+      });
+    });
+  }
+  
+  pragma(sql: string) {
+    return new Promise((resolve, reject) => {
+      this.db.get(sql, (err: any, row: any) => {
+        if (err) reject(err);
+        else resolve(row);
+      });
+    });
+  }
+  
+  prepare(sql: string) {
+    const stmt = this.db.prepare(sql);
+    return {
+      run: (params: any) => new Promise((resolve, reject) => {
+        stmt.run(params, function(this: any, err: any) {
+          if (err) reject(err);
+          else resolve({ lastInsertRowid: this.lastID });
+        });
+      }),
+      get: (params: any) => new Promise((resolve, reject) => {
+        stmt.get(params, (err: any, row: any) => {
+          if (err) reject(err);
+          else resolve(row);
+        });
+      }),
+      all: (params: any) => new Promise((resolve, reject) => {
+        stmt.all(params, (err: any, rows: any) => {
+          if (err) reject(err);
+          else resolve(rows);
+        });
+      }),
+      finalize: () => {
+        stmt.finalize();
+      }
+    };
+  }
+  
+  close() {
+    return new Promise((resolve) => {
+      this.db.close(resolve);
+    });
+  }
+};
 
 export interface LocalCustomer {
   id: string;
@@ -63,39 +133,54 @@ export class LocalDatabase {
 
   async initialize(): Promise<void> {
     try {
+      console.log('Initializing local database at:', this.dbPath);
+      
+      // Ensure the directory exists
+      const { mkdirSync } = require('fs');
+      const { dirname } = require('path');
+      try {
+        mkdirSync(dirname(this.dbPath), { recursive: true });
+      } catch (e) {
+        console.warn('Could not create database directory:', e);
+      }
+      
       this.db = new Database(this.dbPath);
+      console.log('Database connection established');
+      
       // Pragmas for durability and concurrency
-      this.db.pragma('journal_mode = WAL');
-      this.db.pragma('synchronous = NORMAL');
-      this.db.pragma('foreign_keys = ON');
-      this.createTables();
+      await this.db.pragma('PRAGMA journal_mode = WAL');
+      await this.db.pragma('PRAGMA synchronous = NORMAL');
+      await this.db.pragma('PRAGMA foreign_keys = ON');
+      await this.createTables();
+      console.log('Database tables created successfully');
     } catch (err) {
       console.error('Error opening database:', err);
+      console.error('Database path:', this.dbPath);
       throw err;
     }
   }
 
   // Low-level helpers
-  private run(sql: string, params: any[] = []): void {
+  private async run(sql: string, params: any[] = []): Promise<void> {
     if (!this.db) throw new Error('Database not initialized');
-    this.db.prepare(sql).run(...params);
+    await this.db.prepare(sql).run(...params);
   }
 
-  private get<T>(sql: string, params: any[] = []): T {
+  private async get<T>(sql: string, params: any[] = []): Promise<T> {
     if (!this.db) throw new Error('Database not initialized');
-    return this.db.prepare(sql).get(...params) as T;
+    return await this.db.prepare(sql).get(...params) as T;
   }
 
-  private all<T>(sql: string, params: any[] = []): T[] {
+  private async all<T>(sql: string, params: any[] = []): Promise<T[]> {
     if (!this.db) throw new Error('Database not initialized');
-    return this.db.prepare(sql).all(...params) as T[];
+    return await this.db.prepare(sql).all(...params) as T[];
   }
 
-  private createTables(): void {
+  private async createTables(): Promise<void> {
     if (!this.db) throw new Error('Database not initialized');
 
     // Customers table
-    this.run(`
+    await this.run(`
       CREATE TABLE IF NOT EXISTS customers (
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
@@ -114,7 +199,7 @@ export class LocalDatabase {
     `);
 
     // Invoices table
-    this.run(`
+    await this.run(`
       CREATE TABLE IF NOT EXISTS invoices (
         id TEXT PRIMARY KEY,
         invoice_number TEXT UNIQUE NOT NULL,
@@ -138,7 +223,7 @@ export class LocalDatabase {
     `);
 
     // Orders table
-    this.run(`
+    await this.run(`
       CREATE TABLE IF NOT EXISTS orders (
         id TEXT PRIMARY KEY,
         customer_id TEXT NOT NULL,
@@ -155,7 +240,7 @@ export class LocalDatabase {
     `);
 
     // Invoice items table
-    this.run(`
+    await this.run(`
       CREATE TABLE IF NOT EXISTS invoice_items (
         id TEXT PRIMARY KEY,
         invoice_id TEXT NOT NULL,
@@ -169,7 +254,7 @@ export class LocalDatabase {
     `);
 
     // Roles table
-    this.run(`
+    await this.run(`
       CREATE TABLE IF NOT EXISTS roles (
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL UNIQUE,
@@ -186,7 +271,7 @@ export class LocalDatabase {
     `);
 
     // Outbox for sync
-    this.run(`
+    await this.run(`
       CREATE TABLE IF NOT EXISTS outbox (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         table_name TEXT NOT NULL,
@@ -200,7 +285,7 @@ export class LocalDatabase {
     `);
 
     // Sync state
-    this.run(`
+    await this.run(`
       CREATE TABLE IF NOT EXISTS sync_state (
         table_name TEXT PRIMARY KEY,
         last_pull TEXT NOT NULL DEFAULT '1970-01-01T00:00:00.000Z'
@@ -208,14 +293,22 @@ export class LocalDatabase {
     `);
 
     // Indexes
-    this.run(`CREATE INDEX IF NOT EXISTS idx_outbox_created ON outbox(created_at)`);
-    this.run(`CREATE INDEX IF NOT EXISTS idx_outbox_table ON outbox(table_name, record_id)`);
+    await this.run(`CREATE INDEX IF NOT EXISTS idx_outbox_created ON outbox(created_at)`);
+    await this.run(`CREATE INDEX IF NOT EXISTS idx_outbox_table ON outbox(table_name, record_id)`);
   }
 
   // Customer methods
   async getCustomers(): Promise<LocalCustomer[]> {
     if (!this.db) throw new Error('Database not initialized');
-    return this.all<LocalCustomer>("SELECT * FROM customers WHERE deleted = 0 AND LOWER(name) NOT LIKE '%test customer%' ORDER BY created_at DESC");
+    
+    try {
+      const customers = await this.all<LocalCustomer>("SELECT * FROM customers WHERE deleted = 0 AND LOWER(name) NOT LIKE '%test customer%' ORDER BY created_at DESC");
+      console.log('Retrieved customers count:', customers.length);
+      return customers;
+    } catch (error) {
+      console.error('Error retrieving customers:', error);
+      throw error;
+    }
   }
 
   async createCustomer(customer: Omit<LocalCustomer, 'id' | 'created_at' | 'updated_at' | 'synced'>): Promise<LocalCustomer> {
@@ -224,13 +317,13 @@ export class LocalDatabase {
     const id = this.generateId();
     const now = new Date().toISOString();
     
-    this.run(`
+    await this.run(`
       INSERT INTO customers (id, name, phone, address, total_spent, last_order, label, measurements, notes, version, deleted, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0, ?, ?)
     `, [id, customer.name, customer.phone, customer.address, customer.totalSpent, customer.lastOrder, customer.label,
         JSON.stringify(customer.measurements), customer.notes, now, now]);
 
-    this.enqueueOutbox('customers', id, 'insert', {
+    await this.enqueueOutbox('customers', id, 'insert', {
       id,
       name: customer.name,
       phone: customer.phone,
@@ -269,46 +362,69 @@ export class LocalDatabase {
     );
     
     const versionUpdate = options?.fromCloud ? '' : ', version = version + 1';
-    this.run(`UPDATE customers SET ${setClause}, updated_at = ?${versionUpdate} WHERE id = ?`, [...values, now, id]);
+    await this.run(`UPDATE customers SET ${setClause}, updated_at = ?${versionUpdate} WHERE id = ?`, [...values, now, id]);
 
     if (!options?.fromCloud) {
-      const row = this.get<LocalCustomer>('SELECT * FROM customers WHERE id = ?', [id]);
-      this.enqueueOutbox('customers', id, 'update', row);
+      const row = await this.get<LocalCustomer>('SELECT * FROM customers WHERE id = ?', [id]);
+      await this.enqueueOutbox('customers', id, 'update', row);
     }
 
-    return this.get<LocalCustomer>('SELECT * FROM customers WHERE id = ?', [id]);
+    return await this.get<LocalCustomer>('SELECT * FROM customers WHERE id = ?', [id]);
   }
 
   async deleteCustomer(id: string): Promise<void> {
     if (!this.db) throw new Error('Database not initialized');
     
     const now = new Date().toISOString();
-    this.run('UPDATE customers SET deleted = 1, updated_at = ?, version = version + 1 WHERE id = ?', [now, id]);
-    this.enqueueOutbox('customers', id, 'delete', { id, deleted: 1, updated_at: now });
+    await this.run('UPDATE customers SET deleted = 1, updated_at = ?, version = version + 1 WHERE id = ?', [now, id]);
+    await this.enqueueOutbox('customers', id, 'delete', { id, deleted: 1, updated_at: now });
   }
 
   // Invoice methods
   async getInvoices(): Promise<LocalInvoice[]> {
     if (!this.db) throw new Error('Database not initialized');
-    return this.all<LocalInvoice>('SELECT * FROM invoices WHERE deleted = 0 ORDER BY created_at DESC');
+    
+    try {
+      const invoices = await this.all<LocalInvoice>('SELECT * FROM invoices WHERE deleted = 0 ORDER BY created_at DESC');
+      console.log('Retrieved invoices count:', invoices.length);
+      return invoices;
+    } catch (error) {
+      console.error('Error retrieving invoices:', error);
+      throw error;
+    }
   }
 
-  async createInvoice(invoice: Omit<LocalInvoice, 'id' | 'created_at' | 'updated_at' | 'synced'>): Promise<LocalInvoice> {
+  async createInvoice(invoice: Omit<LocalInvoice, 'id' | 'invoice_number' | 'created_at' | 'updated_at' | 'synced'>): Promise<LocalInvoice> {
     if (!this.db) throw new Error('Database not initialized');
     
     const id = this.generateId();
     const invoiceNumber = this.generateInvoiceNumber();
     const now = new Date().toISOString();
     
-    this.run(`
-      INSERT INTO invoices (id, invoice_number, customer_id, customer_name, customer_phone, customer_address,
-                           total, paid_amount, status, invoice_date, due_date, notes, fabric_image_url, paid_at, version, deleted, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0, ?, ?)
-    `, [id, invoiceNumber, invoice.customer_id, invoice.customer_name, invoice.customer_phone,
-        invoice.customer_address, invoice.total, invoice.paid_amount, invoice.status,
-        invoice.invoice_date, invoice.due_date, invoice.notes, invoice.fabric_image_url, invoice.paid_at || null, now, now]);
+    console.log('Creating invoice with data:', {
+      id,
+      invoiceNumber,
+      customer_name: invoice.customer_name,
+      total: invoice.total,
+      status: invoice.status
+    });
+    
+    try {
+      await this.run(`
+        INSERT INTO invoices (id, invoice_number, customer_id, customer_name, customer_phone, customer_address,
+                             total, paid_amount, status, invoice_date, due_date, notes, fabric_image_url, paid_at, version, deleted, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0, ?, ?)
+      `, [id, invoiceNumber, invoice.customer_id, invoice.customer_name, invoice.customer_phone,
+          invoice.customer_address, invoice.total, invoice.paid_amount, invoice.status,
+          invoice.invoice_date, invoice.due_date, invoice.notes, invoice.fabric_image_url, invoice.paid_at || null, now, now]);
+      
+      console.log('Invoice created successfully with ID:', id);
+    } catch (error) {
+      console.error('Error creating invoice:', error);
+      throw error;
+    }
 
-    this.enqueueOutbox('invoices', id, 'insert', {
+    await this.enqueueOutbox('invoices', id, 'insert', {
       ...invoice,
       id,
       invoice_number: invoiceNumber,
@@ -336,33 +452,33 @@ export class LocalDatabase {
     });
     
     const versionUpdate = options?.fromCloud ? '' : ', version = version + 1';
-    this.run(`UPDATE invoices SET ${setClause}, updated_at = ?${versionUpdate} WHERE id = ?`, [...values, now, id]);
+    await this.run(`UPDATE invoices SET ${setClause}, updated_at = ?${versionUpdate} WHERE id = ?`, [...values, now, id]);
     if (!options?.fromCloud) {
-      const row = this.get<LocalInvoice>('SELECT * FROM invoices WHERE id = ?', [id]);
-      this.enqueueOutbox('invoices', id, 'update', row);
+      const row = await this.get<LocalInvoice>('SELECT * FROM invoices WHERE id = ?', [id]);
+      await this.enqueueOutbox('invoices', id, 'update', row);
     }
-    return this.get<LocalInvoice>('SELECT * FROM invoices WHERE id = ?', [id]);
+    return await this.get<LocalInvoice>('SELECT * FROM invoices WHERE id = ?', [id]);
   }
 
   async deleteInvoice(id: string): Promise<void> {
     if (!this.db) throw new Error('Database not initialized');
     
     const now = new Date().toISOString();
-    this.run('UPDATE invoices SET deleted = 1, updated_at = ?, version = version + 1 WHERE id = ?', [now, id]);
-    this.run('DELETE FROM invoice_items WHERE invoice_id = ?', [id]);
-    this.enqueueOutbox('invoices', id, 'delete', { id, deleted: 1, updated_at: now });
+    await this.run('UPDATE invoices SET deleted = 1, updated_at = ?, version = version + 1 WHERE id = ?', [now, id]);
+    await this.run('DELETE FROM invoice_items WHERE invoice_id = ?', [id]);
+    await this.enqueueOutbox('invoices', id, 'delete', { id, deleted: 1, updated_at: now });
   }
 
   // Order methods
   async getOrders(): Promise<LocalOrder[]> {
     if (!this.db) throw new Error('Database not initialized');
-    return this.all<LocalOrder>('SELECT * FROM orders WHERE deleted = 0 ORDER BY created_at DESC');
+    return await this.all<LocalOrder>('SELECT * FROM orders WHERE deleted = 0 ORDER BY created_at DESC');
   }
 
   async getCustomerById(id: string): Promise<LocalCustomer | null> {
     if (!this.db) throw new Error('Database not initialized');
     try {
-      const row = this.get<LocalCustomer | undefined>('SELECT * FROM customers WHERE id = ? AND deleted = 0', [id]);
+      const row = await this.get<LocalCustomer | undefined>('SELECT * FROM customers WHERE id = ? AND deleted = 0', [id]);
       return row ?? null;
     } catch {
       return null;
@@ -375,12 +491,12 @@ export class LocalDatabase {
     const id = this.generateId();
     const now = new Date().toISOString();
     
-    this.run(`
+    await this.run(`
       INSERT INTO orders (id, customer_id, order_date, delivery_date, status, total, notes, version, deleted, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, 1, 0, ?, ?)
     `, [id, order.customer_id, order.order_date, order.delivery_date, order.status, order.total, order.notes, now, now]);
 
-    this.enqueueOutbox('orders', id, 'insert', {
+    await this.enqueueOutbox('orders', id, 'insert', {
       id,
       ...order,
       version: 1,
@@ -406,35 +522,35 @@ export class LocalDatabase {
     );
     
     const versionUpdate = options?.fromCloud ? '' : ', version = version + 1';
-    this.run(`UPDATE orders SET ${setClause}, updated_at = ?${versionUpdate} WHERE id = ?`, [...values, now, id]);
+    await this.run(`UPDATE orders SET ${setClause}, updated_at = ?${versionUpdate} WHERE id = ?`, [...values, now, id]);
     if (!options?.fromCloud) {
-      const row = this.get<LocalOrder>('SELECT * FROM orders WHERE id = ?', [id]);
-      this.enqueueOutbox('orders', id, 'update', row);
+      const row = await this.get<LocalOrder>('SELECT * FROM orders WHERE id = ?', [id]);
+      await this.enqueueOutbox('orders', id, 'update', row);
     }
-    return this.get<LocalOrder>('SELECT * FROM orders WHERE id = ?', [id]);
+    return await this.get<LocalOrder>('SELECT * FROM orders WHERE id = ?', [id]);
   }
 
   async deleteOrder(id: string): Promise<void> {
     if (!this.db) throw new Error('Database not initialized');
     const now = new Date().toISOString();
-    this.run('UPDATE orders SET deleted = 1, updated_at = ?, version = version + 1 WHERE id = ?', [now, id]);
-    this.enqueueOutbox('orders', id, 'delete', { id, deleted: 1, updated_at: now });
+    await this.run('UPDATE orders SET deleted = 1, updated_at = ?, version = version + 1 WHERE id = ?', [now, id]);
+    await this.enqueueOutbox('orders', id, 'delete', { id, deleted: 1, updated_at: now });
   }
 
   // Sync methods
   // Outbox accessors for sync service
-  getOutboxBatch(limit: number = 50): { id: number; table_name: string; record_id: string; action: string; payload: any; created_at: string; attempt_count: number; last_error?: string }[] {
+  async getOutboxBatch(limit: number = 50): Promise<{ id: number; table_name: string; record_id: string; action: string; payload: any; created_at: string; attempt_count: number; last_error?: string }[]> {
     if (!this.db) throw new Error('Database not initialized');
-    const rows = this.all<any>('SELECT id, table_name, record_id, action, payload, created_at, attempt_count, last_error FROM outbox ORDER BY created_at ASC LIMIT ?', [limit]);
+    const rows = await this.all<any>('SELECT id, table_name, record_id, action, payload, created_at, attempt_count, last_error FROM outbox ORDER BY created_at ASC LIMIT ?', [limit]);
     return rows.map(r => ({ ...r, payload: JSON.parse(r.payload) }));
   }
 
-  markOutboxSuccess(id: number): void {
-    this.run('DELETE FROM outbox WHERE id = ?', [id]);
+  async markOutboxSuccess(id: number): Promise<void> {
+    await this.run('DELETE FROM outbox WHERE id = ?', [id]);
   }
 
-  markOutboxFailure(id: number, error: string): void {
-    this.run('UPDATE outbox SET attempt_count = attempt_count + 1, last_error = ? WHERE id = ?', [error, id]);
+  async markOutboxFailure(id: number, error: string): Promise<void> {
+    await this.run('UPDATE outbox SET attempt_count = attempt_count + 1, last_error = ? WHERE id = ?', [error, id]);
   }
 
   // Deprecated: kept for compatibility
@@ -443,10 +559,10 @@ export class LocalDatabase {
   async getAllOfflineData(): Promise<any> {
     if (!this.db) throw new Error('Database not initialized');
     return {
-      customers: this.all<LocalCustomer>('SELECT * FROM customers'),
-      invoices: this.all<LocalInvoice>('SELECT * FROM invoices'),
-      orders: this.all<LocalOrder>('SELECT * FROM orders'),
-      invoiceItems: this.all<any>('SELECT * FROM invoice_items')
+      customers: await this.all<LocalCustomer>('SELECT * FROM customers'),
+      invoices: await this.all<LocalInvoice>('SELECT * FROM invoices'),
+      orders: await this.all<LocalOrder>('SELECT * FROM orders'),
+      invoiceItems: await this.all<any>('SELECT * FROM invoice_items')
     };
   }
 
@@ -471,13 +587,13 @@ export class LocalDatabase {
     const items = Array.isArray(payload.invoiceItems) ? payload.invoiceItems : [];
 
     // Simple replace-all strategy
-    this.run('DELETE FROM invoice_items');
-    this.run('DELETE FROM orders');
-    this.run('DELETE FROM invoices');
-    this.run('DELETE FROM customers');
+    await this.run('DELETE FROM invoice_items');
+    await this.run('DELETE FROM orders');
+    await this.run('DELETE FROM invoices');
+    await this.run('DELETE FROM customers');
 
     for (const c of customers) {
-      this.run(`
+      await this.run(`
         INSERT INTO customers (id, name, phone, address, total_spent, last_order, label, measurements, notes, version, deleted, created_at, updated_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `, [
@@ -498,7 +614,7 @@ export class LocalDatabase {
     }
 
     for (const inv of invoices) {
-      this.run(`
+      await this.run(`
         INSERT INTO invoices (id, invoice_number, customer_id, customer_name, customer_phone, customer_address,
                              total, paid_amount, status, invoice_date, due_date, notes, fabric_image_url, paid_at, version, deleted, created_at, updated_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -525,7 +641,7 @@ export class LocalDatabase {
     }
 
     for (const o of orders) {
-      this.run(`
+      await this.run(`
         INSERT INTO orders (id, customer_id, order_date, delivery_date, status, total, notes, version, deleted, created_at, updated_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `, [
@@ -544,7 +660,7 @@ export class LocalDatabase {
     }
 
     for (const it of items) {
-      this.run(`
+      await this.run(`
         INSERT INTO invoice_items (id, invoice_id, item_name, description, quantity, unit_price, total_price, created_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `, [
@@ -576,9 +692,9 @@ export class LocalDatabase {
     return `INV-${year}${month}${day}-${random}`;
   }
 
-  private enqueueOutbox(tableName: string, recordId: string, action: 'insert' | 'update' | 'delete', payload: any): void {
+  private async enqueueOutbox(tableName: string, recordId: string, action: 'insert' | 'update' | 'delete', payload: any): Promise<void> {
     if (!this.db) throw new Error('Database not initialized');
-    this.run(`
+    await this.run(`
       INSERT INTO outbox (table_name, record_id, action, payload, created_at)
       VALUES (?, ?, ?, ?, ?)
     `, [tableName, recordId, action, JSON.stringify(payload), new Date().toISOString()]);
@@ -601,7 +717,7 @@ export class LocalDatabase {
     updated_at: string;
   }): Promise<void> {
     if (!this.db) throw new Error('Database not initialized');
-    const local = this.get<{ id: string; version: number; updated_at: string } | undefined>('SELECT id, version, updated_at FROM customers WHERE id = ?', [payload.id]);
+    const local = await this.get<{ id: string; version: number; updated_at: string } | undefined>('SELECT id, version, updated_at FROM customers WHERE id = ?', [payload.id]);
 
     const remoteVersion = (payload as any).version ?? 1;
     const remoteUpdatedAt = payload.updated_at;
@@ -622,7 +738,7 @@ export class LocalDatabase {
         }, { fromCloud: true });
       }
     } else {
-      this.run(`
+      await this.run(`
         INSERT INTO customers (id, name, phone, address, total_spent, last_order, label, measurements, notes, version, deleted, created_at, updated_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
       `, [
@@ -660,7 +776,7 @@ export class LocalDatabase {
     updated_at: string;
   }): Promise<void> {
     if (!this.db) throw new Error('Database not initialized');
-    const local = this.get<{ id: string; version: number; updated_at: string } | undefined>('SELECT id, version, updated_at FROM invoices WHERE id = ?', [payload.id]);
+    const local = await this.get<{ id: string; version: number; updated_at: string } | undefined>('SELECT id, version, updated_at FROM invoices WHERE id = ?', [payload.id]);
     const remoteVersion = (payload as any).version ?? 1;
     const remoteUpdatedAt = payload.updated_at;
 
@@ -682,7 +798,7 @@ export class LocalDatabase {
         }, { fromCloud: true });
       }
     } else {
-      this.run(`
+      await this.run(`
         INSERT INTO invoices (id, invoice_number, customer_id, customer_name, customer_phone, customer_address,
                              total, paid_amount, status, invoice_date, due_date, notes, fabric_image_url, version, deleted, created_at, updated_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
@@ -719,7 +835,7 @@ export class LocalDatabase {
     updated_at: string;
   }): Promise<void> {
     if (!this.db) throw new Error('Database not initialized');
-    const local = this.get<{ id: string; version: number; updated_at: string } | undefined>('SELECT id, version, updated_at FROM orders WHERE id = ?', [payload.id]);
+    const local = await this.get<{ id: string; version: number; updated_at: string } | undefined>('SELECT id, version, updated_at FROM orders WHERE id = ?', [payload.id]);
     const remoteVersion = (payload as any).version ?? 1;
     const remoteUpdatedAt = payload.updated_at;
 
@@ -736,7 +852,7 @@ export class LocalDatabase {
         }, { fromCloud: true });
       }
     } else {
-      this.run(`
+      await this.run(`
         INSERT INTO orders (id, customer_id, order_date, delivery_date, status, total, notes, version, deleted, created_at, updated_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
       `, [
@@ -756,18 +872,18 @@ export class LocalDatabase {
 
   // Roles CRUD
   async getRoles(): Promise<any[]> {
-    return this.all<any>('SELECT * FROM roles WHERE deleted = 0 ORDER BY created_at DESC');
+    return await this.all<any>('SELECT * FROM roles WHERE deleted = 0 ORDER BY created_at DESC');
   }
 
   async createRole(role: any): Promise<any> {
     const id = this.generateId();
     const now = new Date().toISOString();
-    this.run(`
+    await this.run(`
       INSERT INTO roles (id, name, description, permissions, allowed_pages, allowed_actions, is_active, version, deleted, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, 1, 0, ?, ?)
     `, [id, role.name, role.description || '', JSON.stringify(role.permissions || []), JSON.stringify(role.allowedPages || []), JSON.stringify(role.allowedActions || []), role.isActive ? 1 : 0, now, now]);
-    const row = this.get<any>('SELECT * FROM roles WHERE id = ?', [id]);
-    this.enqueueOutbox('roles', id, 'insert', row);
+    const row = await this.get<any>('SELECT * FROM roles WHERE id = ?', [id]);
+    await this.enqueueOutbox('roles', id, 'insert', row);
     return row;
   }
 
@@ -781,25 +897,25 @@ export class LocalDatabase {
       toSet.push(`${k === 'permissions' || k === 'allowedPages' || k === 'allowedActions' ? (k === 'allowedPages' ? 'allowed_pages' : k === 'allowedActions' ? 'allowed_actions' : 'permissions') : k} = ?`);
       vals.push(value);
     }
-    this.run(`UPDATE roles SET ${toSet.join(', ')}, updated_at = ?, version = version + 1 WHERE id = ?`, [...vals, now, id]);
-    const row = this.get<any>('SELECT * FROM roles WHERE id = ?', [id]);
-    this.enqueueOutbox('roles', id, 'update', row);
+    await this.run(`UPDATE roles SET ${toSet.join(', ')}, updated_at = ?, version = version + 1 WHERE id = ?`, [...vals, now, id]);
+    const row = await this.get<any>('SELECT * FROM roles WHERE id = ?', [id]);
+    await this.enqueueOutbox('roles', id, 'update', row);
     return row;
   }
 
   async deleteRole(id: string): Promise<void> {
     const now = new Date().toISOString();
-    this.run('UPDATE roles SET deleted = 1, updated_at = ?, version = version + 1 WHERE id = ?', [now, id]);
-    this.enqueueOutbox('roles', id, 'delete', { id, deleted: 1, updated_at: now });
+    await this.run('UPDATE roles SET deleted = 1, updated_at = ?, version = version + 1 WHERE id = ?', [now, id]);
+    await this.enqueueOutbox('roles', id, 'delete', { id, deleted: 1, updated_at: now });
   }
 
-  getLastPull(table: string): string {
-    const row = this.get<{ last_pull: string } | undefined>('SELECT last_pull FROM sync_state WHERE table_name = ?', [table]);
+  async getLastPull(table: string): Promise<string> {
+    const row = await this.get<{ last_pull: string } | undefined>('SELECT last_pull FROM sync_state WHERE table_name = ?', [table]);
     return row?.last_pull || '1970-01-01T00:00:00.000Z';
   }
 
-  setLastPull(table: string, ts: string): void {
-    this.run('INSERT INTO sync_state (table_name, last_pull) VALUES (?, ?) ON CONFLICT(table_name) DO UPDATE SET last_pull = excluded.last_pull', [table, ts]);
+  async setLastPull(table: string, ts: string): Promise<void> {
+    await this.run('INSERT INTO sync_state (table_name, last_pull) VALUES (?, ?) ON CONFLICT(table_name) DO UPDATE SET last_pull = excluded.last_pull', [table, ts]);
   }
 
   // Self-test to validate local DB CRUD and image URL persistence
@@ -809,6 +925,7 @@ export class LocalDatabase {
     const lines: string[] = [];
     const nowIso = new Date().toISOString();
     try {
+      console.log('Starting database self-test...');
       lines.push('بدء اختبار قاعدة البيانات المحلية...');
 
       // 1) Create test customer
@@ -841,7 +958,7 @@ export class LocalDatabase {
       lines.push(`✅ تم إنشاء فاتورة تجريبية: ${inv.id}`);
 
       // Verify image URL persisted
-      const fetchedInv = this.get<LocalInvoice>('SELECT * FROM invoices WHERE id = ?', [inv.id]);
+      const fetchedInv = await this.get<LocalInvoice>('SELECT * FROM invoices WHERE id = ?', [inv.id]);
       if (fetchedInv?.fabric_image_url === 'https://example.com/selftest-image.jpg') {
         lines.push('✅ تم حفظ رابط صورة القماش داخل القاعدة المحلية (حقل نصي)');
       } else {
@@ -860,9 +977,9 @@ export class LocalDatabase {
       lines.push(`✅ تم إنشاء طلب تجريبي: ${ord.id}`);
 
       // 4) Read back entities
-      const customers = this.all<LocalCustomer>("SELECT * FROM customers WHERE name LIKE '%SelfTest%'");
-      const invoices = this.all<LocalInvoice>("SELECT * FROM invoices WHERE notes = 'SelfTest Invoice'");
-      const orders = this.all<LocalOrder>("SELECT * FROM orders WHERE notes = 'SelfTest Order'");
+      const customers = await this.all<LocalCustomer>("SELECT * FROM customers WHERE name LIKE '%SelfTest%'");
+      const invoices = await this.all<LocalInvoice>("SELECT * FROM invoices WHERE notes = 'SelfTest Invoice'");
+      const orders = await this.all<LocalOrder>("SELECT * FROM orders WHERE notes = 'SelfTest Order'");
       if (!customers.length || !invoices.length || !orders.length) {
         throw new Error('فشل في قراءة السجلات التجريبية بعد الإدخال');
       }
@@ -870,14 +987,14 @@ export class LocalDatabase {
 
       // 5) Update and verify
       await this.updateCustomer(cust.id, { notes: 'SelfTest Updated' });
-      const updatedCust = this.get<LocalCustomer>('SELECT * FROM customers WHERE id = ?', [cust.id]);
+      const updatedCust = await this.get<LocalCustomer>('SELECT * FROM customers WHERE id = ?', [cust.id]);
       if (updatedCust?.notes !== 'SelfTest Updated') {
         throw new Error('فشل التحديث على العميل');
       }
       lines.push('✅ التحديثات تعمل بشكل صحيح');
 
       // 6) Outbox check (should have entries)
-      const outbox = this.getOutboxBatch(10);
+      const outbox = await this.getOutboxBatch(10);
       if (outbox.length >= 3) {
         lines.push(`✅ تم تسجيل التغييرات في outbox (${outbox.length}) للمزامنة`);
       } else {
@@ -887,8 +1004,10 @@ export class LocalDatabase {
       // Note: لا نحذف السجلات التجريبية لضمان تتبعها، وواجهة القائمة لا تعرض "Test Customer"
 
       lines.push('🎉 اكتمل الاختبار بنجاح. قاعدة البيانات المحلية تعمل وتخزن النصوص وروابط الصور.');
+      console.log('Database self-test completed successfully');
       return { ok: true, report: lines.join('\n') };
     } catch (e: any) {
+      console.error('Database self-test failed:', e);
       lines.push(`❌ حدث خطأ: ${String(e?.message || e)}`);
       return { ok: false, report: lines.join('\n') };
     }

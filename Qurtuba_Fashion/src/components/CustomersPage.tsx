@@ -232,9 +232,9 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false, on
   const filteredAndSortedCustomers = useMemo(() => {
     let filtered = uniqueCustomers.filter(customer => {
       // Search filter
-      const matchesSearch = customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                           customer.phone.includes(searchTerm) ||
-                           customer.address.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesSearch = (customer.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                           (customer.phone || '').includes(searchTerm) ||
+                           (customer.address || '').toLowerCase().includes(searchTerm.toLowerCase());
       
       // Label filter
       const matchesFilter = filterLabel === 'all' || customer.label === filterLabel;

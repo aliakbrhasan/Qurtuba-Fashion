@@ -5,6 +5,7 @@ x64:
     - '!dist{,/**/*}'
     - build/**/*
     - dist-electron/**/*
+    - node_modules/**/*
     - package.json
     - '!**/*.{iml,hprof,orig,pyc,pyo,rbc,swp,csproj,sln,suo,xproj,cc,d.ts,mk,a,o,forge-meta,pdb}'
     - '!**/._*'
@@ -17,10 +18,12 @@ x64:
     - '**/*'
     - build/**/*
     - dist-electron/**/*
+    - node_modules/**/*
+    - package.json
 nsis:
   script: |-
-    !include "S:\Work_files\مشروع نهراي\Qurtuba-Fashion\Qurtuba_Fashion\node_modules\app-builder-lib\templates\nsis\include\StdUtils.nsh"
-    !addincludedir "S:\Work_files\مشروع نهراي\Qurtuba-Fashion\Qurtuba_Fashion\node_modules\app-builder-lib\templates\nsis\include"
+    !include "C:\Users\msi\Documents\GitHub\Qurtuba-Fashion\Qurtuba_Fashion\node_modules\app-builder-lib\templates\nsis\include\StdUtils.nsh"
+    !addincludedir "C:\Users\msi\Documents\GitHub\Qurtuba-Fashion\Qurtuba_Fashion\node_modules\app-builder-lib\templates\nsis\include"
     !macro _isUpdated _a _b _t _f
       ${StdUtils.TestParameter} $R9 "updated"
       StrCmp "$R9" "true" `${_t}` `${_f}`
@@ -92,11 +95,9 @@ nsis:
       !insertmacro MUI_LANGUAGE "Vietnamese"
     !macroend
 
-    !addincludedir "S:\Work_files\مشروع نهراي\Qurtuba-Fashion\Qurtuba_Fashion\build"
-    !include "S:\Work_files\مشروع نهراي\Qurtuba-Fashion\Qurtuba_Fashion\build\nsis\install-fonts.nsh"
-    !include "C:\Users\gonal\AppData\Local\Temp\t-QEJD4e\1-messages.nsh"
-    !include "C:\Users\gonal\AppData\Local\Temp\t-QEJD4e\0-messages.nsh"
-    !addplugindir /x86-unicode "C:\Users\gonal\AppData\Local\electron-builder\Cache\nsis\nsis-resources-3.4.1\plugins\x86-unicode"
+    !include "C:\Users\msi\AppData\Local\Temp\t-r00g1d\0-messages.nsh"
+    !include "C:\Users\msi\AppData\Local\Temp\t-r00g1d\1-messages.nsh"
+    !addplugindir /x86-unicode "C:\Users\msi\AppData\Local\electron-builder\Cache\nsis\nsis-resources-3.4.1\plugins\x86-unicode"
 
     Var newStartMenuLink
     Var oldStartMenuLink

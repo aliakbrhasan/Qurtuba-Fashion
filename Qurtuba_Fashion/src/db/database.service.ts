@@ -671,10 +671,10 @@ export class DatabaseService {
         const paid = Number((inv as any).paid_amount || 0) || 0;
         const lastOrderDate = inv.invoice_date || inv.created_at || new Date().toISOString();
 
-        if (!target) {
+        if (!target && name && name.trim()) {
           // Create a new customer derived from invoice
           const created = await this.createCustomer({
-            name,
+            name: name.trim(),
             phone,
             address,
             label: 'جديد',
@@ -686,7 +686,7 @@ export class DatabaseService {
           } as any);
           byId.set(String((created as any).id), created);
           if (alias !== '|') byAlias.set(alias, created);
-        } else {
+        } else if (target) {
           // Update existing aggregate fields
           const nextTotal = (target.totalSpent || 0) + paid;
           const newerDate = !target.lastOrder || new Date(lastOrderDate) > new Date(target.lastOrder) ? lastOrderDate : target.lastOrder;

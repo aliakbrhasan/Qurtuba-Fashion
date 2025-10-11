@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog, shell, Menu, Tray, nativeImage } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, shell, Menu, Tray, nativeImage, session } from 'electron';
 // Supabase disabled in local-only mode
 import { existsSync, mkdirSync, readdirSync, copyFileSync, lstatSync, writeFileSync, unlinkSync } from 'fs';
 import { join, dirname } from 'path';
@@ -27,7 +27,7 @@ const createWindow = (): void => {
       sandbox: true,
       webSecurity: true,
       allowRunningInsecureContent: false,
-      experimentalFeatures: false,
+      experimentalFeatures: true,
       spellcheck: false,
       preload: join(__dirname, 'preload.js'),
     },
@@ -38,7 +38,7 @@ const createWindow = (): void => {
 
   // Load the app
   if (isDev) {
-    mainWindow.loadURL('http://localhost:3000');
+    mainWindow.loadURL('http://localhost:3001');
     // Open DevTools in development
     mainWindow.webContents.openDevTools();
   } else {
@@ -61,6 +61,24 @@ const createWindow = (): void => {
       dialog.showErrorBox('الملفات غير موجودة', message);
     }
   }
+
+  // Handle camera permissions
+  mainWindow.webContents.session.setPermissionRequestHandler((webContents, permission, callback) => {
+    if (permission === 'media') {
+      // Grant media permissions (camera and microphone)
+      callback(true);
+    } else {
+      callback(false);
+    }
+  });
+
+  // Set camera permissions for the session
+  mainWindow.webContents.session.setPermissionCheckHandler((webContents, permission, requestingOrigin, details) => {
+    if (permission === 'media') {
+      return true;
+    }
+    return false;
+  });
 
   // Show window when ready to prevent visual flash
   mainWindow.once('ready-to-show', () => {
@@ -90,8 +108,19 @@ const createWindow = (): void => {
 // This method will be called when Electron has finished initialization
 app.whenReady().then(async () => {
   // Initialize local database
-  localDB = new LocalDatabase();
-  await localDB.initialize();
+  try {
+    console.log('Starting database initialization...');
+    localDB = new LocalDatabase();
+    await localDB.initialize();
+    console.log('Database initialized successfully');
+  } catch (error) {
+    console.error('Failed to initialize database:', error);
+    // Show error dialog to user
+    dialog.showErrorBox(
+      'Database Error',
+      'Failed to initialize the local database. The application may not work correctly.\n\nError: ' + (error as Error).message
+    );
+  }
   
   // Local-only: disable sync and supabase initialization
   
@@ -172,29 +201,57 @@ ipcMain.handle('app:showSaveDialog', async (_, options) => {
 // Helper to standardize IPC responses
 async function ok<T>(fn: () => Promise<T> | T): Promise<{ ok: boolean; data?: T; error?: string }> {
   try {
+    if (!localDB) {
+      return { ok: false, error: 'Database not initialized' };
+    }
     const data = await Promise.resolve(fn());
     return { ok: true, data };
   } catch (e: any) {
+    console.error('Database operation failed:', e);
     return { ok: false, error: String(e?.message || e) };
   }
 }
 
 // Local database handlers
-ipcMain.handle('local:getCustomers', async () => ok(() => localDB.getCustomers()));
+ipcMain.handle('local:getCustomers', async () => {
+  console.log('IPC: getCustomers called');
+  return ok(() => localDB.getCustomers());
+});
 
-ipcMain.handle('local:createCustomer', async (_, customer) => ok(() => localDB.createCustomer(customer)));
+ipcMain.handle('local:createCustomer', async (_, customer) => {
+  console.log('IPC: createCustomer called with:', customer);
+  return ok(() => localDB.createCustomer(customer));
+});
 
-ipcMain.handle('local:updateCustomer', async (_, id, updates) => ok(() => localDB.updateCustomer(id, updates)));
+ipcMain.handle('local:updateCustomer', async (_, id, updates) => {
+  console.log('IPC: updateCustomer called with ID:', id);
+  return ok(() => localDB.updateCustomer(id, updates));
+});
 
-ipcMain.handle('local:deleteCustomer', async (_, id) => ok(() => localDB.deleteCustomer(id)));
+ipcMain.handle('local:deleteCustomer', async (_, id) => {
+  console.log('IPC: deleteCustomer called with ID:', id);
+  return ok(() => localDB.deleteCustomer(id));
+});
 
-ipcMain.handle('local:getInvoices', async () => ok(() => localDB.getInvoices()));
+ipcMain.handle('local:getInvoices', async () => {
+  console.log('IPC: getInvoices called');
+  return ok(() => localDB.getInvoices());
+});
 
-ipcMain.handle('local:createInvoice', async (_, invoice) => ok(() => localDB.createInvoice(invoice)));
+ipcMain.handle('local:createInvoice', async (_, invoice) => {
+  console.log('IPC: createInvoice called with:', invoice);
+  return ok(() => localDB.createInvoice(invoice));
+});
 
-ipcMain.handle('local:updateInvoice', async (_, id, updates) => ok(() => localDB.updateInvoice(id, updates)));
+ipcMain.handle('local:updateInvoice', async (_, id, updates) => {
+  console.log('IPC: updateInvoice called with ID:', id);
+  return ok(() => localDB.updateInvoice(id, updates));
+});
 
-ipcMain.handle('local:deleteInvoice', async (_, id) => ok(() => localDB.deleteInvoice(id)));
+ipcMain.handle('local:deleteInvoice', async (_, id) => {
+  console.log('IPC: deleteInvoice called with ID:', id);
+  return ok(() => localDB.deleteInvoice(id));
+});
 
 ipcMain.handle('local:getOrders', async () => ok(() => localDB.getOrders()));
 
@@ -205,7 +262,10 @@ ipcMain.handle('local:updateOrder', async (_, id, updates) => ok(() => localDB.u
 ipcMain.handle('local:deleteOrder', async (_, id) => ok(() => localDB.deleteOrder(id)));
 
 // Local database self-test
-ipcMain.handle('local:selfTest', async () => ok(() => localDB.selfTest()));
+ipcMain.handle('local:selfTest', async () => {
+  console.log('IPC: selfTest called');
+  return ok(() => localDB.selfTest());
+});
 
 // Roles handlers
 ipcMain.handle('local:getRoles', async () => ok(() => (localDB as any).getRoles()));

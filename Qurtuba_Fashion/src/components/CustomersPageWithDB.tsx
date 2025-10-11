@@ -29,6 +29,13 @@ export function CustomersPageWithDB({ onCustomerSelect }: CustomersPageWithDBPro
 				isOpen={isInvoiceDialogOpen}
 				onOpenChange={(open) => setIsInvoiceDialogOpen(open)}
 				prefillCustomer={prefill || undefined}
+				onInvoiceCreated={async () => {
+					// Refresh data after creating a new invoice
+					const { queryClient } = await import('@/app/queryClient');
+					queryClient.invalidateQueries({ queryKey: ['invoices'] });
+					queryClient.invalidateQueries({ queryKey: ['customers'] });
+					queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+				}}
 			/>
 		</>
 	);

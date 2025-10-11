@@ -6,7 +6,7 @@ import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Button } from './ui/button';
-import { X, Plus, Pencil, Trash2, Check, ChevronDown, Camera } from 'lucide-react';
+import { X, Plus, Pencil, Trash2, Check, ChevronDown, Camera, AlertCircle } from 'lucide-react';
 import { InvoiceService, InvoiceFormData } from '@/services/invoice.service';
 import { useInvoices } from '@/hooks/useInvoices';
 import { ImageUpload } from './ui/ImageUpload';
@@ -122,6 +122,7 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated,
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [isCapturing, setIsCapturing] = useState(false);
+  const [cameraAvailable, setCameraAvailable] = useState<boolean | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -134,14 +135,42 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated,
     }
   };
 
+  // Check if camera is available on the device
+  const checkCameraAvailability = async (): Promise<{ available: boolean; message?: string }> => {
+    try {
+      if (!('mediaDevices' in navigator) || !navigator.mediaDevices?.getUserMedia) {
+        return { available: false, message: 'المتصفح لا يدعم الوصول للكاميرا.' };
+      }
+
+      // Check if we're in a secure context (required for camera access)
+      if (!window.isSecureContext && location.protocol !== 'https:' && location.hostname !== 'localhost') {
+        return { available: false, message: 'يتطلب HTTPS للوصول للكاميرا.' };
+      }
+
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const videoDevices = devices.filter(device => device.kind === 'videoinput');
+      
+      if (videoDevices.length === 0) {
+        return { available: false, message: 'لا توجد كاميرا متاحة على هذا الجهاز.' };
+      }
+
+      return { available: true };
+    } catch (err) {
+      console.error('Error checking camera availability:', err);
+      return { available: false, message: 'تعذر التحقق من توفر الكاميرا.' };
+    }
+  };
+
   // Map getUserMedia error to friendly message
   const getCameraErrorMessage = (err: any): string => {
     const name = err?.name || '';
+    const message = err?.message || '';
+    
     if (name === 'NotAllowedError' || name === 'SecurityError' || name === 'PermissionDeniedError') {
       return 'تم رفض إذن الوصول للكاميرا. امنح الإذن من المتصفح وإعدادات Windows > الخصوصية والأمان > الكاميرا.';
     }
     if (name === 'NotFoundError' || name === 'OverconstrainedError') {
-      return 'لا توجد كاميرا متاحة أو لا يمكن العثور عليها.';
+      return 'لا توجد كاميرا متاحة أو لا يمكن العثور عليها. تأكد من توصيل الكاميرا أو كاميرا الويب.';
     }
     if (name === 'NotReadableError' || name === 'TrackStartError') {
       return 'الكاميرا قيد الاستخدام من تطبيق آخر. أغلقه وحاول مجدداً.';
@@ -152,8 +181,23 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated,
     if (name === 'TypeError') {
       return 'لا يمكن فتح الكاميرا على هذه الصفحة. تأكد من استخدام Localhost أو HTTPS.';
     }
+    if (name === 'NotSupportedError') {
+      return 'المتصفح لا يدعم الوصول للكاميرا. جرب متصفح آخر.';
+    }
+    if (message.includes('device not found') || message.includes('NotFoundError')) {
+      return 'لا توجد كاميرا متصلة بالجهاز. تأكد من توصيل كاميرا الويب أو الكاميرا الخارجية.';
+    }
     return 'تعذر فتح الكاميرا. تحقق من الأذونات ثم حاول مجدداً.';
   };
+
+  // Check camera availability on mount
+  useEffect(() => {
+    const checkCamera = async () => {
+      const availability = await checkCameraAvailability();
+      setCameraAvailable(availability.available);
+    };
+    checkCamera();
+  }, []);
 
   // Cleanup when dialog closes or component unmounts
   useEffect(() => {
@@ -1502,35 +1546,78 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated,
                   type="button"
                   variant="outline"
                   size="sm"
-                  onClick={() => {
+                  disabled={cameraAvailable === false}
+                  onClick={async () => {
                     setCameraError(null);
                     setIsCameraOpen(true);
-                    // Start camera stream
-                    setTimeout(async () => {
+                    
+                    // First check if camera is available
+                    const availability = await checkCameraAvailability();
+                    if (!availability.available) {
+                      setCameraError(availability.message || 'لا يمكن الوصول للكاميرا.');
+                      return;
+                    }
+                    
+                    try {
+                      // Try to get camera stream with optimal constraints
+                      const constraints: MediaStreamConstraints = {
+                        video: { 
+                          facingMode: { ideal: 'environment' },
+                          width: { ideal: 1280, min: 640 },
+                          height: { ideal: 720, min: 480 },
+                          frameRate: { ideal: 30, min: 15 }
+                        },
+                        audio: false,
+                      };
+                      
+                      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                      if (videoRef.current) {
+                        videoRef.current.srcObject = stream as any;
+                        await videoRef.current.play();
+                      }
+                    } catch (err) {
+                      console.error('Camera access error:', err);
+                      
+                      // Try with more permissive constraints if the first attempt fails
                       try {
-                        if (!('mediaDevices' in navigator) || !navigator.mediaDevices?.getUserMedia) {
-                          setCameraError('المتصفح لا يدعم الوصول للكاميرا.');
-                          return;
-                        }
-                        const constraints: MediaStreamConstraints = {
-                          video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
+                        const fallbackConstraints: MediaStreamConstraints = {
+                          video: { 
+                            width: { min: 320 },
+                            height: { min: 240 }
+                          },
                           audio: false,
                         };
-                        const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                        const stream = await navigator.mediaDevices.getUserMedia(fallbackConstraints);
                         if (videoRef.current) {
                           videoRef.current.srcObject = stream as any;
                           await videoRef.current.play();
                         }
-                      } catch (err) {
-                        setCameraError(getCameraErrorMessage(err));
+                      } catch (fallbackErr) {
+                        console.error('Fallback camera access error:', fallbackErr);
+                        setCameraError(getCameraErrorMessage(fallbackErr));
                       }
-                    }, 0);
+                    }
                   }}
-                  className="border-[#C69A72] text-[#13312A] hover:bg-[#C69A72]"
+                  className={cn(
+                    "border-[#C69A72] text-[#13312A] hover:bg-[#C69A72]",
+                    cameraAvailable === false && "opacity-50 cursor-not-allowed"
+                  )}
                 >
                   <Camera className="h-4 w-4" />
-                  <span className="arabic-text">فتح الكاميرا</span>
+                  <span className="arabic-text">
+                    {cameraAvailable === false ? 'الكاميرا غير متاحة' : 'فتح الكاميرا'}
+                  </span>
                 </Button>
+                {cameraAvailable === false && (
+                  <div className="text-xs text-gray-500 arabic-text">
+                    استخدم زر "رفع صورة" كبديل
+                  </div>
+                )}
+                {cameraAvailable === null && (
+                  <div className="text-xs text-gray-500 arabic-text">
+                    جاري التحقق من توفر الكاميرا...
+                  </div>
+                )}
               </div>
               </div>
             </CardContent>
@@ -1609,7 +1696,33 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated,
           </DialogHeader>
           <div className="space-y-3">
             {cameraError && (
-              <div className="text-red-600 text-sm arabic-text">{cameraError}</div>
+              <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                <div className="flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0" />
+                  <div className="text-red-600 text-sm arabic-text">{cameraError}</div>
+                </div>
+                <div className="mt-2 text-xs text-red-500 arabic-text">
+                  يمكنك استخدام زر "رفع صورة" كبديل لالتقاط الصور من الكاميرا.
+                </div>
+                <div className="mt-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={async () => {
+                      setCameraError(null);
+                      const availability = await checkCameraAvailability();
+                      setCameraAvailable(availability.available);
+                      if (!availability.available) {
+                        setCameraError(availability.message || 'لا يمكن الوصول للكاميرا.');
+                      }
+                    }}
+                    className="text-xs border-red-300 text-red-600 hover:bg-red-100"
+                  >
+                    إعادة المحاولة
+                  </Button>
+                </div>
+              </div>
             )}
             <div className="w-full aspect-video bg-black/30 rounded-lg overflow-hidden flex items-center justify-center">
               <video ref={videoRef} playsInline className="w-full h-full object-contain" />
