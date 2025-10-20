@@ -155,6 +155,19 @@ class RolesService {
 
   private readCache<T>(key: string, fallback: T): T {
     try {
+      const api = (window as any).electronAPI;
+      if (api?.cache?.readJson) {
+        // Prefer persistent cache file in Electron production
+        const res = api.cache.readJson(key);
+        // Support both sync-like and promise-like invocation across environments
+        if (res && typeof res.then === 'function') {
+          // This branch is not used here; readCache remains sync in renderer; fall back to localStorage
+        } else if (res?.ok) {
+          return (res.data ?? fallback) as T;
+        }
+      }
+    } catch {}
+    try {
       const raw = localStorage.getItem(key);
       if (!raw) return fallback;
       return JSON.parse(raw) as T;
@@ -165,10 +178,14 @@ class RolesService {
 
   private writeCache<T>(key: string, value: T): void {
     try {
+      const api = (window as any).electronAPI;
+      if (api?.cache?.writeJson) {
+        void api.cache.writeJson(key, value);
+      }
+    } catch {}
+    try {
       localStorage.setItem(key, JSON.stringify(value));
-    } catch {
-      // ignore
-    }
+    } catch {}
   }
 
   // Get all roles
@@ -551,19 +568,46 @@ class RolesService {
 
   // Map Supabase role to Role interface
   private mapSupabaseRoleToRole(data: any): Role {
+    const allowedPages = Array.isArray(data.allowedPages) ? data.allowedPages
+      : Array.isArray(data.allowed_pages) ? data.allowed_pages
+      : typeof data.allowedPages === 'string' ? safeParseArray(data.allowedPages)
+      : typeof data.allowed_pages === 'string' ? safeParseArray(data.allowed_pages)
+      : [];
+
+    const allowedActions = Array.isArray(data.allowedActions) ? data.allowedActions
+      : Array.isArray(data.allowed_actions) ? data.allowed_actions
+      : typeof data.allowedActions === 'string' ? safeParseArray(data.allowedActions)
+      : typeof data.allowed_actions === 'string' ? safeParseArray(data.allowed_actions)
+      : [];
+
+    const permissions = Array.isArray(data.permissions) ? data.permissions
+      : typeof data.permissions === 'string' ? safeParseArray(data.permissions)
+      : [];
+
     const role: Role = {
-      id: data.id,
-      name: sanitizeArabicText(data.name),
-      description: sanitizeArabicText(data.description),
-      permissions: data.permissions || [],
-      allowedPages: data.allowed_pages || [],
-      allowedActions: data.allowed_actions || [],
-      isActive: data.is_active,
-      created_at: data.created_at,
-      updated_at: data.updated_at
+      id: String(data.id),
+      name: sanitizeArabicText(String(data.name ?? '')),
+      description: sanitizeArabicText(String(data.description ?? '')),
+      permissions,
+      allowedPages,
+      allowedActions,
+      isActive: Boolean(data.is_active ?? data.isActive ?? true),
+      created_at: String(data.created_at ?? new Date().toISOString()),
+      updated_at: data.updated_at ? String(data.updated_at) : undefined
     };
     return sanitizeRole(role);
   }
 }
 
 export const rolesService = RolesService.getInstance();
+
+// Helper: parse JSON arrays safely and normalize primitives to strings
+function safeParseArray(input: string | any): string[] {
+  try {
+    const parsed = typeof input === 'string' ? JSON.parse(input) : input;
+    if (Array.isArray(parsed)) return parsed.map(v => String(v));
+    return [];
+  } catch {
+    return [];
+  }
+}

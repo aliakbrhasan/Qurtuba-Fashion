@@ -7,6 +7,7 @@ class LocalAuthService {
   private readonly STORAGE_KEY = 'qurtuba_auth';
   private readonly REMEMBER_KEY = 'qurtuba_remember';
   private readonly USERS_STORAGE_KEY = 'qurtuba_users_store_v1';
+  private readonly USERS_CACHE_FILE_KEY = 'users_store_v1';
 
   // Mock users for local testing
   private mockUsers: User[] = [
@@ -86,6 +87,17 @@ class LocalAuthService {
 
   private loadUsersFromStorage(): void {
     try {
+      // Prefer Electron persistent cache file when available
+      const api = (window as any).electronAPI;
+      if (api?.cache?.readJson) {
+        const res = api.cache.readJson(this.USERS_CACHE_FILE_KEY);
+        if (res && res.ok && Array.isArray(res.data)) {
+          this.mockUsers = res.data as User[];
+          return;
+        }
+      }
+    } catch {}
+    try {
       const raw = localStorage.getItem(this.USERS_STORAGE_KEY);
       if (raw) {
         const parsed = JSON.parse(raw);
@@ -103,6 +115,12 @@ class LocalAuthService {
   }
 
   private saveUsersToStorage(): void {
+    try {
+      const api = (window as any).electronAPI;
+      if (api?.cache?.writeJson) {
+        void api.cache.writeJson(this.USERS_CACHE_FILE_KEY, this.mockUsers);
+      }
+    } catch {}
     try {
       localStorage.setItem(this.USERS_STORAGE_KEY, JSON.stringify(this.mockUsers));
     } catch {}

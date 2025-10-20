@@ -112,6 +112,12 @@ const electronAPI = {
     delete: (path: string) => ipcRenderer.invoke('image:delete', path),
     getPublicUrl: (path: string) => ipcRenderer.invoke('image:getPublicUrl', path),
   },
+
+  // Persistent JSON cache
+  cache: {
+    readJson: (key: string) => ipcRenderer.invoke('cache:readJson', key),
+    writeJson: (key: string, data: any) => ipcRenderer.invoke('cache:writeJson', { key, data }),
+  },
 };
 
 // Expose the API to the renderer process

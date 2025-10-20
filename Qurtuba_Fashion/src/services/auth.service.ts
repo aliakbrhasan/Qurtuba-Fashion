@@ -135,7 +135,7 @@ class AuthService {
       phone: row.phone,
       status: row.status,
       role: roleName,
-      is_active: row.is_active,
+      is_active: typeof row.is_active === 'boolean' ? row.is_active : Boolean(row.is_active),
       created_at: row.created_at,
       last_login: row.last_login
     };
@@ -483,7 +483,13 @@ class AuthService {
         const api = (window as any).electronAPI;
         const res = await api.auth.listUsers();
         if (!res?.ok) throw new Error('فشل في جلب المستخدمين');
-        return (res.data || []).map((u: any) => this.normalizeUserRow(u));
+        const rows = Array.isArray(res.data) ? res.data : [];
+        // If desktop local mode returns empty, fallback to local auth users to keep page functional
+        if (rows.length === 0) {
+          const local = await localAuthService.getUsers();
+          return local.map((u: any) => this.normalizeUserRow(u));
+        }
+        return rows.map((u: any) => this.normalizeUserRow(u));
       } catch (dbError) {
         console.log('Database unavailable, using local authentication for users');
         // Fallback to local auth

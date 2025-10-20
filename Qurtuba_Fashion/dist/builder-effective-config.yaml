@@ -13,6 +13,7 @@ asarUnpack:
   - node_modules/sqlite3/**
   - '**/*.node'
   - node_modules/sqlite3/build/Release/**
+  - dist-electron/**/*
 extraResources:
   - from: build/fonts
     to: fonts

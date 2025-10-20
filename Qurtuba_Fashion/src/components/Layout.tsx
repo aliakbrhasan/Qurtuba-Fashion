@@ -31,13 +31,29 @@ export function Layout({ children, currentPage, onNavigate, isLoggedIn, onLogout
       const { storage } = await import('@/storage');
       if (typeof (storage as any).exportAll === 'function') {
         const data = await (storage as any).exportAll();
-        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `qurtuba-backup-${new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')}.json`;
-        a.click();
-        URL.revokeObjectURL(url);
+        const json = JSON.stringify(data, null, 2);
+        const defaultName = `qurtuba-backup-${new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')}.json`;
+        const isElectron = typeof window !== 'undefined' && (window as any).electronAPI;
+        if (isElectron) {
+          try {
+            const result = await (window as any).electronAPI.showSaveDialog({
+              title: 'حفظ النسخة الاحتياطية',
+              defaultPath: defaultName,
+              filters: [{ name: 'JSON', extensions: ['json'] }]
+            });
+            if (!result?.canceled && result?.filePath) {
+              await (window as any).electronAPI.saveFile(json, result.filePath);
+            }
+          } catch {}
+        } else {
+          const blob = new Blob([json], { type: 'application/json' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = defaultName;
+          a.click();
+          URL.revokeObjectURL(url);
+        }
       }
     } finally { setExporting(false); }
   };
@@ -213,6 +229,17 @@ export function Layout({ children, currentPage, onNavigate, isLoggedIn, onLogout
                   </span>
                 )}
               </Button>
+            </div>
+            <div className="flex items-center gap-2">
+              <button onClick={handleExport} disabled={exporting} className="inline-flex items-center gap-2 bg-[#C69A72] text-[#13312A] rounded px-3 py-2 text-sm">
+                <Download size={16} />
+                <span className="arabic-text">تصدير</span>
+              </button>
+              <label className="inline-flex items-center gap-2 bg-[#C69A72] text-[#13312A] rounded px-3 py-2 text-sm cursor-pointer" title={importing ? 'جاري الاستيراد...' : 'استيراد نسخة احتياطية'}>
+                <Upload size={16} />
+                <span className="arabic-text">استيراد</span>
+                <input type="file" accept="application/json" className="hidden" onChange={(e) => e.target.files && e.target.files[0] && handleImport(e.target.files[0])} />
+              </label>
             </div>
             {currentUser && (
               <div className="flex items-center gap-2 text-[#F6E9CA]">

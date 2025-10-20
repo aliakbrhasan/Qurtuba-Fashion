@@ -43,23 +43,27 @@ const Database = class {
   prepare(sql: string) {
     const stmt = this.db.prepare(sql);
     return {
-      run: (params: any) => new Promise((resolve, reject) => {
-        stmt.run(params, function(this: any, err: any) {
+      run: (...params: any[]) => new Promise((resolve, reject) => {
+        // Forward all parameters correctly to sqlite3
+        // eslint-disable-next-line prefer-spread
+        stmt.run.apply(stmt, params.concat(function(this: any, err: any) {
           if (err) reject(err);
           else resolve({ lastInsertRowid: this.lastID });
-        });
+        }));
       }),
-      get: (params: any) => new Promise((resolve, reject) => {
-        stmt.get(params, (err: any, row: any) => {
+      get: (...params: any[]) => new Promise((resolve, reject) => {
+        // eslint-disable-next-line prefer-spread
+        stmt.get.apply(stmt, params.concat((err: any, row: any) => {
           if (err) reject(err);
           else resolve(row);
-        });
+        }));
       }),
-      all: (params: any) => new Promise((resolve, reject) => {
-        stmt.all(params, (err: any, rows: any) => {
+      all: (...params: any[]) => new Promise((resolve, reject) => {
+        // eslint-disable-next-line prefer-spread
+        stmt.all.apply(stmt, params.concat((err: any, rows: any) => {
           if (err) reject(err);
           else resolve(rows);
-        });
+        }));
       }),
       finalize: () => {
         stmt.finalize();
@@ -109,6 +113,23 @@ export interface LocalInvoice {
   synced: boolean;
 }
 
+export interface LocalUser {
+  id: string;
+  code: string;
+  name: string;
+  email: string;
+  phone?: string;
+  password_hash?: string | null;
+  status: string;
+  role?: string | null;
+  role_id?: string | null;
+  is_active: number; // 1 or 0
+  created_at: string;
+  updated_at: string;
+  last_login?: string | null;
+  deleted?: number; // 0 or 1
+}
+
 export interface LocalOrder {
   id: string;
   customer_id: string;
@@ -153,6 +174,7 @@ export class LocalDatabase {
       await this.db.pragma('PRAGMA foreign_keys = ON');
       await this.createTables();
       console.log('Database tables created successfully');
+      await this.seedInitialUsersIfEmpty();
     } catch (err) {
       console.error('Error opening database:', err);
       console.error('Database path:', this.dbPath);
@@ -178,6 +200,27 @@ export class LocalDatabase {
 
   private async createTables(): Promise<void> {
     if (!this.db) throw new Error('Database not initialized');
+
+    // Users table
+    await this.run(`
+      CREATE TABLE IF NOT EXISTS users (
+        id TEXT PRIMARY KEY,
+        code TEXT NOT NULL UNIQUE,
+        name TEXT NOT NULL,
+        email TEXT NOT NULL UNIQUE,
+        phone TEXT,
+        password_hash TEXT,
+        status TEXT NOT NULL,
+        role TEXT,
+        role_id TEXT,
+        is_active INTEGER NOT NULL DEFAULT 1,
+        version INTEGER NOT NULL DEFAULT 1,
+        deleted INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        last_login TEXT
+      )
+    `);
 
     // Customers table
     await this.run(`
@@ -297,6 +340,210 @@ export class LocalDatabase {
     await this.run(`CREATE INDEX IF NOT EXISTS idx_outbox_table ON outbox(table_name, record_id)`);
   }
 
+  private async seedInitialUsersIfEmpty(): Promise<void> {
+    if (!this.db) throw new Error('Database not initialized');
+    try {
+      const row = await this.get<{ cnt: number } | undefined>('SELECT COUNT(*) as cnt FROM users WHERE deleted = 0');
+      const count = row?.cnt ?? 0;
+      if (count > 0) return;
+
+      const now = new Date().toISOString();
+      const seed = [
+        {
+          id: this.generateId(),
+          code: 'ADMIN001',
+          name: 'مدير النظام',
+          email: 'admin@qurtuba.com',
+          phone: '07701234567',
+          password_hash: null,
+          status: 'ادمن',
+          role: 'مدير النظام',
+          role_id: null,
+          is_active: 1,
+          created_at: now,
+          updated_at: now,
+          last_login: null
+        },
+        {
+          id: this.generateId(),
+          code: 'EMP001',
+          name: 'أحمد محمد',
+          email: 'ahmed@qurtuba.com',
+          phone: '07701234568',
+          password_hash: null,
+          status: 'موظف',
+          role: 'مندوب مبيعات',
+          role_id: null,
+          is_active: 1,
+          created_at: now,
+          updated_at: now,
+          last_login: null
+        },
+        {
+          id: this.generateId(),
+          code: 'ACC001',
+          name: 'فاطمة علي',
+          email: 'fatima@qurtuba.com',
+          phone: '07701234569',
+          password_hash: null,
+          status: 'محاسب',
+          role: 'محاسب مالي',
+          role_id: null,
+          is_active: 1,
+          created_at: now,
+          updated_at: now,
+          last_login: null
+        }
+      ];
+      for (const u of seed) {
+        await this.run(
+          `INSERT INTO users (id, code, name, email, phone, password_hash, status, role, role_id, is_active, version, deleted, created_at, updated_at, last_login)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0, ?, ?, ?)`,
+          [u.id, u.code, u.name, u.email, u.phone, u.password_hash, u.status, u.role, u.role_id, u.is_active, u.created_at, u.updated_at, u.last_login]
+        );
+      }
+    } catch (e) {
+      // Non-fatal
+      console.warn('Seed users failed:', e);
+    }
+  }
+
+  // Users methods
+  async getUsers(): Promise<LocalUser[]> {
+    if (!this.db) throw new Error('Database not initialized');
+    const rows = await this.all<LocalUser>(
+      'SELECT * FROM users WHERE deleted = 0 ORDER BY created_at DESC'
+    );
+    return rows;
+  }
+
+  async findUserByEmail(email: string): Promise<LocalUser | null> {
+    if (!this.db) throw new Error('Database not initialized');
+    const row = await this.get<LocalUser | undefined>(
+      'SELECT * FROM users WHERE LOWER(email) = LOWER(?) AND deleted = 0 LIMIT 1',
+      [email]
+    );
+    return row ?? null;
+  }
+
+  async checkEmailExists(email: string): Promise<boolean> {
+    if (!this.db) throw new Error('Database not initialized');
+    const row = await this.get<{ exists: number } | undefined>(
+      'SELECT 1 as exists FROM users WHERE LOWER(email) = LOWER(?) AND deleted = 0 LIMIT 1',
+      [email]
+    );
+    return !!row;
+  }
+
+  async checkCodeExists(code: string): Promise<boolean> {
+    if (!this.db) throw new Error('Database not initialized');
+    const row = await this.get<{ exists: number } | undefined>(
+      'SELECT 1 as exists FROM users WHERE code = ? AND deleted = 0 LIMIT 1',
+      [code]
+    );
+    return !!row;
+  }
+
+  async createUser(user: {
+    code: string;
+    name: string;
+    email: string;
+    phone?: string;
+    password_hash?: string | null;
+    status: string;
+    role?: string | null;
+    role_id?: string | null;
+    is_active?: boolean;
+  }): Promise<LocalUser> {
+    if (!this.db) throw new Error('Database not initialized');
+    const id = this.generateId();
+    const now = new Date().toISOString();
+
+    await this.run(
+      `INSERT INTO users (id, code, name, email, phone, password_hash, status, role, role_id, is_active, version, deleted, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0, ?, ?)`,
+      [
+        id,
+        user.code,
+        user.name,
+        user.email,
+        user.phone ?? null,
+        user.password_hash ?? null,
+        user.status,
+        user.role ?? null,
+        user.role_id ?? null,
+        user.is_active === false ? 0 : 1,
+        now,
+        now
+      ]
+    );
+
+    const row = await this.get<LocalUser>('SELECT * FROM users WHERE id = ?', [id]);
+    await this.enqueueOutbox('users', id, 'insert', row);
+    return row;
+  }
+
+  async updateUser(id: string, updates: Partial<LocalUser>): Promise<LocalUser> {
+    if (!this.db) throw new Error('Database not initialized');
+    const now = new Date().toISOString();
+    const allowedKeys = new Set([
+      'code',
+      'name',
+      'email',
+      'phone',
+      'password_hash',
+      'status',
+      'role',
+      'role_id',
+      'is_active',
+      'last_login'
+    ]);
+    const toSet: string[] = [];
+    const vals: any[] = [];
+    for (const [k, v] of Object.entries(updates)) {
+      if (!allowedKeys.has(k)) continue;
+      if (k === 'is_active') {
+        toSet.push('is_active = ?');
+        vals.push(v ? 1 : 0);
+      } else {
+        toSet.push(`${k} = ?`);
+        vals.push(v);
+      }
+    }
+    if (toSet.length === 0) {
+      const row = await this.get<LocalUser>('SELECT * FROM users WHERE id = ?', [id]);
+      return row;
+    }
+    await this.run(
+      `UPDATE users SET ${toSet.join(', ')}, updated_at = ?, version = version + 1 WHERE id = ?`,
+      [...vals, now, id]
+    );
+    const row = await this.get<LocalUser>('SELECT * FROM users WHERE id = ?', [id]);
+    await this.enqueueOutbox('users', id, 'update', row);
+    return row;
+  }
+
+  async deleteUser(id: string): Promise<void> {
+    if (!this.db) throw new Error('Database not initialized');
+    const now = new Date().toISOString();
+    await this.run('UPDATE users SET deleted = 1, updated_at = ?, version = version + 1 WHERE id = ?', [now, id]);
+    await this.enqueueOutbox('users', id, 'delete', { id, deleted: 1, updated_at: now });
+  }
+
+  async updateLastLogin(id: string): Promise<boolean> {
+    if (!this.db) throw new Error('Database not initialized');
+    const now = new Date().toISOString();
+    await this.run('UPDATE users SET last_login = ?, updated_at = ?, version = version + 1 WHERE id = ?', [now, now, id]);
+    return true;
+  }
+
+  async updatePassword(id: string, password_hash: string): Promise<boolean> {
+    if (!this.db) throw new Error('Database not initialized');
+    const now = new Date().toISOString();
+    await this.run('UPDATE users SET password_hash = ?, updated_at = ?, version = version + 1 WHERE id = ?', [password_hash, now, id]);
+    return true;
+  }
+
   // Customer methods
   async getCustomers(): Promise<LocalCustomer[]> {
     if (!this.db) throw new Error('Database not initialized');
@@ -352,14 +599,24 @@ export class LocalDatabase {
     if (!this.db) throw new Error('Database not initialized');
     
     const now = new Date().toISOString();
-    const setClause = Object.keys(updates)
-      .filter(key => key !== 'id' && key !== 'created_at')
-      .map(key => `${key} = ?`)
-      .join(', ');
-    
-    const values = Object.values(updates).filter((_, index) => 
-      Object.keys(updates)[index] !== 'id' && Object.keys(updates)[index] !== 'created_at'
-    );
+    // Map camelCase payload keys to snake_case DB columns
+    const keyMap: Record<string, string> = {
+      totalSpent: 'total_spent',
+      lastOrder: 'last_order',
+    };
+    const entries = Object.entries(updates).filter(([k]) => k !== 'id' && k !== 'created_at');
+    const columns: string[] = [];
+    const values: any[] = [];
+    for (const [k, v] of entries) {
+      const col = keyMap[k] || k;
+      columns.push(`${col} = ?`);
+      if (col === 'measurements') {
+        values.push(JSON.stringify(v));
+      } else {
+        values.push(v);
+      }
+    }
+    const setClause = columns.join(', ');
     
     const versionUpdate = options?.fromCloud ? '' : ', version = version + 1';
     await this.run(`UPDATE customers SET ${setClause}, updated_at = ?${versionUpdate} WHERE id = ?`, [...values, now, id]);
@@ -941,7 +1198,7 @@ export class LocalDatabase {
       } as any);
       lines.push(`✅ تم إنشاء عميل تجريبي: ${cust.id}`);
 
-      // 2) Create test invoice with image URL (text field)
+      // 2) Create test invoice (no external image to avoid 404s)
       const inv = await this.createInvoice({
         customer_id: cust.id,
         customer_name: 'Test Customer (LocalDB SelfTest)',
@@ -953,16 +1210,13 @@ export class LocalDatabase {
         invoice_date: nowIso,
         due_date: nowIso,
         notes: 'SelfTest Invoice',
-        fabric_image_url: 'https://example.com/selftest-image.jpg'
+        fabric_image_url: null
       } as any);
       lines.push(`✅ تم إنشاء فاتورة تجريبية: ${inv.id}`);
-
-      // Verify image URL persisted
+      // Verify invoice persisted
       const fetchedInv = await this.get<LocalInvoice>('SELECT * FROM invoices WHERE id = ?', [inv.id]);
-      if (fetchedInv?.fabric_image_url === 'https://example.com/selftest-image.jpg') {
-        lines.push('✅ تم حفظ رابط صورة القماش داخل القاعدة المحلية (حقل نصي)');
-      } else {
-        throw new Error('فشل التحقق من حفظ رابط الصورة في الفاتورة');
+      if (fetchedInv?.id !== inv.id) {
+        throw new Error('فشل التحقق من حفظ الفاتورة');
       }
 
       // 3) Create test order

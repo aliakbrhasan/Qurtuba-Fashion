@@ -1,6 +1,6 @@
 import { app, BrowserWindow, ipcMain, dialog, shell, Menu, Tray, nativeImage, session } from 'electron';
 // Supabase disabled in local-only mode
-import { existsSync, mkdirSync, readdirSync, copyFileSync, lstatSync, writeFileSync, unlinkSync } from 'fs';
+import { existsSync, mkdirSync, readdirSync, copyFileSync, lstatSync, writeFileSync, unlinkSync, readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { pathToFileURL } from 'url';
 import { isDev } from './utils';
@@ -65,7 +65,7 @@ const createWindow = (): void => {
   // Handle camera permissions
   mainWindow.webContents.session.setPermissionRequestHandler((webContents, permission, callback) => {
     if (permission === 'media') {
-      // Grant media permissions (camera and microphone)
+      // Grant media permissions (camera/microphone)
       callback(true);
     } else {
       callback(false);
@@ -93,7 +93,7 @@ const createWindow = (): void => {
   // Additional runtime protections
   mainWindow.webContents.on('will-navigate', (event, url) => {
     // Prevent navigation to arbitrary domains
-    const allowedOrigins = ['http://localhost:3000'];
+    const allowedOrigins = ['http://localhost:3000', 'http://localhost:3001'];
     if (!isDev || !allowedOrigins.some(origin => url.startsWith(origin))) {
       event.preventDefault();
     }
@@ -173,9 +173,39 @@ app.on('web-contents-created', (_evt, contents) => {
   });
 
   contents.session.setPermissionRequestHandler((_wc, permission, callback) => {
-    // Deny all permission requests by default
+    // Allow camera/microphone requests, deny others by default
+    if (permission === 'media') {
+      callback(true);
+      return;
+    }
     callback(false);
   });
+});
+
+// Lightweight persistent JSON cache under userData for renderer (roles/users, etc.)
+ipcMain.handle('cache:readJson', async (_evt, key: string) => {
+  try {
+    const dir = join(app.getPath('userData'), 'qf-cache');
+    const file = join(dir, `${key}.json`);
+    if (!existsSync(file)) return { ok: true, data: null };
+    const raw = readFileSync(file, { encoding: 'utf-8' });
+    const data = JSON.parse(raw);
+    return { ok: true, data };
+  } catch (e: any) {
+    return { ok: false, error: String(e?.message || e) };
+  }
+});
+
+ipcMain.handle('cache:writeJson', async (_evt, args: { key: string; data: any }) => {
+  try {
+    const dir = join(app.getPath('userData'), 'qf-cache');
+    try { mkdirSync(dir, { recursive: true }); } catch {}
+    const file = join(dir, `${args.key}.json`);
+    writeFileSync(file, JSON.stringify(args.data ?? null), { encoding: 'utf-8' });
+    return { ok: true };
+  } catch (e: any) {
+    return { ok: false, error: String(e?.message || e) };
+  }
 });
 
 // IPC Handlers for native functionality
@@ -196,6 +226,17 @@ ipcMain.handle('app:showOpenDialog', async (_, options) => {
 ipcMain.handle('app:showSaveDialog', async (_, options) => {
   if (!mainWindow) return null;
   return await dialog.showSaveDialog(mainWindow, options);
+});
+
+// Simple file save handler used by renderer for backups
+ipcMain.handle('file:save', async (_evt, args: { data: string; filename: string }) => {
+  try {
+    const file = args.filename;
+    writeFileSync(file, args.data ?? '', { encoding: 'utf-8' });
+    return { ok: true };
+  } catch (e: any) {
+    return { ok: false, error: String(e?.message || e) };
+  }
 });
 
 // Helper to standardize IPC responses
@@ -302,16 +343,20 @@ ipcMain.handle('offline:isOnline', () => ok(async () => {
 ipcMain.handle('offline:getOfflineData', async () => ok(() => localDB.getAllOfflineData()));
 
 // AUTH IPC (local-only stubs)
-ipcMain.handle('auth:getRoleIdByName', async (_evt, _name: string) => ok(async () => null));
-ipcMain.handle('auth:findUserByEmail', async (_evt, _email: string) => ok(async () => null));
-ipcMain.handle('auth:updateLastLogin', async (_evt, _id: string) => ok(async () => true));
-ipcMain.handle('auth:checkEmailExists', async (_evt, _email: string) => ok(async () => false));
-ipcMain.handle('auth:checkCodeExists', async (_evt, _code: string) => ok(async () => false));
-ipcMain.handle('auth:createUser', async (_evt, payload: any) => ok(async () => ({ ...payload, id: Date.now().toString(), created_at: new Date().toISOString() })));
-ipcMain.handle('auth:updatePassword', async (_evt, _id: string, _password_hash: string) => ok(async () => true));
-ipcMain.handle('auth:listUsers', async () => ok(async () => []));
-ipcMain.handle('auth:updateUser', async (_evt, _id: string, updates: any) => ok(async () => ({ ...updates })));
-ipcMain.handle('auth:deleteUser', async (_evt, _id: string) => ok(async () => true));
+ipcMain.handle('auth:getRoleIdByName', async (_evt, name: string) => ok(async () => {
+  const roles = await (localDB as any).getRoles();
+  const found = (roles || []).find((r: any) => String(r.name).trim() === String(name).trim());
+  return found ? String(found.id) : null;
+}));
+ipcMain.handle('auth:findUserByEmail', async (_evt, email: string) => ok(async () => (localDB as any).findUserByEmail(email)));
+ipcMain.handle('auth:updateLastLogin', async (_evt, id: string) => ok(async () => (localDB as any).updateLastLogin(id)));
+ipcMain.handle('auth:checkEmailExists', async (_evt, email: string) => ok(async () => (localDB as any).checkEmailExists(email)));
+ipcMain.handle('auth:checkCodeExists', async (_evt, code: string) => ok(async () => (localDB as any).checkCodeExists(code)));
+ipcMain.handle('auth:createUser', async (_evt, payload: any) => ok(async () => (localDB as any).createUser(payload)));
+ipcMain.handle('auth:updatePassword', async (_evt, id: string, password_hash: string) => ok(async () => (localDB as any).updatePassword(id, password_hash)));
+ipcMain.handle('auth:listUsers', async () => ok(async () => (localDB as any).getUsers()));
+ipcMain.handle('auth:updateUser', async (_evt, id: string, updates: any) => ok(async () => (localDB as any).updateUser(id, updates)));
+ipcMain.handle('auth:deleteUser', async (_evt, id: string) => ok(async () => (localDB as any).deleteUser(id)));
 
 // IMAGE STORAGE IPC
 ipcMain.handle('image:upload', async (_evt, args: { buffer: number[]; contentType: string; fileName: string }) => ok(async () => {
