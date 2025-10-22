@@ -1,4 +1,4 @@
-import React from 'react';
+ 
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from './ui/dialog';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
@@ -20,7 +20,7 @@ import {
   X
 } from 'lucide-react';
 import { PrintableInvoice, formatCurrency, formatDate, PrintableInvoiceData } from './PrintableInvoice';
-import { openPrintWindow } from './print/PrintUtils';
+import { openPrintInvoiceWindow } from './print/PrintUtils';
 
 interface InvoiceDetailsDialogProps {
   isOpen: boolean;
@@ -48,7 +48,7 @@ export function InvoiceDetailsDialog({ isOpen, onOpenChange, invoice }: InvoiceD
   const remaining = Math.max(invoice.total - invoice.paid, 0);
 
   const handlePrint = () => {
-    openPrintWindow(`فاتورة ${invoice.id}`, <PrintableInvoice invoice={invoice} />);
+    openPrintInvoiceWindow(`فاتورة ${invoice.id}`, <PrintableInvoice invoice={invoice} />);
   };
 
   const handleShare = async () => {

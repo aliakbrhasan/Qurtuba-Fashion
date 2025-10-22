@@ -23,7 +23,7 @@ import {
 } from 'lucide-react';
 import { Handshake } from 'lucide-react';
 import { formatCurrency, formatDate, PrintableInvoiceData, PrintableInvoice } from './PrintableInvoice';
-import { openPrintWindow } from './print/PrintUtils';
+import { openPrintInvoiceWindow } from './print/PrintUtils';
 import { useImages } from '@/hooks/useImages';
 import { useInvoiceDetails } from '@/hooks/useInvoiceDetails';
 import { useRef, useState } from 'react';
@@ -90,11 +90,12 @@ export function InvoiceDetailsPage({ invoiceId, onBack, onMarkAsPaid }: InvoiceD
     paid: invoice.paid_amount,
     receivedDate: invoice.invoice_date,
     deliveryDate: invoice.due_date || invoice.invoice_date,
+    paymentDate: (invoice as any).paid_at || undefined,
     notes: invoice.notes || ''
   };
 
   const handlePrint = () => {
-    openPrintWindow(`فاتورة ${invoice.invoice_number}`, <PrintableInvoice invoice={printableInvoice} />);
+    openPrintInvoiceWindow(`فاتورة ${invoice.invoice_number}`, <PrintableInvoice invoice={printableInvoice} />);
   };
 
   const handleShare = async () => {

@@ -452,241 +452,7 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false, on
     ));
   };
 
-  const NewCustomerDialog = () => (
-    <Dialog open={isNewCustomerOpen} onOpenChange={setIsNewCustomerOpen}>
-      <DialogContent className="max-w-2xl bg-[#F6E9CA] border-[#C69A72]">
-        <DialogHeader>
-          <DialogTitle className="text-[#13312A] arabic-text">إضافة زبون جديد</DialogTitle>
-          <DialogDescription className="text-[#155446] arabic-text">
-            أدخل بيانات الزبون الجديد
-          </DialogDescription>
-        </DialogHeader>
-        
-        <form className="space-y-6" onSubmit={(e) => { e.preventDefault(); handleCreateCustomer(); }}>
-          <Card className="bg-white border-[#C69A72]">
-            <CardHeader>
-              <CardTitle className="text-[#13312A] arabic-text text-lg">البيانات الأساسية</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <Label className="text-[#13312A] arabic-text">الاسم الكامل</Label>
-                <Input 
-                  placeholder="أدخل الاسم الكامل" 
-                  className="bg-white border-[#C69A72] text-right"
-                  value={newCustomer.name}
-                  onChange={(e) => setNewCustomer({...newCustomer, name: e.target.value})}
-                  required
-                />
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label className="text-[#13312A] arabic-text">رقم الهاتف</Label>
-                  <Input 
-                    placeholder="077xxxxxxxx" 
-                    className="bg-white border-[#C69A72] text-right"
-                    value={newCustomer.phone}
-                    onChange={(e) => setNewCustomer({...newCustomer, phone: e.target.value})}
-                    required
-                  />
-                </div>
-                <div>
-                  <Label className="text-[#13312A] arabic-text">تصنيف الزبون</Label>
-                  <Select 
-                    value={newCustomer.label}
-                    onValueChange={(value: string) => setNewCustomer({...newCustomer, label: value})}
-                  >
-                  <SelectTrigger className="bg-white border-[#C69A72]" aria-label="تصنيف الزبون" title="تصنيف الزبون">
-                      <SelectValue placeholder="اختر التصنيف" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="جديد">جديد</SelectItem>
-                      <SelectItem value="منتظم">منتظم</SelectItem>
-                      <SelectItem value="وفي">وفي</SelectItem>
-                      <SelectItem value="ذهبي">ذهبي</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <div>
-                <Label className="text-[#13312A] arabic-text">العنوان</Label>
-                <Input 
-                  placeholder="أدخل العنوان الكامل" 
-                  className="bg-white border-[#C69A72] text-right"
-                  value={newCustomer.address}
-                  onChange={(e) => setNewCustomer({...newCustomer, address: e.target.value})}
-                />
-              </div>
-            </CardContent>
-          </Card>
-
-          <div className="flex gap-4 justify-end">
-            <Button 
-              type="button"
-              variant="outline" 
-              onClick={() => setIsNewCustomerOpen(false)} 
-              className="border-[#C69A72] text-[#13312A] hover:bg-[#C69A72]"
-              disabled={isCreating}
-            >
-              إلغاء
-            </Button>
-            <Button 
-              type="submit"
-              className="bg-[#155446] hover:bg-[#13312A] text-[#F6E9CA]"
-              disabled={isCreating}
-            >
-              {isCreating ? 'جاري الحفظ...' : 'حفظ الزبون'}
-            </Button>
-          </div>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
-
-  const EditCustomerDialog = () => (
-    <Dialog open={isEditOpen} onOpenChange={(open) => { setIsEditOpen(open); if (!open) setEditDraft(null); }}>
-      <DialogContent className="max-w-2xl bg-[#F6E9CA] border-[#C69A72]">
-        <DialogHeader>
-          <DialogTitle className="text-[#13312A] arabic-text">تعديل بيانات الزبون</DialogTitle>
-          <DialogDescription className="text-[#155446] arabic-text">
-            عدّل الحقول المطلوبة ثم احفظ التغييرات
-          </DialogDescription>
-        </DialogHeader>
-        {editDraft && (
-          <form
-            className="space-y-6"
-            onSubmit={async (e) => {
-              e.preventDefault();
-              try {
-                setIsSavingEdit(true);
-                await databaseService.updateCustomer(String(editDraft.id), {
-                  name: editDraft.name,
-                  phone: editDraft.phone,
-                  address: editDraft.address,
-                  measurements: editDraft.measurements,
-                });
-                setIsEditOpen(false);
-              } catch (err) {
-                console.error('Error updating customer:', err);
-              } finally {
-                setIsSavingEdit(false);
-              }
-            }}
-          >
-            <Card className="bg-white border-[#C69A72]">
-              <CardHeader>
-                <CardTitle className="text-[#13312A] arabic-text text-lg">البيانات الأساسية</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <Label className="text-[#13312A] arabic-text">الاسم الكامل</Label>
-                  <Input
-                    className="bg-white border-[#C69A72] text-right"
-                    value={editDraft.name}
-                    onChange={(e) => setEditDraft({ ...(editDraft as Customer), name: e.target.value })}
-                    required
-                  />
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <Label className="text-[#13312A] arabic-text">رقم الهاتف</Label>
-                    <Input
-                      className="bg-white border-[#C69A72] text-right"
-                      value={editDraft.phone}
-                      onChange={(e) => setEditDraft({ ...(editDraft as Customer), phone: e.target.value })}
-                      required
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-[#13312A] arabic-text">العنوان</Label>
-                    <Input
-                      className="bg-white border-[#C69A72] text-right"
-                      value={editDraft.address}
-                      onChange={(e) => setEditDraft({ ...(editDraft as Customer), address: e.target.value })}
-                    />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-white border-[#C69A72]">
-              <CardHeader>
-                <CardTitle className="text-[#13312A] arabic-text text-lg">القياسات</CardTitle>
-              </CardHeader>
-              <CardContent className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div>
-                  <Label className="text-[#13312A] arabic-text">الطول (سم)</Label>
-                  <Input
-                    type="number"
-                    className="bg-white border-[#C69A72] text-right"
-                    value={editDraft.measurements?.height ?? 0}
-                    onChange={(e) => setEditDraft({
-                      ...(editDraft as Customer),
-                      measurements: { ...(editDraft.measurements || {}), height: Number(e.target.value) }
-                    })}
-                  />
-                </div>
-                <div>
-                  <Label className="text-[#13312A] arabic-text">الكتف (سم)</Label>
-                  <Input
-                    type="number"
-                    className="bg-white border-[#C69A72] text-right"
-                    value={editDraft.measurements?.shoulder ?? 0}
-                    onChange={(e) => setEditDraft({
-                      ...(editDraft as Customer),
-                      measurements: { ...(editDraft.measurements || {}), shoulder: Number(e.target.value) }
-                    })}
-                  />
-                </div>
-                <div>
-                  <Label className="text-[#13312A] arabic-text">الخصر (سم)</Label>
-                  <Input
-                    type="number"
-                    className="bg-white border-[#C69A72] text-right"
-                    value={editDraft.measurements?.waist ?? 0}
-                    onChange={(e) => setEditDraft({
-                      ...(editDraft as Customer),
-                      measurements: { ...(editDraft.measurements || {}), waist: Number(e.target.value) }
-                    })}
-                  />
-                </div>
-                <div>
-                  <Label className="text-[#13312A] arabic-text">الصدر (سم)</Label>
-                  <Input
-                    type="number"
-                    className="bg-white border-[#C69A72] text-right"
-                    value={editDraft.measurements?.chest ?? 0}
-                    onChange={(e) => setEditDraft({
-                      ...(editDraft as Customer),
-                      measurements: { ...(editDraft.measurements || {}), chest: Number(e.target.value) }
-                    })}
-                  />
-                </div>
-              </CardContent>
-            </Card>
-
-            <div className="flex gap-4 justify-end">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setIsEditOpen(false)}
-                className="border-[#C69A72] text-[#13312A] hover:bg-[#C69A72]"
-                disabled={isSavingEdit}
-              >
-                إلغاء
-              </Button>
-              <Button
-                type="submit"
-                className="bg-[#155446] hover:bg-[#13312A] text-[#F6E9CA]"
-                disabled={isSavingEdit}
-              >
-                {isSavingEdit ? 'جاري الحفظ...' : 'حفظ التغييرات'}
-              </Button>
-            </div>
-          </form>
-        )}
-      </DialogContent>
-    </Dialog>
-  );
+  
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#F6E9CA] to-[#FDFBF7]">
@@ -1133,8 +899,239 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false, on
         )}
       </div>
 
-      <NewCustomerDialog />
-      <EditCustomerDialog />
+      {/* Inline New Customer Dialog to avoid remounts on each keypress */}
+      <Dialog open={isNewCustomerOpen} onOpenChange={setIsNewCustomerOpen}>
+        <DialogContent className="max-w-2xl bg-[#F6E9CA] border-[#C69A72]">
+          <DialogHeader>
+            <DialogTitle className="text-[#13312A] arabic-text">إضافة زبون جديد</DialogTitle>
+            <DialogDescription className="text-[#155446] arabic-text">
+              أدخل بيانات الزبون الجديد
+            </DialogDescription>
+          </DialogHeader>
+          
+          <form className="space-y-6" onSubmit={(e) => { e.preventDefault(); handleCreateCustomer(); }}>
+            <Card className="bg-white border-[#C69A72]">
+              <CardHeader>
+                <CardTitle className="text-[#13312A] arabic-text text-lg">البيانات الأساسية</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <Label className="text-[#13312A] arabic-text">الاسم الكامل</Label>
+                  <Input 
+                    placeholder="أدخل الاسم الكامل" 
+                    className="bg-white border-[#C69A72] text-right"
+                    value={newCustomer.name}
+                    onChange={(e) => setNewCustomer({...newCustomer, name: e.target.value})}
+                    required
+                  />
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label className="text-[#13312A] arabic-text">رقم الهاتف</Label>
+                    <Input 
+                      placeholder="077xxxxxxxx" 
+                      className="bg-white border-[#C69A72] text-right"
+                      value={newCustomer.phone}
+                      onChange={(e) => setNewCustomer({...newCustomer, phone: e.target.value})}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-[#13312A] arabic-text">تصنيف الزبون</Label>
+                    <Select 
+                      value={newCustomer.label}
+                      onValueChange={(value: string) => setNewCustomer({...newCustomer, label: value})}
+                    >
+                      <SelectTrigger className="bg-white border-[#C69A72]" aria-label="تصنيف الزبون" title="تصنيف الزبون">
+                        <SelectValue placeholder="اختر التصنيف" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="جديد">جديد</SelectItem>
+                        <SelectItem value="منتظم">منتظم</SelectItem>
+                        <SelectItem value="وفي">وفي</SelectItem>
+                        <SelectItem value="ذهبي">ذهبي</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div>
+                  <Label className="text-[#13312A] arabic-text">العنوان</Label>
+                  <Input 
+                    placeholder="أدخل العنوان الكامل" 
+                    className="bg-white border-[#C69A72] text-right"
+                    value={newCustomer.address}
+                    onChange={(e) => setNewCustomer({...newCustomer, address: e.target.value})}
+                  />
+                </div>
+              </CardContent>
+            </Card>
+
+            <div className="flex gap-4 justify-end">
+              <Button 
+                type="button"
+                variant="outline" 
+                onClick={() => setIsNewCustomerOpen(false)} 
+                className="border-[#C69A72] text-[#13312A] hover:bg-[#C69A72]"
+                disabled={isCreating}
+              >
+                إلغاء
+              </Button>
+              <Button 
+                type="submit"
+                className="bg-[#155446] hover:bg-[#13312A] text-[#F6E9CA]"
+                disabled={isCreating}
+              >
+                {isCreating ? 'جاري الحفظ...' : 'حفظ الزبون'}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Inline Edit Customer Dialog to avoid remounts on each keypress */}
+      <Dialog open={isEditOpen} onOpenChange={(open) => { setIsEditOpen(open); if (!open) setEditDraft(null); }}>
+        <DialogContent className="max-w-2xl bg-[#F6E9CA] border-[#C69A72]">
+          <DialogHeader>
+            <DialogTitle className="text-[#13312A] arabic-text">تعديل بيانات الزبون</DialogTitle>
+            <DialogDescription className="text-[#155446] arabic-text">
+              عدّل الحقول المطلوبة ثم احفظ التغييرات
+            </DialogDescription>
+          </DialogHeader>
+          {editDraft && (
+            <form
+              className="space-y-6"
+              onSubmit={async (e) => {
+                e.preventDefault();
+                try {
+                  setIsSavingEdit(true);
+                  await databaseService.updateCustomer(String(editDraft.id), {
+                    name: editDraft.name,
+                    phone: editDraft.phone,
+                    address: editDraft.address,
+                    measurements: editDraft.measurements,
+                  });
+                  setIsEditOpen(false);
+                } catch (err) {
+                  console.error('Error updating customer:', err);
+                } finally {
+                  setIsSavingEdit(false);
+                }
+              }}
+            >
+              <Card className="bg-white border-[#C69A72]">
+                <CardHeader>
+                  <CardTitle className="text-[#13312A] arabic-text text-lg">البيانات الأساسية</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div>
+                    <Label className="text-[#13312A] arabic-text">الاسم الكامل</Label>
+                    <Input
+                      className="bg-white border-[#C69A72] text-right"
+                      value={editDraft.name}
+                      onChange={(e) => setEditDraft({ ...(editDraft as Customer), name: e.target.value })}
+                      required
+                    />
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <Label className="text-[#13312A] arabic-text">رقم الهاتف</Label>
+                      <Input
+                        className="bg-white border-[#C69A72] text-right"
+                        value={editDraft.phone}
+                        onChange={(e) => setEditDraft({ ...(editDraft as Customer), phone: e.target.value })}
+                        required
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-[#13312A] arabic-text">العنوان</Label>
+                      <Input
+                        className="bg-white border-[#C69A72] text-right"
+                        value={editDraft.address}
+                        onChange={(e) => setEditDraft({ ...(editDraft as Customer), address: e.target.value })}
+                      />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-white border-[#C69A72]">
+                <CardHeader>
+                  <CardTitle className="text-[#13312A] arabic-text text-lg">القياسات</CardTitle>
+                </CardHeader>
+                <CardContent className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div>
+                    <Label className="text-[#13312A] arabic-text">الطول (سم)</Label>
+                    <Input
+                      type="number"
+                      className="bg-white border-[#C69A72] text-right"
+                      value={editDraft.measurements?.height ?? 0}
+                      onChange={(e) => setEditDraft({
+                        ...(editDraft as Customer),
+                        measurements: { ...(editDraft.measurements || {}), height: Number(e.target.value) }
+                      })}
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-[#13312A] arabic-text">الكتف (سم)</Label>
+                    <Input
+                      type="number"
+                      className="bg-white border-[#C69A72] text-right"
+                      value={editDraft.measurements?.shoulder ?? 0}
+                      onChange={(e) => setEditDraft({
+                        ...(editDraft as Customer),
+                        measurements: { ...(editDraft.measurements || {}), shoulder: Number(e.target.value) }
+                      })}
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-[#13312A] arabic-text">الخصر (سم)</Label>
+                    <Input
+                      type="number"
+                      className="bg-white border-[#C69A72] text-right"
+                      value={editDraft.measurements?.waist ?? 0}
+                      onChange={(e) => setEditDraft({
+                        ...(editDraft as Customer),
+                        measurements: { ...(editDraft.measurements || {}), waist: Number(e.target.value) }
+                      })}
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-[#13312A] arabic-text">الصدر (سم)</Label>
+                    <Input
+                      type="number"
+                      className="bg-white border-[#C69A72] text-right"
+                      value={editDraft.measurements?.chest ?? 0}
+                      onChange={(e) => setEditDraft({
+                        ...(editDraft as Customer),
+                        measurements: { ...(editDraft.measurements || {}), chest: Number(e.target.value) }
+                      })}
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+
+              <div className="flex gap-4 justify-end">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setIsEditOpen(false)}
+                  className="border-[#C69A72] text-[#13312A] hover:bg-[#C69A72]"
+                  disabled={isSavingEdit}
+                >
+                  إلغاء
+                </Button>
+                <Button
+                  type="submit"
+                  className="bg-[#155446] hover:bg-[#13312A] text-[#F6E9CA]"
+                  disabled={isSavingEdit}
+                >
+                  {isSavingEdit ? 'جاري الحفظ...' : 'حفظ التغييرات'}
+                </Button>
+              </div>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

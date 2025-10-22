@@ -6,7 +6,7 @@ import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Button } from './ui/button';
-import { X, Plus, Pencil, Trash2, Check, ChevronDown, Camera, AlertCircle } from 'lucide-react';
+import { X, Plus, Pencil, Trash2, Check, ChevronDown, Camera, AlertCircle, User, Ruler, CreditCard, Palette, Image as ImageIcon, Info } from 'lucide-react';
 import { InvoiceService, InvoiceFormData } from '@/services/invoice.service';
 import { useInvoices } from '@/hooks/useInvoices';
 import { ImageUpload } from './ui/ImageUpload';
@@ -828,8 +828,8 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated,
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogOverlay className="fixed inset-0 z-[999] bg-black/50 backdrop-blur-sm" />
-      <DialogContent className="max-w-4xl max-h-[90vh] bg-[#F6E9CA] border-[#C69A72] flex flex-col rounded-xl shadow-2xl">
+      <DialogOverlay className="fixed inset-0 z-[999] bg-black/80" />
+      <DialogContent fullScreen className="bg-[#F6F1E6] flex flex-col">
         <DialogHeader className="flex-shrink-0 relative">
           <Button
             type="button"
@@ -846,14 +846,18 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated,
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex-1 overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-[#C69A72] scrollbar-track-[#F6E9CA] hover:scrollbar-thumb-[#B88A5A]">
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <div className="flex-1 overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-[#C69A72] scrollbar-track-[#F6F1E6] hover:scrollbar-thumb-[#B88A5A]" dir="rtl">
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="grid grid-cols-3 gap-5">
           {/* Customer Information */}
-          <Card className="bg-white border-[#C69A72] rounded-lg shadow-sm">
-            <CardHeader>
-              <CardTitle className="text-[#13312A] arabic-text text-lg">بيانات الزبون</CardTitle>
+          <Card className="bg-white border-[#E6D9C4] rounded-lg shadow-sm">
+            <CardHeader className="py-2 border-b border-[#EEE1CD]">
+              <div className="flex items-center gap-2 px-2">
+                <User className="h-4 w-4 text-[#1F4529]" />
+                <CardTitle className="text-[#13312A] arabic-text text-base">بيانات الزبون</CardTitle>
+              </div>
             </CardHeader>
-            <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-3 py-3">
               <div>
                 <Label className="text-[#13312A] arabic-text">اسم الزبون *</Label>
                 <Input 
@@ -887,17 +891,20 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated,
           </Card>
 
           {/* Measurements */}
-          <Card className="bg-white border-[#C69A72] rounded-lg shadow-sm">
-            <CardHeader>
-              <CardTitle className="text-[#13312A] arabic-text text-lg">القياسات</CardTitle>
+          <Card className="bg-white border-[#E6D9C4] rounded-lg shadow-sm">
+            <CardHeader className="py-2 border-b border-[#EEE1CD]">
+              <div className="flex items-center gap-2 px-2">
+                <Ruler className="h-4 w-4 text-[#1F4529]" />
+                <CardTitle className="text-[#13312A] arabic-text text-base">القياسات</CardTitle>
+              </div>
             </CardHeader>
-            <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <CardContent className="grid grid-cols-2 md:grid-cols-1 gap-3 py-3">
               <div>
                 <Label className="text-[#13312A] arabic-text">الطول (سم)</Label>
                 <Input 
                   type="number"
                   placeholder="0"
-                  className="bg-white border-[#C69A72] text-right"
+                  className="bg-white border-[#C69A72] text-right h-10 py-2"
                   value={formData.measurements?.length || ''}
                   onChange={(e) => setFormData(prev => ({
                     ...prev,
@@ -912,7 +919,7 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated,
                 <Input 
                   type="number"
                   placeholder="0"
-                  className="bg-white border-[#C69A72] text-right"
+                  className="bg-white border-[#C69A72] text-right h-10 py-2"
                   value={formData.measurements?.shoulder || ''}
                   onChange={(e) => setFormData(prev => ({
                     ...prev,
@@ -927,7 +934,7 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated,
                 <Input 
                   type="number"
                   placeholder="0"
-                  className="bg-white border-[#C69A72] text-right"
+                  className="bg-white border-[#C69A72] text-right h-10 py-2"
                   value={formData.measurements?.waist || ''}
                   onChange={(e) => setFormData(prev => ({
                     ...prev,
@@ -942,7 +949,7 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated,
                 <Input 
                   type="number"
                   placeholder="0"
-                  className="bg-white border-[#C69A72] text-right"
+                  className="bg-white border-[#C69A72] text-right h-10 py-2"
                   value={formData.measurements?.chest || ''}
                   onChange={(e) => setFormData(prev => ({
                     ...prev,
@@ -954,14 +961,17 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated,
               </div>
             </CardContent>
           </Card>
-
-
+          </div>
+          <div className="grid grid-cols-3 gap-5">
           {/* Payment Information */}
-          <Card className="bg-white border-[#C69A72] rounded-lg shadow-sm">
-            <CardHeader>
-              <CardTitle className="text-[#13312A] arabic-text text-lg">معلومات الدفع</CardTitle>
+          <Card className="bg-white border-[#E6D9C4] rounded-lg shadow-sm">
+            <CardHeader className="py-2 border-b border-[#EEE1CD]">
+              <div className="flex items-center gap-2 px-2">
+                <CreditCard className="h-4 w-4 text-[#1F4529]" />
+                <CardTitle className="text-[#13312A] arabic-text text-base">معلومات الدفع</CardTitle>
+              </div>
             </CardHeader>
-            <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <CardContent className="grid grid-cols-1 md:grid-cols-1 gap-3 py-3">
               <div>
                 <Label className="text-[#13312A] arabic-text">المجموع</Label>
                 <Input 
@@ -1042,11 +1052,14 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated,
           </Card>
 
           {/* Design Details Section */}
-          <Card className="bg-white border-[#C69A72] rounded-lg shadow-sm">
-            <CardHeader>
-              <CardTitle className="text-[#13312A] arabic-text text-lg">تفاصيل التصميم</CardTitle>
+          <Card className="bg-white border-[#E6D9C4] rounded-lg shadow-sm">
+            <CardHeader className="py-2 border-b border-[#EEE1CD]">
+              <div className="flex items-center gap-2 px-2">
+                <Palette className="h-4 w-4 text-[#1F4529]" />
+                <CardTitle className="text-[#13312A] arabic-text text-base">تفاصيل التصميم</CardTitle>
+              </div>
             </CardHeader>
-            <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <CardContent className="grid grid-cols-1 md:grid-cols-1 gap-3 py-3">
               <div>
                 <Label className="text-[#13312A] arabic-text">نوع القماش</Label>
                 <Popover open={isFabricPopoverOpen} onOpenChange={setIsFabricPopoverOpen}>
@@ -1515,120 +1528,129 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated,
               </div>
             </CardContent>
           </Card>
-
+          </div>
+          <div className="grid grid-cols-3 gap-5">
           {/* Fabric Image Upload Section */}
-          <Card className="bg-white border-[#C69A72] rounded-lg shadow-sm">
-            <CardHeader>
-              <CardTitle className="text-[#13312A] arabic-text text-lg">صورة القماش</CardTitle>
+          <Card className="bg-white border-[#E6D9C4] rounded-lg shadow-sm">
+            <CardHeader className="py-2 border-b border-[#EEE1CD]">
+              <div className="flex items-center gap-2 px-2">
+                <ImageIcon className="h-4 w-4 text-[#1F4529]" />
+                <CardTitle className="text-[#13312A] arabic-text text-base">صورة القماش</CardTitle>
+              </div>
             </CardHeader>
-            <CardContent>
+            <CardContent className="py-3">
               <div>
                 <Label className="text-[#13312A] arabic-text">صورة القماش</Label>
                 <p className="text-xs text-gray-500 mb-2">اختر صورة القماش المستخدم في الطلب</p>
-                <ImageUpload
-                  onImageChange={(imageData, file) => {
-                    setFabricImage(imageData);
-                  if (file) {
-                    const renamed = new File([file], 'fabric.jpg', { type: file.type || 'image/jpeg' });
-                    setFabricImageFile(renamed);
-                  } else {
-                    setFabricImageFile(null);
-                  }
-                  }}
-                  currentImage={fabricImage}
-                  maxSize={2}
-                  maxWidth={800}
-                  maxHeight={600}
-                  quality={0.8}
-                />
-              <div className="mt-3 flex items-center gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={cameraAvailable === false}
-                  onClick={async () => {
-                    setCameraError(null);
-                    setIsCameraOpen(true);
-                    
-                    // First check if camera is available
-                    const availability = await checkCameraAvailability();
-                    if (!availability.available) {
-                      setCameraError(availability.message || 'لا يمكن الوصول للكاميرا.');
-                      return;
-                    }
-                    
-                    try {
-                      // Try to get camera stream with optimal constraints
-                      const constraints: MediaStreamConstraints = {
-                        video: { 
-                          facingMode: { ideal: 'environment' },
-                          width: { ideal: 1280, min: 640 },
-                          height: { ideal: 720, min: 480 },
-                          frameRate: { ideal: 30, min: 15 }
-                        },
-                        audio: false,
-                      };
-                      
-                      const stream = await navigator.mediaDevices.getUserMedia(constraints);
-                      if (videoRef.current) {
-                        videoRef.current.srcObject = stream as any;
-                        await videoRef.current.play();
+                <div className="max-h-[280px] overflow-hidden rounded-md border border-[#C69A72]/40">
+                  <ImageUpload
+                    onImageChange={(imageData, file) => {
+                      setFabricImage(imageData);
+                      if (file) {
+                        const renamed = new File([file], 'fabric.jpg', { type: file.type || 'image/jpeg' });
+                        setFabricImageFile(renamed);
+                      } else {
+                        setFabricImageFile(null);
                       }
-                    } catch (err) {
-                      console.error('Camera access error:', err);
+                    }}
+                    currentImage={fabricImage}
+                    maxSize={2}
+                    maxWidth={800}
+                    maxHeight={600}
+                    quality={0.8}
+                  />
+                </div>
+                <div className="mt-3 flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={cameraAvailable === false}
+                    onClick={async () => {
+                      setCameraError(null);
+                      setIsCameraOpen(true);
                       
-                      // Try with more permissive constraints if the first attempt fails
+                      // First check if camera is available
+                      const availability = await checkCameraAvailability();
+                      if (!availability.available) {
+                        setCameraError(availability.message || 'لا يمكن الوصول للكاميرا.');
+                        return;
+                      }
+                      
                       try {
-                        const fallbackConstraints: MediaStreamConstraints = {
+                        // Try to get camera stream with optimal constraints
+                        const constraints: MediaStreamConstraints = {
                           video: { 
-                            width: { min: 320 },
-                            height: { min: 240 }
+                            facingMode: { ideal: 'environment' },
+                            width: { ideal: 1280, min: 640 },
+                            height: { ideal: 720, min: 480 },
+                            frameRate: { ideal: 30, min: 15 }
                           },
                           audio: false,
                         };
-                        const stream = await navigator.mediaDevices.getUserMedia(fallbackConstraints);
+                        
+                        const stream = await navigator.mediaDevices.getUserMedia(constraints);
                         if (videoRef.current) {
                           videoRef.current.srcObject = stream as any;
                           await videoRef.current.play();
                         }
-                      } catch (fallbackErr) {
-                        console.error('Fallback camera access error:', fallbackErr);
-                        setCameraError(getCameraErrorMessage(fallbackErr));
+                      } catch (err) {
+                        console.error('Camera access error:', err);
+                        
+                        // Try with more permissive constraints if the first attempt fails
+                        try {
+                          const fallbackConstraints: MediaStreamConstraints = {
+                            video: { 
+                              width: { min: 320 },
+                              height: { min: 240 }
+                            },
+                            audio: false,
+                          };
+                          const stream = await navigator.mediaDevices.getUserMedia(fallbackConstraints);
+                          if (videoRef.current) {
+                            videoRef.current.srcObject = stream as any;
+                            await videoRef.current.play();
+                          }
+                        } catch (fallbackErr) {
+                          console.error('Fallback camera access error:', fallbackErr);
+                          setCameraError(getCameraErrorMessage(fallbackErr));
+                        }
                       }
-                    }
-                  }}
-                  className={cn(
-                    "border-[#C69A72] text-[#13312A] hover:bg-[#C69A72]",
-                    cameraAvailable === false && "opacity-50 cursor-not-allowed"
+                    }}
+                    className={cn(
+                      "border-[#C69A72] text-[#13312A] hover:bg-[#C69A72]",
+                      cameraAvailable === false && "opacity-50 cursor-not-allowed"
+                    )}
+                  >
+                    <Camera className="h-4 w-4" />
+                    <span className="arabic-text">
+                      {cameraAvailable === false ? 'الكاميرا غير متاحة' : 'فتح الكاميرا'}
+                    </span>
+                  </Button>
+                  {cameraAvailable === false && (
+                    <div className="text-xs text-gray-500 arabic-text">
+                      استخدم زر "رفع صورة" كبديل
+                    </div>
                   )}
-                >
-                  <Camera className="h-4 w-4" />
-                  <span className="arabic-text">
-                    {cameraAvailable === false ? 'الكاميرا غير متاحة' : 'فتح الكاميرا'}
-                  </span>
-                </Button>
-                {cameraAvailable === false && (
-                  <div className="text-xs text-gray-500 arabic-text">
-                    استخدم زر "رفع صورة" كبديل
-                  </div>
-                )}
-                {cameraAvailable === null && (
-                  <div className="text-xs text-gray-500 arabic-text">
-                    جاري التحقق من توفر الكاميرا...
-                  </div>
-                )}
-              </div>
+                  {cameraAvailable === null && (
+                    <div className="text-xs text-gray-500 arabic-text">
+                      جاري التحقق من توفر الكاميرا...
+                    </div>
+                  )}
+                </div>
               </div>
             </CardContent>
           </Card>
 
           {/* Additional Information */}
-          <Card className="bg-white border-[#C69A72] rounded-lg shadow-sm">
-            <CardHeader>
-              <CardTitle className="text-[#13312A] arabic-text text-lg">معلومات إضافية</CardTitle>
+          <Card className="bg-white border-[#E6D9C4] rounded-lg shadow-sm">
+            <CardHeader className="py-2 border-b border-[#EEE1CD]">
+              <div className="flex items-center gap-2 px-2">
+                <Info className="h-4 w-4 text-[#1F4529]" />
+                <CardTitle className="text-[#13312A] arabic-text text-base">معلومات إضافية</CardTitle>
+              </div>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-3 py-3">
               <div>
                 <Label className="text-[#13312A] arabic-text">تاريخ التسليم</Label>
                 <Input 
@@ -1649,6 +1671,7 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated,
               </div>
             </CardContent>
           </Card>
+          </div>
 
           {/* Error Display */}
           {submitError && (

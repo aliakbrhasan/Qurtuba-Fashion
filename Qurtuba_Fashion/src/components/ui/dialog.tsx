@@ -85,19 +85,32 @@ DialogOverlay.displayName = "DialogOverlay";
 
 const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
-  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
->(({ className, children, ...props }, ref) => (
+  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & { fullScreen?: boolean }
+>(({ className, children, fullScreen = false, ...props }, ref) => (
   <DialogPortal data-slot="dialog-portal">
     <DialogOverlay />
     <div className="fixed inset-0 z-[1000] overflow-y-auto">
-      <div className="flex min-h-full items-center justify-center p-4 sm:p-6">
+      <div
+        className={cn(
+          "flex min-h-full",
+          fullScreen ? "items-stretch justify-start p-0" : "items-center justify-center p-4 sm:p-6",
+        )}
+      >
         <DialogPrimitive.Content
           ref={ref}
           data-slot="dialog-content"
           className={cn(
-            "relative flex max-h-[calc(100dvh-3rem)] w-full max-w-[min(100vw-2rem,90rem)] flex-col overflow-hidden rounded-2xl border border-border/60 bg-background text-foreground shadow-[0_20px_70px_rgba(15,23,42,0.35)] outline-none ring-1 ring-border/40 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 sm:max-h-[calc(100dvh-4rem)]",
+            fullScreen
+              ? "fixed inset-0 flex h-[100dvh] w-[100vw] max-h-none max-w-none flex-col overflow-hidden rounded-none bg-background text-foreground outline-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0"
+              : "relative flex max-h-[calc(100dvh-3rem)] w-full max-w-[min(100vw-2rem,90rem)] flex-col overflow-hidden rounded-2xl border border-border/60 bg-background text-foreground shadow-[0_20px_70px_rgba(15,23,42,0.35)] outline-none ring-1 ring-border/40 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 sm:max-h-[calc(100dvh-4rem)]",
             className,
           )}
+          onEscapeKeyDown={(event: Event) => {
+            event.preventDefault();
+          }}
+          onInteractOutside={(event: Event) => {
+            event.preventDefault();
+          }}
           {...props}
         >
           <div className="scrollbar-thin flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain">

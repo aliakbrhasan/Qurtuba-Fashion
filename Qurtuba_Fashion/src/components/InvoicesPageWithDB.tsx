@@ -1,6 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { renderToStaticMarkup } from 'react-dom/server';
 import { Card, CardContent } from './ui/card';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -37,12 +36,8 @@ import {
   formatDate,
   PrintableInvoiceData,
 } from './PrintableInvoice';
-import { openPrintWindow, formatPrintDateTime } from './print/PrintUtils';
+import { openPrintWindow, openPrintInvoiceWindow, formatPrintDateTime } from './print/PrintUtils';
 
-const RECEIPT_A5_STYLES = `
-  @page { size: A5 landscape; margin: 0.5cm; }
-  @media print { * { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
-`;
 
 type DateParts = {
   year: string;
@@ -384,13 +379,6 @@ export function InvoicesPageWithDB({ onCreateInvoice, onViewInvoiceDetails, onMa
   };
 
   const handlePrintInvoice = (invoice: any) => {
-    const receiptWindow = window.open('', '_blank', 'width=900,height=700');
-
-    if (!receiptWindow) {
-      return;
-    }
-
-    // Transform invoice to PrintableInvoiceData format
     const printableInvoice: PrintableInvoiceData = {
       id: invoice.invoice_number,
       customerName: invoice.customer_name,
@@ -403,31 +391,7 @@ export function InvoicesPageWithDB({ onCreateInvoice, onViewInvoiceDetails, onMa
       paymentDate: invoice.paid_at || undefined,
       notes: invoice.notes || ''
     };
-
-    const markup = renderToStaticMarkup(<PrintableInvoice invoice={printableInvoice} />);
-
-    receiptWindow.document.write(`<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-  <head>
-    <meta charSet="utf-8" />
-    <title>فاتورة ${invoice.invoice_number}</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet" />
-    <style>${RECEIPT_A5_STYLES}</style>
-  </head>
-  <body>
-    ${markup}
-    <script>
-      window.onload = () => {
-        window.focus();
-        setTimeout(() => window.print(), 300);
-      };
-    <\/script>
-  </body>
-</html>`);
-    receiptWindow.document.close();
-    receiptWindow.focus();
+    openPrintInvoiceWindow(`فاتورة ${invoice.invoice_number}`, <PrintableInvoice invoice={printableInvoice} />);
   };
 
   // Enhanced filtering and sorting logic
@@ -1304,7 +1268,7 @@ export function InvoicesPageWithDB({ onCreateInvoice, onViewInvoiceDetails, onMa
       {/* Invoice Details Dialog */}
       {selectedInvoice && (
         <InvoiceDetailsDialog
-          isOpen={isDetailsDialogOpen}
+          isOpen={isPrintDialogOpen ? false : isDetailsDialogOpen}
           onOpenChange={setIsDetailsDialogOpen}
           invoice={selectedInvoice}
         />

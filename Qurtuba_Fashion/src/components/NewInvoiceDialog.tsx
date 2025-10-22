@@ -195,7 +195,8 @@ export function NewInvoiceDialog({ isOpen, onOpenChange }: NewInvoiceDialogProps
 
       // Upload to storage
       const result = await ImageService.uploadImage(fileToUpload, 'fabric-images');
-      return result.publicUrl;
+      // Support both ImageUploadResult (publicUrl) and ImageRecord (data_url)
+      return (result as any).publicUrl ?? (result as any).data_url ?? null;
     } catch (error) {
       console.error('Error uploading image:', error);
       setSubmitError('فشل في رفع الصورة. يرجى المحاولة مرة أخرى.');
@@ -564,7 +565,7 @@ export function NewInvoiceDialog({ isOpen, onOpenChange }: NewInvoiceDialogProps
   return (
     <>
       <Dialog open={isOpen} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto bg-[#F6E9CA] border-[#C69A72]">
+        <DialogContent fullScreen className="bg-[#F6E9CA]">
           <DialogHeader>
             <DialogTitle className="text-[#13312A] arabic-text">إنشاء فاتورة جديدة</DialogTitle>
             <DialogDescription className="text-[#155446] arabic-text">

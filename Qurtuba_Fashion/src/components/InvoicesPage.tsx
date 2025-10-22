@@ -41,7 +41,7 @@ import {
   formatDate,
   PrintableInvoiceData,
 } from './PrintableInvoice';
-import { openPrintWindow, formatPrintDateTime } from './print/PrintUtils';
+import { openPrintWindow, openPrintInvoiceWindow, formatPrintDateTime } from './print/PrintUtils';
 
 const RECEIPT_A5_STYLES = `
   @page { size: A5 landscape; margin: 0.5cm; }
@@ -618,36 +618,7 @@ export function InvoicesPage({ onCreateInvoice, onViewInvoiceDetails, onMarkAsPa
   };
 
   const handlePrintInvoice = (invoice: Invoice) => {
-    const receiptWindow = window.open('', '_blank', 'width=900,height=700');
-
-    if (!receiptWindow) {
-      return;
-    }
-
-    const markup = renderToStaticMarkup(<PrintableInvoice invoice={invoice} />);
-
-    receiptWindow.document.write(`<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-  <head>
-    <meta charSet="utf-8" />
-    <title>فاتورة ${invoice.id}</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet" />
-    <style>${RECEIPT_A5_STYLES}</style>
-  </head>
-  <body>
-    ${markup}
-    <script>
-      window.onload = () => {
-        window.focus();
-        setTimeout(() => window.print(), 300);
-      };
-    <\/script>
-  </body>
-</html>`);
-    receiptWindow.document.close();
-    receiptWindow.focus();
+    openPrintInvoiceWindow(`فاتورة ${invoice.id}`, <PrintableInvoice invoice={invoice} />);
   };
 
   const handleExportPDF = (invoice: Invoice) => {
