@@ -12,7 +12,7 @@ import { useNotifications } from '@/app/NotificationsProvider';
 interface LayoutProps {
   children: React.ReactNode;
   currentPage: string;
-  onNavigate: (page: string) => void;
+  onNavigate: (page: string, itemId?: string) => void;
   isLoggedIn: boolean;
   onLogout: () => void;
   currentUser?: UserType | null;

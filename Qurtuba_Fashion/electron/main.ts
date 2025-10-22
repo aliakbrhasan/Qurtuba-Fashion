@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog, shell, Menu, Tray, nativeImage, session } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, shell, Menu, Tray, nativeImage, session, webContents } from 'electron';
 // Supabase disabled in local-only mode
 import { existsSync, mkdirSync, readdirSync, copyFileSync, lstatSync, writeFileSync, unlinkSync, readFileSync } from 'fs';
 import { join, dirname } from 'path';
@@ -182,7 +182,27 @@ app.on('window-all-closed', () => {
 
 // Security: Prevent new window creation
 app.on('web-contents-created', (_evt, contents) => {
-  contents.setWindowOpenHandler(() => {
+  contents.setWindowOpenHandler((details) => {
+    const { url } = details;
+    // Allow print windows
+    if (url === 'about:blank') {
+      return {
+        action: 'allow',
+        overrideBrowserWindowOptions: {
+          show: true,
+          width: 900,
+          height: 700,
+          webPreferences: {
+            nodeIntegration: false,
+            contextIsolation: true,
+            sandbox: true,
+            webSecurity: true,
+            allowRunningInsecureContent: false,
+          },
+        },
+      };
+    }
+    // Deny all other external windows
     return { action: 'deny' };
   });
 
@@ -378,7 +398,7 @@ ipcMain.handle('auth:updateUser', async (_evt, id: string, updates: any) => ok(a
 ipcMain.handle('auth:deleteUser', async (_evt, id: string) => ok(async () => (localDB as any).deleteUser(id)));
 
 // IMAGE STORAGE IPC
-ipcMain.handle('image:upload', async (_evt, args: { buffer: number[]; contentType: string; fileName: string }) => ok(async () => {
+ipcMain.handle('image:upload', async (_evt, args: { buffer: number[]; contentType: string; fileName: string; entityType?: string; entityId?: string; originalName?: string; width?: number; height?: number }) => ok(async () => {
   // Save image locally under userData/images
   const baseDir = join(app.getPath('userData'), 'images');
   const targetPath = join(baseDir, args.fileName);
@@ -387,6 +407,36 @@ ipcMain.handle('image:upload', async (_evt, args: { buffer: number[]; contentTyp
   const buf = Buffer.from(args.buffer);
   writeFileSync(targetPath, buf);
   const fileUrl = pathToFileURL(targetPath).toString();
+  
+  // If entity info provided, save to database
+  if (args.entityType && args.entityId) {
+    console.log('Main process - Saving image to database:', { 
+      entityType: args.entityType, 
+      entityId: args.entityId, 
+      fileName: args.fileName 
+    });
+    try {
+      const imageRecord = await (localDB as any).createImage({
+        filename: args.fileName,
+        original_name: args.originalName || args.fileName,
+        mime_type: args.contentType,
+        size: args.buffer.length,
+        width: args.width,
+        height: args.height,
+        data_url: fileUrl,
+        entity_type: args.entityType,
+        entity_id: args.entityId
+      });
+      console.log('Main process - Image saved to database with ID:', imageRecord.id);
+      return { url: targetPath, path: args.fileName, publicUrl: fileUrl, imageId: imageRecord.id };
+    } catch (dbError) {
+      console.error('Main process - Failed to save image record to database:', dbError);
+      // Continue with file upload even if DB save fails
+    }
+  } else {
+    console.log('Main process - No entity info provided, skipping database save');
+  }
+  
   return { url: targetPath, path: args.fileName, publicUrl: fileUrl };
 }));
 
@@ -407,6 +457,192 @@ ipcMain.handle('image:getPublicUrl', async (_evt, path: string) => ok(async () =
   const targetPath = join(baseDir, path);
   return pathToFileURL(targetPath).toString();
 }));
+
+ipcMain.handle('image:getByEntity', async (_evt, entityType: string, entityId: string) => ok(async () => {
+  console.log('Main process - image:getByEntity called with:', { entityType, entityId });
+  try {
+    const result = await (localDB as any).getImagesByEntity(entityType, entityId);
+    console.log('Main process - getImagesByEntity result:', result);
+    return result;
+  } catch (error) {
+    console.error('Main process - getImagesByEntity error:', error);
+    throw error;
+  }
+}));
+
+ipcMain.handle('image:deleteById', async (_evt, imageId: string) => ok(async () => {
+  // Get image record first to find the file path
+  const image = await (localDB as any).getImage(imageId);
+  if (image) {
+    // Delete the file
+    const baseDir = join(app.getPath('userData'), 'images');
+    const targetPath = join(baseDir, image.filename);
+    try {
+      if (existsSync(targetPath)) unlinkSync(targetPath);
+    } catch (e) {
+      console.warn('Failed to delete image file:', e);
+    }
+  }
+  // Delete from database
+  await (localDB as any).deleteImage(imageId);
+  return true;
+}));
+
+// Print handlers
+ipcMain.handle('print:document', async (_evt, args: { title: string; content: string; styles?: string }) => {
+  try {
+    if (!mainWindow) {
+      throw new Error('Main window not available');
+    }
+
+    // Create a new window for printing
+    const printWindow = new BrowserWindow({
+      width: 900,
+      height: 700,
+      show: false,
+      webPreferences: {
+        nodeIntegration: false,
+        contextIsolation: true,
+        sandbox: true,
+        webSecurity: true,
+        allowRunningInsecureContent: false,
+      },
+    });
+
+    // Load the print content
+    const htmlContent = `<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="utf-8" />
+    <title>${args.title}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet" />
+    <style>${args.styles || ''}</style>
+  </head>
+  <body>
+    ${args.content}
+  </body>
+</html>`;
+
+    await printWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(htmlContent)}`);
+    
+    // Show the window and focus it
+    printWindow.show();
+    printWindow.focus();
+
+    // Wait for content to load, then trigger print
+    printWindow.webContents.once('did-finish-load', () => {
+      setTimeout(() => {
+        printWindow.webContents.print({}, (success, errorType) => {
+          if (!success) {
+            console.error('Print failed:', errorType);
+          }
+          // Close the print window after printing
+          setTimeout(() => {
+            printWindow.close();
+          }, 1000);
+        });
+      }, 500);
+    });
+
+    return { ok: true };
+  } catch (e: any) {
+    console.error('Print error:', e);
+    return { ok: false, error: String(e?.message || e) };
+  }
+});
+
+ipcMain.handle('print:preview', async (_evt, args: { title: string; content: string; styles?: string }) => {
+  try {
+    if (!mainWindow) {
+      throw new Error('Main window not available');
+    }
+
+    // Create a new window for print preview
+    const previewWindow = new BrowserWindow({
+      width: 900,
+      height: 700,
+      show: true,
+      webPreferences: {
+        nodeIntegration: false,
+        contextIsolation: true,
+        sandbox: true,
+        webSecurity: true,
+        allowRunningInsecureContent: false,
+      },
+      title: `معاينة الطباعة - ${args.title}`,
+    });
+
+    // Load the print content
+    const htmlContent = `<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="utf-8" />
+    <title>${args.title}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet" />
+    <style>
+      body { 
+        margin: 0; 
+        padding: 20px; 
+        font-family: 'Tajawal', sans-serif; 
+        direction: rtl; 
+        background: #f5f5f5;
+      }
+      .print-content {
+        background: white;
+        padding: 20px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        border-radius: 8px;
+        max-width: 800px;
+        margin: 0 auto;
+      }
+      .print-actions {
+        position: fixed;
+        top: 10px;
+        right: 10px;
+        z-index: 1000;
+        background: white;
+        padding: 10px;
+        border-radius: 5px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+      }
+      .print-btn {
+        background: #007bff;
+        color: white;
+        border: none;
+        padding: 8px 16px;
+        border-radius: 4px;
+        cursor: pointer;
+        margin-left: 5px;
+      }
+      .print-btn:hover {
+        background: #0056b3;
+      }
+      ${args.styles || ''}
+    </style>
+  </head>
+  <body>
+    <div class="print-actions">
+      <button class="print-btn" onclick="window.print()">طباعة</button>
+      <button class="print-btn" onclick="window.close()">إغلاق</button>
+    </div>
+    <div class="print-content">
+      ${args.content}
+    </div>
+  </body>
+</html>`;
+
+    await previewWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(htmlContent)}`);
+    
+    return { ok: true };
+  } catch (e: any) {
+    console.error('Print preview error:', e);
+    return { ok: false, error: String(e?.message || e) };
+  }
+});
 
 // Handle app protocol for deep linking (optional)
 app.setAsDefaultProtocolClient('qurtuba-fashion');

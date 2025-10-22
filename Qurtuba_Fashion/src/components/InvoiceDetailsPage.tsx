@@ -40,6 +40,18 @@ export function InvoiceDetailsPage({ invoiceId, onBack, onMarkAsPaid }: InvoiceD
   const { invoiceDetails, isLoading, error, refetch } = useInvoiceDetails(invoiceId);
   // Ensure hooks order is stable across renders
   const { images, loading: imagesLoading } = useImages('invoice', invoiceId);
+  
+  // Check if we have fabric_image_url as fallback
+  const hasFabricImageUrl = !!(invoiceDetails as any)?.fabric_image_url;
+  
+  // Debug logging
+  console.log('InvoiceDetailsPage - Debug info:', {
+    invoiceId,
+    images: images?.length || 0,
+    imagesLoading,
+    hasFabricImageUrl,
+    fabricImageUrl: (invoiceDetails as any)?.fabric_image_url
+  });
   // Hooks must be declared before any early returns
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
@@ -461,7 +473,7 @@ export function InvoiceDetailsPage({ invoiceId, onBack, onMarkAsPaid }: InvoiceD
             </CardHeader>
             <CardContent>
               <div className="bg-[#f9fafb] rounded-lg p-8 border border-[#e5e7eb] flex flex-col items-center justify-center gap-3 min-h-[140px]">
-                {imagesLoading && !invoice.fabricImageUrl ? (
+                {imagesLoading && !hasFabricImageUrl ? (
                   <Loader2 className="w-6 h-6 animate-spin text-[#9ca3af]" />
                 ) : (images && images.length > 0) ? (
                   <div className="w-full h-48 flex items-center justify-center overflow-hidden">
@@ -471,10 +483,10 @@ export function InvoiceDetailsPage({ invoiceId, onBack, onMarkAsPaid }: InvoiceD
                       className="max-h-full max-w-full object-contain rounded-lg shadow-md"
                     />
                   </div>
-                ) : (invoice as any).fabric_image_url || (invoice as any).fabricImageUrl ? (
+                ) : hasFabricImageUrl ? (
                   <div className="w-full h-48 flex items-center justify-center overflow-hidden">
                     <img
-                      src={(invoice as any).fabric_image_url || (invoice as any).fabricImageUrl}
+                      src={(invoiceDetails as any).fabric_image_url}
                       alt="صورة القماش"
                       className="max-h-full max-w-full object-contain rounded-lg shadow-md"
                     />

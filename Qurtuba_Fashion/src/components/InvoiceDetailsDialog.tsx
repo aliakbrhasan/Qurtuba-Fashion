@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { PrintableInvoice, formatCurrency, formatDate, PrintableInvoiceData } from './PrintableInvoice';
 import { openPrintInvoiceWindow } from './print/PrintUtils';
+import { formatStringNumber } from '../utils/arabicNumbers';
 
 interface InvoiceDetailsDialogProps {
   isOpen: boolean;
@@ -107,7 +108,7 @@ export function InvoiceDetailsDialog({ isOpen, onOpenChange, invoice }: InvoiceD
                 تفاصيل الفاتورة
               </DialogTitle>
               <DialogDescription className="text-[#155446] arabic-text text-sm md:text-lg">
-                رقم الفاتورة: {invoice.id}
+                رقم الفاتورة: {formatStringNumber(invoice.id)}
               </DialogDescription>
             </div>
             <div className="flex items-center gap-2 md:gap-3">
@@ -133,7 +134,7 @@ export function InvoiceDetailsDialog({ isOpen, onOpenChange, invoice }: InvoiceD
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div className="text-center sm:text-right">
                   <h2 className="text-2xl font-bold text-[#13312A] arabic-text">{invoice.customerName}</h2>
-                  <p className="text-[#155446] arabic-text">رقم الفاتورة: {invoice.id}</p>
+                  <p className="text-[#155446] arabic-text">رقم الفاتورة: {formatStringNumber(invoice.id)}</p>
                 </div>
                 <div className="flex items-center justify-center gap-4">
                   <Badge className={`${getStatusColor(invoice.status)} text-sm px-3 py-1`}>
@@ -171,7 +172,7 @@ export function InvoiceDetailsDialog({ isOpen, onOpenChange, invoice }: InvoiceD
                       <Phone className="h-4 w-4 text-[#155446]" />
                       <div>
                         <p className="text-sm text-[#155446] arabic-text">الهاتف</p>
-                        <p className="text-lg font-semibold text-[#13312A]">{invoice.phone}</p>
+                        <p className="text-lg font-semibold text-[#13312A]">{formatStringNumber(invoice.phone)}</p>
                       </div>
                     </div>
                     {invoice.address && (

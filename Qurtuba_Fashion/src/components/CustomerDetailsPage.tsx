@@ -8,6 +8,7 @@ import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Customer } from '../types/customer';
+import { formatArabicNumber, formatStringNumber } from '../utils/arabicNumbers';
 import {
   Phone,
   MapPin,
@@ -127,7 +128,7 @@ export function CustomerDetailsPage({ customer, onBack }: CustomerDetailsPagePro
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-[#155446]">
             <div className="flex items-center gap-2">
               <Phone className="w-4 h-4" />
-              <span>{customer.phone}</span>
+              <span>{formatStringNumber(customer.phone)}</span>
             </div>
             <div className="flex items-center gap-2">
               <Calendar className="w-4 h-4" />
@@ -139,11 +140,11 @@ export function CustomerDetailsPage({ customer, onBack }: CustomerDetailsPagePro
             </div>
             <div className="flex items-center gap-2">
               <CreditCard className="w-4 h-4" />
-              <span className="arabic-text">إجمالي المصروف: {customer.totalSpent} دينار عراقي</span>
+              <span className="arabic-text">إجمالي المصروف: {formatArabicNumber(customer.totalSpent)} دينار عراقي</span>
             </div>
             <div className="flex items-center gap-2">
               <ClipboardList className="w-4 h-4" />
-              <span className="arabic-text">عدد الطلبات: {customer.orders.length}</span>
+              <span className="arabic-text">عدد الطلبات: {formatArabicNumber(customer.orders.length)}</span>
             </div>
           </div>
           {customer.notes && (

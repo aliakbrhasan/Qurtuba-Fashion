@@ -1,6 +1,16 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 
+// Type definitions for Electron API
+declare global {
+  interface Window {
+    electronAPI?: {
+      print: (data: { title: string; content: string; styles?: string }) => Promise<any>;
+      printPreview: (data: { title: string; content: string; styles?: string }) => Promise<any>;
+    };
+  }
+}
+
 export const brandPrintStyles = `
   @page {
     size: A4 portrait;
@@ -327,20 +337,45 @@ export const brandPrintStyles = `
   }
 `;
 
-export const formatPrintDateTime = (date: Date) =>
-  new Intl.DateTimeFormat('en-US', {
+export const formatPrintDateTime = (date: Date) => {
+  return new Intl.DateTimeFormat('en-US', {
     dateStyle: 'long',
     timeStyle: 'short',
   }).format(date);
+};
 
 export const openPrintWindow = (title: string, content: React.ReactElement) => {
+  const markup = renderToStaticMarkup(content);
+  
+  // Check if we're in Electron environment
+  if (window.electronAPI) {
+    // Use Electron's native print functionality
+    window.electronAPI.print({
+      title,
+      content: `
+        <div class="print-container">
+          <div class="print-inner">${markup}</div>
+          <div class="print-footer">تم إنشاء هذا المستند من خلال نظام إدارة أزياء قرطبة</div>
+        </div>
+      `,
+      styles: brandPrintStyles
+    }).catch((error: any) => {
+      console.error('Print failed:', error);
+      // Fallback to browser print
+      fallbackPrint(title, markup);
+    });
+  } else {
+    // Fallback to browser print
+    fallbackPrint(title, markup);
+  }
+};
+
+const fallbackPrint = (title: string, markup: string) => {
   const printWindow = window.open('', '_blank', 'width=900,height=700');
 
   if (!printWindow) {
     return;
   }
-
-  const markup = renderToStaticMarkup(content);
 
   printWindow.document.write(`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
@@ -371,13 +406,44 @@ export const openPrintWindow = (title: string, content: React.ReactElement) => {
 };
 
 export const openPrintInvoiceWindow = (title: string, content: React.ReactElement) => {
+  const markup = renderToStaticMarkup(content);
+  
+  console.log('openPrintInvoiceWindow called with title:', title);
+  console.log('window.electronAPI available:', !!window.electronAPI);
+  console.log('window.electronAPI.print available:', !!(window.electronAPI && window.electronAPI.print));
+  
+  // Check if we're in Electron environment
+  if (window.electronAPI && window.electronAPI.print) {
+    console.log('Using Electron print API');
+    // Use Electron's native print functionality
+    window.electronAPI.print({
+      title,
+      content: markup,
+      styles: `
+        @page { size: A5 landscape; margin: 6mm; }
+        html, body { padding: 0; margin: 0; background: #ffffff; }
+        * { box-sizing: border-box; }
+      `
+    }).then((result: any) => {
+      console.log('Print API result:', result);
+    }).catch((error: any) => {
+      console.error('Print failed:', error);
+      // Fallback to browser print
+      fallbackPrintInvoice(title, markup);
+    });
+  } else {
+    console.log('Using fallback print');
+    // Fallback to browser print
+    fallbackPrintInvoice(title, markup);
+  }
+};
+
+const fallbackPrintInvoice = (title: string, markup: string) => {
   const printWindow = window.open('', '_blank', 'width=900,height=700');
 
   if (!printWindow) {
     return;
   }
-
-  const markup = renderToStaticMarkup(content);
 
   printWindow.document.write(`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
@@ -407,3 +473,30 @@ export const openPrintInvoiceWindow = (title: string, content: React.ReactElemen
   printWindow.document.close();
   printWindow.focus();
 };
+
+export const openPrintPreviewWindow = (title: string, content: React.ReactElement) => {
+  const markup = renderToStaticMarkup(content);
+  
+  // Check if we're in Electron environment
+  if (window.electronAPI) {
+    // Use Electron's native print preview functionality
+    window.electronAPI.printPreview({
+      title,
+      content: `
+        <div class="print-container">
+          <div class="print-inner">${markup}</div>
+          <div class="print-footer">تم إنشاء هذا المستند من خلال نظام إدارة أزياء قرطبة</div>
+        </div>
+      `,
+      styles: brandPrintStyles
+    }).catch((error: any) => {
+      console.error('Print preview failed:', error);
+      // Fallback to regular print
+      openPrintWindow(title, content);
+    });
+  } else {
+    // Fallback to regular print
+    openPrintWindow(title, content);
+  }
+};
+

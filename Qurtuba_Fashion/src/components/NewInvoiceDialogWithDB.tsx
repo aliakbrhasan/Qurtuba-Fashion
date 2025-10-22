@@ -462,14 +462,7 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated,
           paid_amount: formData.paidAmount,
           status: formData.status,
           due_date: formData.deliveryDate,
-          notes: formData.notes,
-          items: formData.items.map(item => ({
-            item_name: item.itemName,
-            description: item.description,
-            quantity: item.quantity,
-            unit_price: item.unitPrice,
-            total_price: item.totalPrice
-          }))
+          notes: formData.notes
         };
 
         result = await InvoiceService.updateInvoice(prefillCustomer.id, updates);
@@ -479,21 +472,45 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated,
       }
 
       // 2) Upload image and persist URL to invoice so it appears in details page
+      console.log('NewInvoiceDialog - Invoice creation result:', result);
+      console.log('NewInvoiceDialog - Image upload debug:', {
+        hasFabricImage: !!fabricImage,
+        hasFabricImageFile: !!fabricImageFile,
+        invoiceId: result?.id,
+        fabricImageType: typeof fabricImage,
+        fabricImageFileType: fabricImageFile?.type
+      });
+      
       if (fabricImage && fabricImageFile && result?.id) {
         try {
+          console.log('Uploading image for invoice:', result.id);
           const uploaded = await ImageService.uploadImage(
             fabricImageFile,
             'invoice',
-            result.id,
-            { createThumbnail: true }
+            result.id
           );
+          console.log('Image upload result:', uploaded);
+          
+          // The image is now saved in the images table via the uploadImage function
+          // We also save the URL to fabric_image_url for backward compatibility
           const newUrl = (uploaded as any).publicUrl || (uploaded as any).data_url || (uploaded as any).url || '';
           if (newUrl) {
-            try { await InvoiceService.updateInvoice(result.id, { fabric_image_url: newUrl } as any); } catch {}
+            console.log('Updating invoice with image URL:', newUrl);
+            try { await InvoiceService.updateInvoice(result.id, { fabric_image_url: newUrl } as any); } catch (updateError) {
+              console.error('Failed to update invoice with image URL:', updateError);
+            }
+          } else {
+            console.warn('No URL returned from image upload');
           }
         } catch (imageError) {
-          console.warn('Fabric image upload failed:', imageError);
+          console.error('Fabric image upload failed:', imageError);
         }
+      } else {
+        console.log('Skipping image upload - missing data:', {
+          fabricImage: !!fabricImage,
+          fabricImageFile: !!fabricImageFile,
+          resultId: !!result?.id
+        });
       }
       
       // Close dialog
@@ -1729,11 +1746,17 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated,
                   <div className="max-h-[80px] overflow-hidden rounded-md border border-[#C69A72]/40">
                     <ImageUpload
                       onImageChange={(imageData, file) => {
+                        console.log('NewInvoiceDialog - onImageChange called with:', {
+                          imageData: imageData ? 'data available' : 'null',
+                          file: file ? { name: file.name, size: file.size, type: file.type } : 'null'
+                        });
                         setFabricImage(imageData);
                         if (file) {
                           const renamed = new File([file], 'fabric.jpg', { type: file.type || 'image/jpeg' });
+                          console.log('NewInvoiceDialog - Setting fabricImageFile:', { name: renamed.name, size: renamed.size, type: renamed.type });
                           setFabricImageFile(renamed);
                         } else {
+                          console.log('NewInvoiceDialog - Clearing fabricImageFile');
                           setFabricImageFile(null);
                         }
                       }}

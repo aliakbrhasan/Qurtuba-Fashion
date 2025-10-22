@@ -6,6 +6,7 @@ import { Button } from './ui/button';
 import { useDashboardStats } from '@/hooks/useDashboardStats';
 import { StatCard } from './dashboard/StatCard';
 import { DashboardGrids } from './dashboard/ResponsiveGrid';
+import { formatArabicNumber } from '@/utils/arabicNumbers';
 
 export function FinancialPage() {
   const [startDate, setStartDate] = useState<string>('');
@@ -122,7 +123,7 @@ export function FinancialPage() {
         <DashboardGrids.Stats>
           <StatCard
             title="فواتير اليوم"
-            value={isLoading ? <Skeleton className="h-8 w-16" /> : stats.todayInvoices}
+            value={isLoading ? <Skeleton className="h-8 w-16" /> : formatArabicNumber(stats.todayInvoices)}
             icon={TrendingUp}
             color="bg-[#155446]"
             subtitle="فواتير جديدة اليوم"
@@ -136,14 +137,14 @@ export function FinancialPage() {
           />
           <StatCard
             title="إجمالي الزبائن"
-            value={isLoading ? <Skeleton className="h-8 w-16" /> : stats.totalCustomers}
+            value={isLoading ? <Skeleton className="h-8 w-16" /> : formatArabicNumber(stats.totalCustomers)}
             icon={TrendingUp}
             color="bg-[#C69A72]"
             subtitle="زبائن مسجلون"
           />
           <StatCard
             title="إجمالي الفواتير"
-            value={isLoading ? <Skeleton className="h-8 w-16" /> : stats.totalInvoices}
+            value={isLoading ? <Skeleton className="h-8 w-16" /> : formatArabicNumber(stats.totalInvoices)}
             icon={TrendingUp}
             color="bg-[#155446]"
             subtitle="جميع الفواتير"
@@ -185,21 +186,21 @@ export function FinancialPage() {
         <DashboardGrids.Status>
           <StatCard
             title="فواتير معلقة"
-            value={isLoading ? <Skeleton className="h-8 w-16" /> : stats.pendingInvoices}
+            value={isLoading ? <Skeleton className="h-8 w-16" /> : formatArabicNumber(stats.pendingInvoices)}
             icon={TrendingUp}
             color="bg-yellow-600"
             subtitle="في انتظار الدفع"
           />
           <StatCard
             title="فواتير مدفوعة"
-            value={isLoading ? <Skeleton className="h-8 w-16" /> : stats.paidInvoices}
+            value={isLoading ? <Skeleton className="h-8 w-16" /> : formatArabicNumber(stats.paidInvoices)}
             icon={TrendingUp}
             color="bg-green-600"
             subtitle="مدفوعة بالكامل"
           />
           <StatCard
             title="فواتير جزئية"
-            value={isLoading ? <Skeleton className="h-8 w-16" /> : stats.partialInvoices}
+            value={isLoading ? <Skeleton className="h-8 w-16" /> : formatArabicNumber(stats.partialInvoices)}
             icon={TrendingUp}
             color="bg-blue-600"
             subtitle="مدفوعة جزئياً"
@@ -229,7 +230,7 @@ export function FinancialPage() {
           />
           <StatCard
             title="إجمالي الطلبات"
-            value={isLoading ? <Skeleton className="h-8 w-16" /> : stats.totalOrders}
+            value={isLoading ? <Skeleton className="h-8 w-16" /> : formatArabicNumber(stats.totalOrders)}
             icon={TrendingUp}
             color="bg-orange-600"
             subtitle="جميع الطلبات"

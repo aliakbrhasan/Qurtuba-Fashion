@@ -398,31 +398,24 @@ export class DatabaseService {
       this.persistAllToStorage();
       (syncEngine as any).schedule?.();
       try { await (syncEngine as any).sync?.(); } catch {}
-      try {
-        const { notifications } = await import('@/services/notifications.service');
-        notifications.emit({
-          type: 'success',
-          title: 'زبون جديد',
-          message: `تم إضافة الزبون ${customer.name}`,
-          target: { page: 'customers', id: (created as any).id?.toString?.() },
-        });
-      } catch {}
       return created;
     } catch (error) {
       console.warn('Local storage error:', error);
       const newCustomer: Customer = { ...customer, id: Date.now().toString() } as any;
       this.localData.customers.push(newCustomer);
       this.persistAllToStorage();
+      return newCustomer;
+    } finally {
+      // Emit notification only once, regardless of success or fallback
       try {
         const { notifications } = await import('@/services/notifications.service');
         notifications.emit({
           type: 'success',
           title: 'زبون جديد',
           message: `تم إضافة الزبون ${customer.name}`,
-          target: { page: 'customers', id: (newCustomer as any).id?.toString?.() },
+          target: { page: 'customers', id: (this.localData.customers[0] as any).id?.toString?.() },
         });
       } catch {}
-      return newCustomer;
     }
   }
 
@@ -451,6 +444,18 @@ export class DatabaseService {
       this.persistAllToStorage();
       (syncEngine as any).schedule?.();
       try { await (syncEngine as any).sync?.(); } catch {}
+      return updated;
+    } catch (error) {
+      console.warn('Local storage error:', error);
+      const customerIndex = this.localData.customers.findIndex(c => String(c.id) === String(id));
+      if (customerIndex !== -1) {
+        this.localData.customers[customerIndex] = { ...this.localData.customers[customerIndex], ...updates } as any;
+        this.persistAllToStorage();
+        return this.localData.customers[customerIndex];
+      }
+      throw new Error('Customer not found');
+    } finally {
+      // Emit notification only once, regardless of success or fallback
       if (!options?.silent) {
         try {
           const { notifications } = await import('@/services/notifications.service');
@@ -462,27 +467,6 @@ export class DatabaseService {
           });
         } catch {}
       }
-      return updated;
-    } catch (error) {
-      console.warn('Local storage error:', error);
-      const customerIndex = this.localData.customers.findIndex(c => String(c.id) === String(id));
-      if (customerIndex !== -1) {
-        this.localData.customers[customerIndex] = { ...this.localData.customers[customerIndex], ...updates } as any;
-        this.persistAllToStorage();
-        if (!options?.silent) {
-          try {
-            const { notifications } = await import('@/services/notifications.service');
-            notifications.emit({
-              type: 'info',
-              title: 'تعديل زبون',
-              message: `تم تعديل بيانات الزبون`,
-              target: { page: 'customers', id: id?.toString?.() },
-            });
-          } catch {}
-        }
-        return this.localData.customers[customerIndex];
-      }
-      throw new Error('Customer not found');
     }
   }
 

@@ -44,7 +44,7 @@ export class ImageService {
     }
 
     const folder = `${_entityType}-images/${_entityIdSafe}`;
-    const storageRes = await this.uploadToStorage(fileToUpload, folder);
+    const storageRes = await this.uploadToStorage(fileToUpload, folder, _entityType, _entityIdSafe);
 
     // Thumbnail (optional)
     let thumbnailUrl: string | undefined = undefined;
@@ -52,9 +52,9 @@ export class ImageService {
       thumbnailUrl = await this.createThumbnail(fileToUpload, 220);
     }
 
-    // Local-only: synthesize an ImageRecord without DB row
+    // Return the result from uploadToStorage which includes the database record
     return {
-      id: `${Date.now()}`,
+      id: storageRes.imageId || `${Date.now()}`,
       filename: storageRes.path,
       original_name: file.name,
       mime_type: file.type,
@@ -68,24 +68,90 @@ export class ImageService {
   }
 
   // List entity images from DB
-  static async getEntityImages(_entityType: 'invoice'|'customer'|'order', _entityId: string): Promise<ImageRecord[]> {
-    // Local-only: no DB list, return empty
+  static async getEntityImages(entityType: 'invoice'|'customer'|'order', entityId: string): Promise<ImageRecord[]> {
+    console.log('ImageService.getEntityImages called with:', { entityType, entityId });
+    const api = (typeof window !== 'undefined' ? (window as any).electronAPI : undefined);
+    console.log('Electron API available:', !!api?.images?.getByEntity);
+    
+    if (api?.images?.getByEntity) {
+      try {
+        const res = await api.images.getByEntity(entityType, entityId);
+        console.log('API response:', res);
+        if (res?.ok && res.data) {
+          console.log('Raw data from API:', res.data);
+          if (res.data.length > 0) {
+            // Convert LocalImage to ImageRecord format
+            const images = (res.data as any[]).map((img: any) => ({
+              id: img.id,
+              filename: img.filename,
+              original_name: img.original_name,
+              mime_type: img.mime_type,
+              size: img.size,
+              width: img.width,
+              height: img.height,
+              data_url: img.data_url,
+              thumbnail_url: img.thumbnail_url,
+              entity_type: img.entity_type,
+              entity_id: img.entity_id,
+              created_at: img.created_at
+            }));
+            console.log('Converted images:', images);
+            return images;
+          }
+          console.log('No images found in database for entity:', { entityType, entityId });
+          return [];
+        }
+      } catch (error) {
+        console.error('Error fetching images:', error);
+        return [];
+      }
+    }
+    // Browser fallback: try to get from fabric_image_url in invoice data
+    console.log('No Electron API, trying browser fallback');
+    
+    // In browser mode, we need to get the invoice data and check fabric_image_url
+    // This is a temporary fallback until we implement proper browser image storage
+    try {
+      // Try to get invoice data from the current context
+      const invoiceData = (window as any).currentInvoiceData;
+      if (invoiceData && invoiceData.fabric_image_url) {
+        console.log('Found fabric_image_url in browser mode:', invoiceData.fabric_image_url);
+        return [{
+          id: 'browser-fallback',
+          filename: 'fabric-image.jpg',
+          original_name: 'fabric-image.jpg',
+          mime_type: 'image/jpeg',
+          size: 0,
+          data_url: invoiceData.fabric_image_url,
+          entity_type: entityType,
+          entity_id: entityId,
+          created_at: new Date().toISOString()
+        }];
+      }
+    } catch (error) {
+      console.log('Browser fallback failed:', error);
+    }
+    
+    console.log('No browser fallback data, returning empty array');
     return [];
   }
 
   // Delete image: remove from storage then DB
   static async deleteImage(imageIdOrPath: string): Promise<void> {
-    // Accept either image id (uuid) or storage path
-    let filenamePath = imageIdOrPath;
-    // In local-only mode, assume provided value is a path
     const api = (typeof window !== 'undefined' ? (window as any).electronAPI : undefined);
+    if (api?.images?.deleteById) {
+      // Try to delete by ID first (for database records)
+      try {
+        const delRes = await api.images.deleteById(imageIdOrPath);
+        if (delRes?.ok) return;
+      } catch (e) {
+        // If deleteById fails, try delete by path
+      }
+    }
+    
     if (api?.images?.delete) {
-      const delRes = await api.images.delete(filenamePath);
+      const delRes = await api.images.delete(imageIdOrPath);
       if (!delRes?.ok) throw new Error(delRes?.error || 'فشل في حذف الصورة');
-      // No DB row to delete in local-only mode
-    } else {
-      // Browser-only fallback: nothing to delete on disk; best-effort DB cleanup
-      // No DB row to delete in local-only mode
     }
   }
 
@@ -109,7 +175,7 @@ export class ImageService {
   }
 
   // Internal: upload to storage via IPC
-  private static async uploadToStorage(file: File, folder: string): Promise<ImageUploadResult> {
+  private static async uploadToStorage(file: File, folder: string, entityType?: string, entityId?: string): Promise<ImageUploadResult> {
     try {
       if (!this.validateFile(file)) throw new Error('نوع الملف غير مدعوم أو حجمه كبير جداً');
       const dimensions = await this.getImageDimensions(file);
@@ -126,9 +192,23 @@ export class ImageService {
       const api = (typeof window !== 'undefined' ? (window as any).electronAPI : undefined);
       if (api?.images?.upload) {
         const buffer = await file.arrayBuffer();
-        const res = await api.images.upload(Array.from(new Uint8Array(buffer)), file.type, fileName);
+        const res = await api.images.upload(
+          Array.from(new Uint8Array(buffer)), 
+          file.type, 
+          fileName,
+          entityType,
+          entityId,
+          file.name,
+          dimensions.width,
+          dimensions.height
+        );
         if (!res?.ok) throw new Error(res?.error || 'فشل في رفع الصورة');
-        return res.data as ImageUploadResult;
+        const result = res.data as ImageUploadResult;
+        // Add imageId if it exists in the response
+        if ((res.data as any).imageId) {
+          (result as any).imageId = (res.data as any).imageId;
+        }
+        return result;
       }
       // Browser fallback: embed as data URL so it persists in local DB
       const dataUrl = await new Promise<string>((resolve, reject) => {

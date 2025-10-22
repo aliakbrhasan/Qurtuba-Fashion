@@ -12,16 +12,17 @@
     "package.json"
   ],
   "asarUnpack": [
-    "node_modules/sqlite3/**",
+    "node_modules/better-sqlite3/**",
     "**/*.node",
-    "node_modules/sqlite3/build/Release/**",
+    "node_modules/better-sqlite3/build/**",
+    "node_modules/better-sqlite3/build/Release/**",
     "dist-electron/**/*"
   ],
   "extraResources": [
     { "from": "build/fonts", "to": "fonts" },
     { "from": "resources", "to": "resources", "filter": ["**/*"] },
     { "from": "build/icon.ico", "to": "icon.ico" },
-    { "from": "node_modules/sqlite3/build/Release", "to": "sqlite3" }
+    { "from": "node_modules/better-sqlite3/build/Release", "to": "better-sqlite3" }
   ],
   "asar": true,
   "win": {

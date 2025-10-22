@@ -9,7 +9,7 @@ import { useNotifications } from '@/app/NotificationsProvider';
 interface NotificationCenterProps {
   isOpen: boolean;
   onClose: () => void;
-  onNavigate: (page: string) => void;
+  onNavigate: (page: string, itemId?: string) => void;
 }
 
 export function NotificationCenter({ isOpen, onClose, onNavigate }: NotificationCenterProps) {
@@ -148,7 +148,7 @@ export function NotificationCenter({ isOpen, onClose, onNavigate }: Notification
                             variant="outline"
                             onClick={() => {
                               markAsRead(notification.id);
-                              onNavigate(notification.target!.page);
+                              onNavigate(notification.target!.page, notification.target!.id);
                             }}
                             className="mt-2 text-xs"
                           >

@@ -88,6 +88,10 @@ export function ImageUpload({
       const optimizedImageData = await optimizeImage(file);
       
       // Call parent callback
+      console.log('ImageUpload - Calling onImageChange with:', {
+        imageData: optimizedImageData ? 'data available' : 'null',
+        file: file ? { name: file.name, size: file.size, type: file.type } : 'null'
+      });
       onImageChange(optimizedImageData, file);
       
     } catch (err) {

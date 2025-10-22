@@ -35,6 +35,7 @@ import { formatCurrency, formatDate } from './PrintableInvoice';
 import { databaseService } from '../db/database.service';
 import { usePermissions } from '../hooks/usePermissions';
 import { authService } from '../services/auth.service';
+import { formatArabicNumber, formatStringNumber } from '../utils/arabicNumbers';
 
 interface CustomersPageProps {
   customers: Customer[];
@@ -176,9 +177,15 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false, on
         created_at: new Date().toISOString()
       };
 
-      await databaseService.createCustomer(customerData);
+      const created = await databaseService.createCustomer(customerData);
       
-      // Reset form
+      // Import queryClient and invalidate caches
+      const { queryClient } = await import('@/app/queryClient');
+      queryClient.invalidateQueries({ queryKey: ['customers'] });
+      queryClient.invalidateQueries({ queryKey: ['invoices'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+      
+      // Reset form and close dialog
       setNewCustomer({
         name: '',
         phone: '',
@@ -186,9 +193,6 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false, on
         label: 'جديد'
       });
       setIsNewCustomerOpen(false);
-      
-      // Refresh the page to show new customer
-      window.location.reload();
     } catch (error) {
       console.error('Error creating customer:', error);
     } finally {
@@ -349,7 +353,7 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false, on
                 {filteredAndSortedCustomers.map((customer) => (
                   <tr key={customer.id}>
                     <td>{customer.name}</td>
-                    <td>{customer.phone}</td>
+                    <td>{formatStringNumber(customer.phone)}</td>
                     <td>{customer.address}</td>
                     <td>
                       <span className="status-pill" style={getLabelPrintStyle(customer.label)}>
@@ -381,7 +385,7 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false, on
                 <div className="detail-grid two-column">
                   <div className="detail-item">
                     <span className="item-label">الهاتف</span>
-                    <span className="item-value">{customer.phone}</span>
+                    <span className="item-value">{formatStringNumber(customer.phone)}</span>
                   </div>
                   <div className="detail-item">
                     <span className="item-label">العنوان</span>
@@ -511,7 +515,7 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false, on
                     <User className="w-6 h-6 text-[#13312A]" />
                   </div>
                 </div>
-                <div className="text-3xl font-bold mb-2 text-black">{stats.total}</div>
+                <div className="text-3xl font-bold mb-2 text-black">{formatArabicNumber(stats.total)}</div>
                 <div className="text-sm opacity-90 arabic-text text-black">إجمالي الزبائن</div>
               </CardContent>
             </Card>
@@ -523,7 +527,7 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false, on
                     <CheckCircle className="w-6 h-6 text-[#13312A]" />
                   </div>
                 </div>
-                <div className="text-3xl font-bold mb-2 text-black">{stats.regularCustomers}</div>
+                <div className="text-3xl font-bold mb-2 text-black">{formatArabicNumber(stats.regularCustomers)}</div>
                 <div className="text-sm opacity-90 arabic-text text-black">منتظمون</div>
               </CardContent>
             </Card>
@@ -535,7 +539,7 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false, on
                     <Star className="w-6 h-6 text-[#13312A]" />
                   </div>
                 </div>
-                <div className="text-3xl font-bold mb-2 text-black">{stats.goldenCustomers}</div>
+                <div className="text-3xl font-bold mb-2 text-black">{formatArabicNumber(stats.goldenCustomers)}</div>
                 <div className="text-sm opacity-90 arabic-text text-black">زبائن ذهبيون</div>
               </CardContent>
             </Card>
@@ -750,7 +754,7 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false, on
                               onClick={() => onCustomerSelect(customer)}
                             >
                               <TableCell className="text-[#13312A] arabic-text font-semibold text-lg">{customer.name}</TableCell>
-                              <TableCell className="text-[#13312A] font-mono">{customer.phone}</TableCell>
+                              <TableCell className="text-[#13312A] font-mono">{formatStringNumber(customer.phone)}</TableCell>
                               <TableCell className="text-[#13312A] arabic-text">{customer.address}</TableCell>
                               <TableCell>
                                 <Badge className={`${getLabelColor(customer.label)} px-3 py-1 text-sm font-semibold rounded-full flex items-center gap-1 w-fit`}>
@@ -829,7 +833,7 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false, on
                           <div className="space-y-3 mb-4">
                             <div className="flex items-center gap-3 text-[#155446]">
                               <Phone className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
-                              <span className="text-sm truncate" title={customer.phone}>{customer.phone}</span>
+                              <span className="text-sm truncate" title={customer.phone}>{formatStringNumber(customer.phone)}</span>
                             </div>
                             <div className="flex items-center gap-3 text-[#155446]">
                               <MapPin className="w-4 h-4 flex-shrink-0" aria-hidden="true" />

@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { useInvoices } from '@/hooks/useInvoices';
 import { usePermissions } from '@/hooks/usePermissions';
 import { authService } from '@/services/auth.service';
+import { formatArabicNumber, formatStringNumber } from '@/utils/arabicNumbers';
 import {
   Plus,
   Search,
@@ -770,15 +771,15 @@ export function InvoicesPageWithDB({ onCreateInvoice, onViewInvoiceDetails, onMa
         {hasActionPermission('view_financial_reports') && (
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
             <div className="bg-white text-[#13312A] p-3 rounded-lg text-center border border-[#C69A72]/20 shadow-sm">
-              <div className="text-xl font-bold">{stats.total}</div>
+              <div className="text-xl font-bold">{formatArabicNumber(stats.total)}</div>
               <div className="text-xs text-[#155446] arabic-text">إجمالي الفواتير</div>
             </div>
             <div className="bg-white text-[#13312A] p-3 rounded-lg text-center border border-[#C69A72]/20 shadow-sm">
-              <div className="text-xl font-bold">{stats.paid}</div>
+              <div className="text-xl font-bold">{formatArabicNumber(stats.paid)}</div>
               <div className="text-xs text-[#155446] arabic-text">الفواتير المدفوعة</div>
             </div>
             <div className="bg-white text-[#13312A] p-3 rounded-lg text-center border border-[#C69A72]/20 shadow-sm">
-              <div className="text-xl font-bold">{stats.pending}</div>
+              <div className="text-xl font-bold">{formatArabicNumber(stats.pending)}</div>
               <div className="text-xs text-[#155446] arabic-text">الفواتير المعلقة</div>
             </div>
             <div className="bg-white text-[#13312A] p-3 rounded-lg text-center border border-[#C69A72]/20 shadow-sm">
@@ -1015,7 +1016,7 @@ export function InvoicesPageWithDB({ onCreateInvoice, onViewInvoiceDetails, onMa
                            className="text-black arabic-text font-semibold text-lg"
                            style={{ width: `${columnWidths.invoiceNumber}px` }}
                          >
-                      {invoice.invoice_number}
+                      {formatStringNumber(invoice.invoice_number)}
                     </TableCell>
                          <TableCell 
                            className="text-black arabic-text font-medium"
@@ -1027,7 +1028,7 @@ export function InvoicesPageWithDB({ onCreateInvoice, onViewInvoiceDetails, onMa
                            className="text-black font-mono"
                            style={{ width: `${columnWidths.phone}px` }}
                          >
-                           {invoice.customer_phone || '-'}
+                           {invoice.customer_phone ? formatStringNumber(invoice.customer_phone) : '-'}
                          </TableCell>
                          <TableCell 
                            className="text-black font-bold text-lg"

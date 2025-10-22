@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { useInvoices } from '@/hooks/useInvoices';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useAuth } from './ProtectedRoute';
+import { formatArabicNumber, formatStringNumber } from '@/utils/arabicNumbers';
 // import { InvoiceService } from '@/services/invoice.service';
 import {
   Plus,
@@ -780,15 +781,15 @@ export function InvoicesPage({ onCreateInvoice, onViewInvoiceDetails, onMarkAsPa
             {/* Statistics Cards */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               <div className="bg-gradient-to-r from-[#155446] to-[#13312A] text-white p-4 rounded-lg text-center">
-                <div className="text-2xl font-bold">{stats.total}</div>
+                <div className="text-2xl font-bold">{formatArabicNumber(stats.total)}</div>
                 <div className="text-sm opacity-90 arabic-text">إجمالي الفواتير</div>
               </div>
               <div className="bg-gradient-to-r from-green-500 to-green-600 text-white p-4 rounded-lg text-center">
-                <div className="text-2xl font-bold">{stats.paid}</div>
+                <div className="text-2xl font-bold">{formatArabicNumber(stats.paid)}</div>
                 <div className="text-sm opacity-90 arabic-text">مدفوعة</div>
               </div>
               <div className="bg-gradient-to-r from-yellow-500 to-orange-500 text-white p-4 rounded-lg text-center">
-                <div className="text-2xl font-bold">{stats.pending}</div>
+                <div className="text-2xl font-bold">{formatArabicNumber(stats.pending)}</div>
                 <div className="text-sm opacity-90 arabic-text">معلقة</div>
               </div>
               <div className="bg-gradient-to-r from-[#C69A72] to-[#B8860B] text-white p-4 rounded-lg text-center">
@@ -1221,8 +1222,8 @@ export function InvoicesPage({ onCreateInvoice, onViewInvoiceDetails, onMarkAsPa
                           {/* Content */}
                           <div className="p-4">
                             <h3 className="text-lg font-bold text-[#13312A] arabic-text mb-2 truncate">{invoice.customerName}</h3>
-                            <p className="text-sm text-[#155446] arabic-text mb-1">رقم الفاتورة: {invoice.id}</p>
-                            <p className="text-sm text-[#155446] font-mono mb-3">{invoice.phone}</p>
+                            <p className="text-sm text-[#155446] arabic-text mb-1">رقم الفاتورة: {formatStringNumber(invoice.id)}</p>
+                            <p className="text-sm text-[#155446] font-mono mb-3">{formatStringNumber(invoice.phone)}</p>
                             
                             <div className="space-y-2 mb-4">
                               <div className="flex justify-between items-center">

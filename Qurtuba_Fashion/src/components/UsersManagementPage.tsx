@@ -14,7 +14,7 @@ import { toast } from 'sonner';
 
 
 interface UsersManagementPageProps {
-  onNavigate?: (page: string) => void;
+  onNavigate?: (page: string, itemId?: string) => void;
 }
 
 export function UsersManagementPage({ onNavigate }: UsersManagementPageProps) {

@@ -1,23 +1,18 @@
-import { useState } from 'react';
 import { Card, CardContent } from './ui/card';
 import { Button } from './ui/button';
-import { Bell, AlertCircle, RefreshCw } from 'lucide-react';
+import { AlertCircle, RefreshCw } from 'lucide-react';
 import { SyncStatus } from './SyncStatus';
 import { useDashboardStats } from '@/hooks/useDashboardStats';
 import { QuickActions } from './dashboard/QuickActions';
 import { RecentActivities } from './dashboard/RecentActivities';
-import { NotificationCenter } from './dashboard/NotificationCenter';
-import { useNotifications } from '@/app/NotificationsProvider';
 
 interface DashboardProps {
-  onNavigate: (page: string) => void;
+  onNavigate: (page: string, itemId?: string) => void;
   onCreateInvoice: () => void;
 }
 
 export function Dashboard({ onNavigate, onCreateInvoice }: DashboardProps) {
   const { stats, error } = useDashboardStats();
-  const [isNotificationOpen, setIsNotificationOpen] = useState(false);
-  const { unreadCount } = useNotifications();
 
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -67,20 +62,6 @@ export function Dashboard({ onNavigate, onCreateInvoice }: DashboardProps) {
           <div className="relative hidden md:block">
             <SyncStatus />
           </div>
-          <div>
-            <Button 
-              className="bg-[#155446] hover:bg-[#13312A] text-[#F6E9CA] touch-target relative"
-              onClick={() => setIsNotificationOpen(true)}
-            >
-              <Bell className="w-4 h-4 ml-2" />
-              <span className="arabic-text">الإشعارات</span>
-              {unreadCount > 0 && (
-                <span className="absolute top-0 right-0 translate-x-1/2 -translate-y-1/2 bg-red-600 text-white text-[10px] leading-none rounded-full py-[2px] px-[6px]">
-                  {unreadCount}
-                </span>
-              )}
-            </Button>
-          </div>
         </div>
       </div>
 
@@ -96,13 +77,6 @@ export function Dashboard({ onNavigate, onCreateInvoice }: DashboardProps) {
         recentInvoices={stats.recentInvoices}
         recentCustomers={stats.recentCustomers}
         upcomingDeliveries={stats.upcomingDeliveries}
-      />
-
-      {/* Notification Center */}
-      <NotificationCenter
-        isOpen={isNotificationOpen}
-        onClose={() => setIsNotificationOpen(false)}
-        onNavigate={onNavigate}
       />
     </div>
   );

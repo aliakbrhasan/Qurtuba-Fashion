@@ -3,14 +3,21 @@
  */
 
 /**
- * Converts Western digits to Arabic digits
+ * Converts Western digits to Arabic digits - DISABLED
+ * Now returns numbers as-is (Western numerals 0-9)
  */
 export function toArabicDigits(str: string | number): string {
-  const arabicDigits = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'];
-  
-  return String(str).replace(/[0-9]/g, (digit) => {
-    return arabicDigits[parseInt(digit)];
-  });
+  // Return numbers as-is without conversion to Arabic digits
+  return String(str);
+}
+
+/**
+ * Formats string numbers to display as Western numerals
+ * Handles both string and number inputs
+ */
+export function formatStringNumber(value: string | number | undefined): string {
+  if (!value) return '—';
+  return String(value);
 }
 
 /**
@@ -31,10 +38,10 @@ export function formatArabicNumberEnhanced(value: number, options?: {
       maximumFractionDigits: options?.maximumFractionDigits ?? 0,
     }).format(value);
     
-    // Convert to Arabic digits
-    return toArabicDigits(formatted);
+    // Return formatted numbers as-is (Western numerals)
+    return formatted;
   } catch {
-    return toArabicDigits(value.toString());
+    return value.toString();
   }
 }
 
@@ -54,9 +61,9 @@ export function formatArabicCurrencyEnhanced(amount: number, currency: string = 
       maximumFractionDigits: 0,
     }).format(amount);
     
-    return toArabicDigits(formatted);
+    return formatted;
   } catch {
-    return `${toArabicDigits(amount)} ${currency}`;
+    return `${amount} ${currency}`;
   }
 }
 
@@ -77,9 +84,9 @@ export function formatArabicNumber(value: number, options?: {
       maximumFractionDigits: options?.maximumFractionDigits ?? 0,
     }).format(value);
     
-    return toArabicDigits(formatted);
+    return formatted;
   } catch {
-    return toArabicDigits(value.toString());
+    return value.toString();
   }
 }
 
@@ -99,9 +106,9 @@ export function formatArabicCurrency(amount: number, currency: string = 'IQD'): 
       maximumFractionDigits: 0,
     }).format(amount);
     
-    return toArabicDigits(formatted);
+    return formatted;
   } catch {
-    return `${toArabicDigits(amount)} ${currency}`;
+    return `${amount} ${currency}`;
   }
 }
 
@@ -125,9 +132,9 @@ export function formatArabicDate(date: string | Date, options?: {
       day: options?.day ?? '2-digit',
     }).format(dateObj);
     
-    return toArabicDigits(formatted);
+    return formatted;
   } catch {
-    return toArabicDigits(dateObj.toISOString().slice(0, 10));
+    return dateObj.toISOString().slice(0, 10);
   }
 }
 
@@ -147,8 +154,8 @@ export function formatArabicDateDisplay(date: string | Date): string {
       day: 'numeric',
     }).format(dateObj);
     
-    return toArabicDigits(formatted);
+    return formatted;
   } catch {
-    return toArabicDigits(dateObj.toISOString().slice(0, 10));
+    return dateObj.toISOString().slice(0, 10);
   }
 }

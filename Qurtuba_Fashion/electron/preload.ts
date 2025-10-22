@@ -29,9 +29,13 @@ const electronAPI = {
     return ipcRenderer.invoke('export:pdf', data);
   },
   
-  // Print functionality (for future use)
-  print: (data: any) => {
+  // Print functionality
+  print: (data: { title: string; content: string; styles?: string }) => {
     return ipcRenderer.invoke('print:document', data);
+  },
+  
+  printPreview: (data: { title: string; content: string; styles?: string }) => {
+    return ipcRenderer.invoke('print:preview', data);
   },
 
   // Local database functions
@@ -108,9 +112,11 @@ const electronAPI = {
 
   // Images
   images: {
-    upload: (buffer: number[], contentType: string, fileName: string) => ipcRenderer.invoke('image:upload', { buffer, contentType, fileName }),
+    upload: (buffer: number[], contentType: string, fileName: string, entityType?: string, entityId?: string, originalName?: string, width?: number, height?: number) => ipcRenderer.invoke('image:upload', { buffer, contentType, fileName, entityType, entityId, originalName, width, height }),
     delete: (path: string) => ipcRenderer.invoke('image:delete', path),
+    deleteById: (imageId: string) => ipcRenderer.invoke('image:deleteById', imageId),
     getPublicUrl: (path: string) => ipcRenderer.invoke('image:getPublicUrl', path),
+    getByEntity: (entityType: string, entityId: string) => ipcRenderer.invoke('image:getByEntity', entityType, entityId),
   },
 
   // Persistent JSON cache

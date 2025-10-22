@@ -63,7 +63,7 @@ export function PrintableInvoice({ invoice }: PrintableInvoiceProps) {
   const formatShortCurrency = (value: number): string => {
     if (!Number.isFinite(value)) return '—';
     try {
-      return new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(value) + ' د.ع';
+      return new Intl.NumberFormat('ar-IQ', { maximumFractionDigits: 0 }).format(value) + ' د.ع';
     } catch {
       return `${value} د.ع`;
     }

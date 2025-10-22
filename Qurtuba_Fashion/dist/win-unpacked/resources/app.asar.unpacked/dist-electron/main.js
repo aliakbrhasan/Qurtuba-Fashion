@@ -363,6 +363,27 @@ electron_1.ipcMain.handle('image:upload', async (_evt, args) => ok(async () => {
     const buf = Buffer.from(args.buffer);
     (0, fs_1.writeFileSync)(targetPath, buf);
     const fileUrl = (0, url_1.pathToFileURL)(targetPath).toString();
+    // If entity info provided, save to database
+    if (args.entityType && args.entityId) {
+        try {
+            const imageRecord = await localDB.createImage({
+                filename: args.fileName,
+                original_name: args.originalName || args.fileName,
+                mime_type: args.contentType,
+                size: args.buffer.length,
+                width: args.width,
+                height: args.height,
+                data_url: fileUrl,
+                entity_type: args.entityType,
+                entity_id: args.entityId
+            });
+            return { url: targetPath, path: args.fileName, publicUrl: fileUrl, imageId: imageRecord.id };
+        }
+        catch (dbError) {
+            console.warn('Failed to save image record to database:', dbError);
+            // Continue with file upload even if DB save fails
+        }
+    }
     return { url: targetPath, path: args.fileName, publicUrl: fileUrl };
 }));
 electron_1.ipcMain.handle('image:delete', async (_evt, path) => ok(async () => {
@@ -383,6 +404,174 @@ electron_1.ipcMain.handle('image:getPublicUrl', async (_evt, path) => ok(async (
     const targetPath = (0, path_1.join)(baseDir, path);
     return (0, url_1.pathToFileURL)(targetPath).toString();
 }));
+electron_1.ipcMain.handle('image:getByEntity', async (_evt, entityType, entityId) => ok(async () => {
+    return await localDB.getImagesByEntity(entityType, entityId);
+}));
+electron_1.ipcMain.handle('image:deleteById', async (_evt, imageId) => ok(async () => {
+    // Get image record first to find the file path
+    const image = await localDB.getImage(imageId);
+    if (image) {
+        // Delete the file
+        const baseDir = (0, path_1.join)(electron_1.app.getPath('userData'), 'images');
+        const targetPath = (0, path_1.join)(baseDir, image.filename);
+        try {
+            if ((0, fs_1.existsSync)(targetPath))
+                (0, fs_1.unlinkSync)(targetPath);
+        }
+        catch (e) {
+            console.warn('Failed to delete image file:', e);
+        }
+    }
+    // Delete from database
+    await localDB.deleteImage(imageId);
+    return true;
+}));
+// Print handlers
+electron_1.ipcMain.handle('print:document', async (_evt, args) => {
+    try {
+        if (!mainWindow) {
+            throw new Error('Main window not available');
+        }
+        // Create a new window for printing
+        const printWindow = new electron_1.BrowserWindow({
+            width: 900,
+            height: 700,
+            show: false,
+            webPreferences: {
+                nodeIntegration: false,
+                contextIsolation: true,
+                sandbox: true,
+                webSecurity: true,
+                allowRunningInsecureContent: false,
+            },
+        });
+        // Load the print content
+        const htmlContent = `<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="utf-8" />
+    <title>${args.title}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet" />
+    <style>${args.styles || ''}</style>
+  </head>
+  <body>
+    ${args.content}
+  </body>
+</html>`;
+        await printWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(htmlContent)}`);
+        // Show the window and focus it
+        printWindow.show();
+        printWindow.focus();
+        // Wait for content to load, then trigger print
+        printWindow.webContents.once('did-finish-load', () => {
+            setTimeout(() => {
+                printWindow.webContents.print({}, (success, errorType) => {
+                    if (!success) {
+                        console.error('Print failed:', errorType);
+                    }
+                    // Close the print window after printing
+                    setTimeout(() => {
+                        printWindow.close();
+                    }, 1000);
+                });
+            }, 500);
+        });
+        return { ok: true };
+    }
+    catch (e) {
+        console.error('Print error:', e);
+        return { ok: false, error: String(e?.message || e) };
+    }
+});
+electron_1.ipcMain.handle('print:preview', async (_evt, args) => {
+    try {
+        if (!mainWindow) {
+            throw new Error('Main window not available');
+        }
+        // Create a new window for print preview
+        const previewWindow = new electron_1.BrowserWindow({
+            width: 900,
+            height: 700,
+            show: true,
+            webPreferences: {
+                nodeIntegration: false,
+                contextIsolation: true,
+                sandbox: true,
+                webSecurity: true,
+                allowRunningInsecureContent: false,
+            },
+            title: `معاينة الطباعة - ${args.title}`,
+        });
+        // Load the print content
+        const htmlContent = `<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="utf-8" />
+    <title>${args.title}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet" />
+    <style>
+      body { 
+        margin: 0; 
+        padding: 20px; 
+        font-family: 'Tajawal', sans-serif; 
+        direction: rtl; 
+        background: #f5f5f5;
+      }
+      .print-content {
+        background: white;
+        padding: 20px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        border-radius: 8px;
+        max-width: 800px;
+        margin: 0 auto;
+      }
+      .print-actions {
+        position: fixed;
+        top: 10px;
+        right: 10px;
+        z-index: 1000;
+        background: white;
+        padding: 10px;
+        border-radius: 5px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+      }
+      .print-btn {
+        background: #007bff;
+        color: white;
+        border: none;
+        padding: 8px 16px;
+        border-radius: 4px;
+        cursor: pointer;
+        margin-left: 5px;
+      }
+      .print-btn:hover {
+        background: #0056b3;
+      }
+      ${args.styles || ''}
+    </style>
+  </head>
+  <body>
+    <div class="print-actions">
+      <button class="print-btn" onclick="window.print()">طباعة</button>
+      <button class="print-btn" onclick="window.close()">إغلاق</button>
+    </div>
+    <div class="print-content">
+      ${args.content}
+    </div>
+  </body>
+</html>`;
+        await previewWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(htmlContent)}`);
+        return { ok: true };
+    }
+    catch (e) {
+        console.error('Print preview error:', e);
+        return { ok: false, error: String(e?.message || e) };
+    }
+});
 // Handle app protocol for deep linking (optional)
 electron_1.app.setAsDefaultProtocolClient('qurtuba-fashion');
 // Create system tray

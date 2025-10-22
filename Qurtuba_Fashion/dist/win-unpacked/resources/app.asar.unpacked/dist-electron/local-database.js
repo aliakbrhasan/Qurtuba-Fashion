@@ -1,86 +1,13 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.LocalDatabase = void 0;
 const electron_1 = require("electron");
 const path_1 = require("path");
-// Use sqlite3 instead of better-sqlite3 to avoid C++20 compilation issues
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const sqlite3 = require('sqlite3').verbose();
-// Ensure sqlite3 can find its native module in packaged app
-if (electron_1.app.isPackaged) {
-    const sqlite3Path = (0, path_1.join)(process.resourcesPath, 'sqlite3', 'node_sqlite3.node');
-    console.log('Looking for sqlite3 native module at:', sqlite3Path);
-}
-// Wrapper class to match better-sqlite3 API
-const Database = class {
-    constructor(path) {
-        this.db = new sqlite3.Database(path);
-    }
-    static open(path) {
-        return new Database(path);
-    }
-    exec(sql) {
-        return new Promise((resolve, reject) => {
-            this.db.exec(sql, (err) => {
-                if (err)
-                    reject(err);
-                else
-                    resolve(undefined);
-            });
-        });
-    }
-    pragma(sql) {
-        return new Promise((resolve, reject) => {
-            this.db.get(sql, (err, row) => {
-                if (err)
-                    reject(err);
-                else
-                    resolve(row);
-            });
-        });
-    }
-    prepare(sql) {
-        const stmt = this.db.prepare(sql);
-        return {
-            run: (...params) => new Promise((resolve, reject) => {
-                // Forward all parameters correctly to sqlite3
-                // eslint-disable-next-line prefer-spread
-                stmt.run.apply(stmt, params.concat(function (err) {
-                    if (err)
-                        reject(err);
-                    else
-                        resolve({ lastInsertRowid: this.lastID });
-                }));
-            }),
-            get: (...params) => new Promise((resolve, reject) => {
-                // eslint-disable-next-line prefer-spread
-                stmt.get.apply(stmt, params.concat((err, row) => {
-                    if (err)
-                        reject(err);
-                    else
-                        resolve(row);
-                }));
-            }),
-            all: (...params) => new Promise((resolve, reject) => {
-                // eslint-disable-next-line prefer-spread
-                stmt.all.apply(stmt, params.concat((err, rows) => {
-                    if (err)
-                        reject(err);
-                    else
-                        resolve(rows);
-                }));
-            }),
-            finalize: () => {
-                stmt.finalize();
-            }
-        };
-    }
-    close() {
-        return new Promise((resolve) => {
-            this.db.close(resolve);
-        });
-    }
-};
+// Use better-sqlite3 for better Electron compatibility
+const better_sqlite3_1 = __importDefault(require("better-sqlite3"));
 class LocalDatabase {
     constructor() {
         this.db = null;
@@ -99,13 +26,13 @@ class LocalDatabase {
             catch (e) {
                 console.warn('Could not create database directory:', e);
             }
-            this.db = new Database(this.dbPath);
+            this.db = new better_sqlite3_1.default(this.dbPath);
             console.log('Database connection established');
             // Pragmas for durability and concurrency
-            await this.db.pragma('PRAGMA journal_mode = WAL');
-            await this.db.pragma('PRAGMA synchronous = NORMAL');
-            await this.db.pragma('PRAGMA foreign_keys = ON');
-            await this.createTables();
+            this.db.pragma('journal_mode = WAL');
+            this.db.pragma('synchronous = NORMAL');
+            this.db.pragma('foreign_keys = ON');
+            this.createTables();
             console.log('Database tables created successfully');
             await this.seedInitialUsersIfEmpty();
         }
@@ -116,26 +43,26 @@ class LocalDatabase {
         }
     }
     // Low-level helpers
-    async run(sql, params = []) {
+    run(sql, params = []) {
         if (!this.db)
             throw new Error('Database not initialized');
-        await this.db.prepare(sql).run(...params);
+        this.db.prepare(sql).run(...params);
     }
-    async get(sql, params = []) {
+    get(sql, params = []) {
         if (!this.db)
             throw new Error('Database not initialized');
-        return await this.db.prepare(sql).get(...params);
+        return this.db.prepare(sql).get(...params);
     }
-    async all(sql, params = []) {
+    all(sql, params = []) {
         if (!this.db)
             throw new Error('Database not initialized');
-        return await this.db.prepare(sql).all(...params);
+        return this.db.prepare(sql).all(...params);
     }
-    async createTables() {
+    createTables() {
         if (!this.db)
             throw new Error('Database not initialized');
         // Users table
-        await this.run(`
+        this.run(`
       CREATE TABLE IF NOT EXISTS users (
         id TEXT PRIMARY KEY,
         code TEXT NOT NULL UNIQUE,
@@ -155,7 +82,7 @@ class LocalDatabase {
       )
     `);
         // Customers table
-        await this.run(`
+        this.run(`
       CREATE TABLE IF NOT EXISTS customers (
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
@@ -173,7 +100,7 @@ class LocalDatabase {
       )
     `);
         // Invoices table
-        await this.run(`
+        this.run(`
       CREATE TABLE IF NOT EXISTS invoices (
         id TEXT PRIMARY KEY,
         invoice_number TEXT UNIQUE NOT NULL,
@@ -196,7 +123,7 @@ class LocalDatabase {
       )
     `);
         // Orders table
-        await this.run(`
+        this.run(`
       CREATE TABLE IF NOT EXISTS orders (
         id TEXT PRIMARY KEY,
         customer_id TEXT NOT NULL,
@@ -212,7 +139,7 @@ class LocalDatabase {
       )
     `);
         // Invoice items table
-        await this.run(`
+        this.run(`
       CREATE TABLE IF NOT EXISTS invoice_items (
         id TEXT PRIMARY KEY,
         invoice_id TEXT NOT NULL,
@@ -225,7 +152,7 @@ class LocalDatabase {
       )
     `);
         // Roles table
-        await this.run(`
+        this.run(`
       CREATE TABLE IF NOT EXISTS roles (
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL UNIQUE,
@@ -241,7 +168,7 @@ class LocalDatabase {
       )
     `);
         // Outbox for sync
-        await this.run(`
+        this.run(`
       CREATE TABLE IF NOT EXISTS outbox (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         table_name TEXT NOT NULL,
@@ -254,21 +181,42 @@ class LocalDatabase {
       )
     `);
         // Sync state
-        await this.run(`
+        this.run(`
       CREATE TABLE IF NOT EXISTS sync_state (
         table_name TEXT PRIMARY KEY,
         last_pull TEXT NOT NULL DEFAULT '1970-01-01T00:00:00.000Z'
       )
     `);
+        // Images table
+        this.run(`
+      CREATE TABLE IF NOT EXISTS images (
+        id TEXT PRIMARY KEY,
+        filename TEXT NOT NULL,
+        original_name TEXT NOT NULL,
+        mime_type TEXT NOT NULL,
+        size INTEGER NOT NULL,
+        width INTEGER,
+        height INTEGER,
+        data_url TEXT NOT NULL,
+        thumbnail_url TEXT,
+        entity_type TEXT NOT NULL,
+        entity_id TEXT NOT NULL,
+        created_by TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )
+    `);
         // Indexes
-        await this.run(`CREATE INDEX IF NOT EXISTS idx_outbox_created ON outbox(created_at)`);
-        await this.run(`CREATE INDEX IF NOT EXISTS idx_outbox_table ON outbox(table_name, record_id)`);
+        this.run(`CREATE INDEX IF NOT EXISTS idx_outbox_created ON outbox(created_at)`);
+        this.run(`CREATE INDEX IF NOT EXISTS idx_outbox_table ON outbox(table_name, record_id)`);
+        this.run(`CREATE INDEX IF NOT EXISTS idx_images_entity ON images(entity_type, entity_id)`);
+        this.run(`CREATE INDEX IF NOT EXISTS idx_images_created_at ON images(created_at)`);
     }
     async seedInitialUsersIfEmpty() {
         if (!this.db)
             throw new Error('Database not initialized');
         try {
-            const row = await this.get('SELECT COUNT(*) as cnt FROM users WHERE deleted = 0');
+            const row = this.get('SELECT COUNT(*) as cnt FROM users WHERE deleted = 0');
             const count = row?.cnt ?? 0;
             if (count > 0)
                 return;
@@ -321,7 +269,7 @@ class LocalDatabase {
                 }
             ];
             for (const u of seed) {
-                await this.run(`INSERT INTO users (id, code, name, email, phone, password_hash, status, role, role_id, is_active, version, deleted, created_at, updated_at, last_login)
+                this.run(`INSERT INTO users (id, code, name, email, phone, password_hash, status, role, role_id, is_active, version, deleted, created_at, updated_at, last_login)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0, ?, ?, ?)`, [u.id, u.code, u.name, u.email, u.phone, u.password_hash, u.status, u.role, u.role_id, u.is_active, u.created_at, u.updated_at, u.last_login]);
             }
         }
@@ -980,6 +928,69 @@ class LocalDatabase {
         const now = new Date().toISOString();
         await this.run('UPDATE roles SET deleted = 1, updated_at = ?, version = version + 1 WHERE id = ?', [now, id]);
         await this.enqueueOutbox('roles', id, 'delete', { id, deleted: 1, updated_at: now });
+    }
+    // Image CRUD functions
+    async createImage(image) {
+        if (!this.db)
+            throw new Error('Database not initialized');
+        const id = this.generateId();
+        const now = new Date().toISOString();
+        await this.run(`
+      INSERT INTO images (id, filename, original_name, mime_type, size, width, height, data_url, thumbnail_url, entity_type, entity_id, created_by, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [
+            id,
+            image.filename,
+            image.original_name,
+            image.mime_type,
+            image.size,
+            image.width || null,
+            image.height || null,
+            image.data_url,
+            image.thumbnail_url || null,
+            image.entity_type,
+            image.entity_id,
+            image.created_by || null,
+            now,
+            now
+        ]);
+        const row = await this.get('SELECT * FROM images WHERE id = ?', [id]);
+        await this.enqueueOutbox('images', id, 'insert', row);
+        return row;
+    }
+    async getImagesByEntity(entityType, entityId) {
+        if (!this.db)
+            throw new Error('Database not initialized');
+        return await this.all('SELECT * FROM images WHERE entity_type = ? AND entity_id = ? ORDER BY created_at DESC', [entityType, entityId]);
+    }
+    async getImage(id) {
+        if (!this.db)
+            throw new Error('Database not initialized');
+        return await this.get('SELECT * FROM images WHERE id = ?', [id]);
+    }
+    async updateImage(id, updates) {
+        if (!this.db)
+            throw new Error('Database not initialized');
+        const now = new Date().toISOString();
+        const toSet = [];
+        const vals = [];
+        for (const [k, v] of Object.entries(updates)) {
+            if (k === 'id' || k === 'created_at')
+                continue;
+            toSet.push(`${k} = ?`);
+            vals.push(v);
+        }
+        await this.run(`UPDATE images SET ${toSet.join(', ')}, updated_at = ? WHERE id = ?`, [...vals, now, id]);
+        const row = await this.get('SELECT * FROM images WHERE id = ?', [id]);
+        await this.enqueueOutbox('images', id, 'update', row);
+        return row;
+    }
+    async deleteImage(id) {
+        if (!this.db)
+            throw new Error('Database not initialized');
+        const now = new Date().toISOString();
+        await this.run('DELETE FROM images WHERE id = ?', [id]);
+        await this.enqueueOutbox('images', id, 'delete', { id, deleted: 1, updated_at: now });
     }
     async getLastPull(table) {
         const row = await this.get('SELECT last_pull FROM sync_state WHERE table_name = ?', [table]);

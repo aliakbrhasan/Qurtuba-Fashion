@@ -54,7 +54,7 @@ export default function App() {
     }
   };
 
-  const handleNavigate = (page: string) => {
+  const handleNavigate = (page: string, itemId?: string) => {
     setCurrentPage(page);
     if (page !== 'customerDetails' && page !== 'invoiceDetails') {
       setSelectedCustomer(null);
@@ -63,6 +63,18 @@ export default function App() {
       setSelectedInvoice(null);
     }
     setIsNewInvoiceDialogOpen(false);
+
+    // Handle navigation with specific item IDs
+    if (itemId) {
+      if (page === 'invoices') {
+        setSelectedInvoice({ id: itemId });
+        setCurrentPage('invoiceDetails');
+      } else if (page === 'customers') {
+        // For customers, we need to load the customer data first
+        // This will be handled by the notification system
+        setCurrentPage('customers');
+      }
+    }
   };
 
   const handleCustomerSelect = (customer: Customer) => {
