@@ -6,7 +6,7 @@ import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Button } from './ui/button';
-import { X, Plus, Pencil, Trash2, Check, ChevronDown, Camera, AlertCircle, User, Ruler, CreditCard, Palette, Image as ImageIcon, Info } from 'lucide-react';
+import { X, Plus, Pencil, Trash2, Check, ChevronDown, Camera, AlertCircle } from 'lucide-react';
 import { InvoiceService, InvoiceFormData } from '@/services/invoice.service';
 import { useInvoices } from '@/hooks/useInvoices';
 import { ImageUpload } from './ui/ImageUpload';
@@ -828,8 +828,8 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated,
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogOverlay className="fixed inset-0 z-[999] bg-black/80" />
-      <DialogContent fullScreen className="bg-[#F6F1E6] flex flex-col">
+      <DialogOverlay className="fixed inset-0 z-[999] bg-[#000000]" />
+      <DialogContent fullScreen className="bg-[#F6E9CA] flex flex-col">
         <DialogHeader className="flex-shrink-0 relative">
           <Button
             type="button"
@@ -846,185 +846,173 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated,
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex-1 overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-[#C69A72] scrollbar-track-[#F6F1E6] hover:scrollbar-thumb-[#B88A5A]" dir="rtl">
+        <div className="flex-1 overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-[#4A5568] scrollbar-track-[#2D3748] hover:scrollbar-thumb-[#718096]" dir="rtl">
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-3 gap-5">
-          {/* Customer Information */}
-          <Card className="bg-white border-[#E6D9C4] rounded-lg shadow-sm">
-            <CardHeader className="py-2 border-b border-[#EEE1CD]">
-              <div className="flex items-center gap-2 px-2">
-                <User className="h-4 w-4 text-[#1F4529]" />
-                <CardTitle className="text-[#13312A] arabic-text text-base">بيانات الزبون</CardTitle>
-              </div>
-            </CardHeader>
-            <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-3 py-3">
-              <div>
-                <Label className="text-[#13312A] arabic-text">اسم الزبون *</Label>
-                <Input 
-                  placeholder="أدخل اسم الزبون" 
-                  className="bg-white border-[#C69A72] text-right"
-                  value={formData.customerName}
-                  onChange={(e) => setFormData(prev => ({ ...prev, customerName: e.target.value }))}
-                  required
-                />
-              </div>
-              <div>
-                <Label className="text-[#13312A] arabic-text">رقم الهاتف *</Label>
-                <Input 
-                  placeholder="077xxxxxxxx" 
-                  className="bg-white border-[#C69A72] text-right"
-                  value={formData.customerPhone}
-                  onChange={(e) => setFormData(prev => ({ ...prev, customerPhone: e.target.value }))}
-                  required
-                />
-              </div>
-              <div className="md:col-span-2">
-                <Label className="text-[#13312A] arabic-text">العنوان</Label>
-                <Input 
-                  placeholder="أدخل العنوان" 
-                  className="bg-white border-[#C69A72] text-right"
-                  value={formData.customerAddress}
-                  onChange={(e) => setFormData(prev => ({ ...prev, customerAddress: e.target.value }))}
-                />
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Measurements */}
-          <Card className="bg-white border-[#E6D9C4] rounded-lg shadow-sm">
-            <CardHeader className="py-2 border-b border-[#EEE1CD]">
-              <div className="flex items-center gap-2 px-2">
-                <Ruler className="h-4 w-4 text-[#1F4529]" />
-                <CardTitle className="text-[#13312A] arabic-text text-base">القياسات</CardTitle>
-              </div>
-            </CardHeader>
-            <CardContent className="grid grid-cols-2 md:grid-cols-1 gap-3 py-3">
-              <div>
-                <Label className="text-[#13312A] arabic-text">الطول (سم)</Label>
-                <Input 
-                  type="number"
-                  placeholder="0"
-                  className="bg-white border-[#C69A72] text-right h-10 py-2"
-                  value={formData.measurements?.length || ''}
-                  onChange={(e) => setFormData(prev => ({
-                    ...prev,
-                    measurements: { ...prev.measurements!, length: Number(e.target.value) }
-                  }))}
-                  onFocus={handleFocus}
-                  onWheel={handleWheel}
-                />
-              </div>
-              <div>
-                <Label className="text-[#13312A] arabic-text">الكتف (سم)</Label>
-                <Input 
-                  type="number"
-                  placeholder="0"
-                  className="bg-white border-[#C69A72] text-right h-10 py-2"
-                  value={formData.measurements?.shoulder || ''}
-                  onChange={(e) => setFormData(prev => ({
-                    ...prev,
-                    measurements: { ...prev.measurements!, shoulder: Number(e.target.value) }
-                  }))}
-                  onFocus={handleFocus}
-                  onWheel={handleWheel}
-                />
-              </div>
-              <div>
-                <Label className="text-[#13312A] arabic-text">الخصر (سم)</Label>
-                <Input 
-                  type="number"
-                  placeholder="0"
-                  className="bg-white border-[#C69A72] text-right h-10 py-2"
-                  value={formData.measurements?.waist || ''}
-                  onChange={(e) => setFormData(prev => ({
-                    ...prev,
-                    measurements: { ...prev.measurements!, waist: Number(e.target.value) }
-                  }))}
-                  onFocus={handleFocus}
-                  onWheel={handleWheel}
-                />
-              </div>
-              <div>
-                <Label className="text-[#13312A] arabic-text">الصدر (سم)</Label>
-                <Input 
-                  type="number"
-                  placeholder="0"
-                  className="bg-white border-[#C69A72] text-right h-10 py-2"
-                  value={formData.measurements?.chest || ''}
-                  onChange={(e) => setFormData(prev => ({
-                    ...prev,
-                    measurements: { ...prev.measurements!, chest: Number(e.target.value) }
-                  }))}
-                  onFocus={handleFocus}
-                  onWheel={handleWheel}
-                />
-              </div>
-            </CardContent>
-          </Card>
-          </div>
-          <div className="grid grid-cols-3 gap-5">
-          {/* Payment Information */}
-          <Card className="bg-white border-[#E6D9C4] rounded-lg shadow-sm">
-            <CardHeader className="py-2 border-b border-[#EEE1CD]">
-              <div className="flex items-center gap-2 px-2">
-                <CreditCard className="h-4 w-4 text-[#1F4529]" />
-                <CardTitle className="text-[#13312A] arabic-text text-base">معلومات الدفع</CardTitle>
-              </div>
-            </CardHeader>
-            <CardContent className="grid grid-cols-1 md:grid-cols-1 gap-3 py-3">
-              <div>
-                <Label className="text-[#13312A] arabic-text">المجموع</Label>
-                <Input 
-                  type="number"
-                  placeholder="0"
-                  className="bg-white border-[#C69A72] text-right"
-                  value={formData.total}
-                  onChange={(e) => setFormData(prev => ({ ...prev, total: Number(e.target.value) }))}
-                  onFocus={handleFocus}
-                  onWheel={handleWheel}
-                />
-              </div>
-              <div>
-                <Label className="text-[#13312A] arabic-text">المدفوع</Label>
-                <Input 
-                  type="number"
-                  placeholder="0"
-                  className="bg-white border-[#C69A72] text-right"
-                  value={formData.paidAmount}
-                  onChange={(e) => setFormData(prev => ({ ...prev, paidAmount: Number(e.target.value) }))}
-                  onFocus={handleFocus}
-                  onWheel={handleWheel}
-                />
-              </div>
-              <div>
-                <Label className="text-[#13312A] arabic-text">المتبقي</Label>
-                <Input 
-                  type="number"
-                  placeholder="0"
-                  className="bg-gray-50 border-[#C69A72] text-right"
-                  value={remainingAmount}
-                  readOnly
-                />
-              </div>
-              <div>
-                <Label className="text-[#13312A] arabic-text">تاريخ الدفع</Label>
-                <Input 
-                  type="date"
-                  className="bg-white border-[#C69A72] text-right"
-                  value={paymentDate}
-                  onChange={(e) => setPaymentDate(e.target.value)}
-                />
-              </div>
-            </CardContent>
-            <CardContent className="pt-0">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* الصف الأول: بيانات الزبون، القياسات، معلومات الدفع */}
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+            {/* Customer Information */}
+            <Card className="bg-white border-[#E6D9C4] rounded-xl shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
+              <CardHeader className="py-1 border-b border-[#EEE1CD] min-h-[28px]">
+                <CardTitle className="text-[#1F4529] arabic-text text-sm font-bold">بيانات الزبون</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2 py-1">
                 <div>
-                  <Label className="text-[#13312A] arabic-text">الحالة</Label>
+                  <Label className="text-[#13312A] arabic-text text-xs">اسم الزبون *</Label>
+                  <Input 
+                    placeholder="أدخل اسم الزبون" 
+                    className="bg-white border-[#C69A72] text-right h-7 text-xs"
+                    value={formData.customerName}
+                    onChange={(e) => setFormData(prev => ({ ...prev, customerName: e.target.value }))}
+                    required
+                  />
+                </div>
+                <div>
+                  <Label className="text-[#13312A] arabic-text text-xs">رقم الهاتف *</Label>
+                  <Input 
+                    placeholder="077xxxxxxxx" 
+                    className="bg-white border-[#C69A72] text-right h-7 text-xs"
+                    value={formData.customerPhone}
+                    onChange={(e) => setFormData(prev => ({ ...prev, customerPhone: e.target.value }))}
+                    required
+                  />
+                </div>
+                <div>
+                  <Label className="text-[#13312A] arabic-text text-xs">العنوان</Label>
+                  <Input 
+                    placeholder="أدخل العنوان" 
+                    className="bg-white border-[#C69A72] text-right h-7 text-xs"
+                    value={formData.customerAddress}
+                    onChange={(e) => setFormData(prev => ({ ...prev, customerAddress: e.target.value }))}
+                  />
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Measurements */}
+            <Card className="bg-white border-[#E6D9C4] rounded-xl shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
+              <CardHeader className="py-1 border-b border-[#EEE1CD] min-h-[28px]">
+                <CardTitle className="text-[#1F4529] arabic-text text-sm font-bold">القياسات</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2 py-1">
+                <div>
+                  <Label className="text-[#13312A] arabic-text text-xs">الطول (سم)</Label>
+                  <Input 
+                    type="number"
+                    placeholder="0"
+                    className="bg-white border-[#C69A72] text-right h-7 text-xs"
+                    value={formData.measurements?.length || ''}
+                    onChange={(e) => setFormData(prev => ({
+                      ...prev,
+                      measurements: { ...prev.measurements!, length: Number(e.target.value) }
+                    }))}
+                    onFocus={handleFocus}
+                    onWheel={handleWheel}
+                  />
+                </div>
+                <div>
+                  <Label className="text-[#13312A] arabic-text text-xs">الكتف (سم)</Label>
+                  <Input 
+                    type="number"
+                    placeholder="0"
+                    className="bg-white border-[#C69A72] text-right h-7 text-xs"
+                    value={formData.measurements?.shoulder || ''}
+                    onChange={(e) => setFormData(prev => ({
+                      ...prev,
+                      measurements: { ...prev.measurements!, shoulder: Number(e.target.value) }
+                    }))}
+                    onFocus={handleFocus}
+                    onWheel={handleWheel}
+                  />
+                </div>
+                <div>
+                  <Label className="text-[#13312A] arabic-text text-xs">الخصر (سم)</Label>
+                  <Input 
+                    type="number"
+                    placeholder="0"
+                    className="bg-white border-[#C69A72] text-right h-7 text-xs"
+                    value={formData.measurements?.waist || ''}
+                    onChange={(e) => setFormData(prev => ({
+                      ...prev,
+                      measurements: { ...prev.measurements!, waist: Number(e.target.value) }
+                    }))}
+                    onFocus={handleFocus}
+                    onWheel={handleWheel}
+                  />
+                </div>
+                <div>
+                  <Label className="text-[#13312A] arabic-text text-xs">الصدر (سم)</Label>
+                  <Input 
+                    type="number"
+                    placeholder="0"
+                    className="bg-white border-[#C69A72] text-right h-7 text-xs"
+                    value={formData.measurements?.chest || ''}
+                    onChange={(e) => setFormData(prev => ({
+                      ...prev,
+                      measurements: { ...prev.measurements!, chest: Number(e.target.value) }
+                    }))}
+                    onFocus={handleFocus}
+                    onWheel={handleWheel}
+                  />
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Payment Information */}
+            <Card className="bg-white border-[#E6D9C4] rounded-xl shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
+              <CardHeader className="py-1 border-b border-[#EEE1CD] min-h-[28px]">
+                <CardTitle className="text-[#1F4529] arabic-text text-sm font-bold">معلومات الدفع</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2 py-1">
+                <div>
+                  <Label className="text-[#13312A] arabic-text text-xs">المجموع</Label>
+                  <Input 
+                    type="number"
+                    placeholder="0"
+                    className="bg-white border-[#C69A72] text-right h-7 text-xs"
+                    value={formData.total}
+                    onChange={(e) => setFormData(prev => ({ ...prev, total: Number(e.target.value) }))}
+                    onFocus={handleFocus}
+                    onWheel={handleWheel}
+                  />
+                </div>
+                <div>
+                  <Label className="text-[#13312A] arabic-text text-xs">المدفوع</Label>
+                  <Input 
+                    type="number"
+                    placeholder="0"
+                    className="bg-white border-[#C69A72] text-right h-7 text-xs"
+                    value={formData.paidAmount}
+                    onChange={(e) => setFormData(prev => ({ ...prev, paidAmount: Number(e.target.value) }))}
+                    onFocus={handleFocus}
+                    onWheel={handleWheel}
+                  />
+                </div>
+                <div>
+                  <Label className="text-[#13312A] arabic-text text-xs">المتبقي</Label>
+                  <Input 
+                    type="number"
+                    placeholder="0"
+                    className="bg-gray-50 border-[#C69A72] text-right h-7 text-xs"
+                    value={remainingAmount}
+                    readOnly
+                  />
+                </div>
+                <div>
+                  <Label className="text-[#13312A] arabic-text text-xs">تاريخ الدفع</Label>
+                  <Input 
+                    type="date"
+                    className="bg-white border-[#C69A72] text-right h-7 text-xs"
+                    value={paymentDate}
+                    onChange={(e) => setPaymentDate(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <Label className="text-[#13312A] arabic-text text-xs">الحالة</Label>
                   <Select 
                     value={formData.status}
                     onValueChange={(value: string) => setFormData(prev => ({ ...prev, status: value }))}
                   >
-                    <SelectTrigger className="bg-white border-[#C69A72] text-right" aria-label="اختيار الزبون" title="اختيار الزبون">
+                    <SelectTrigger className="bg-white border-[#C69A72] text-right h-8 text-sm" aria-label="اختيار الزبون" title="اختيار الزبون">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -1034,34 +1022,31 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated,
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="flex items-end">
-                  <div className={`px-3 py-2 rounded-lg text-sm font-medium w-full text-center ${
-                    formData.status === 'مدفوع' 
-                      ? 'bg-green-100 text-green-800 border border-green-200' 
-                      : formData.status === 'جزئي'
-                      ? 'bg-yellow-100 text-yellow-800 border border-yellow-200'
-                      : 'bg-red-100 text-red-800 border border-red-200'
-                  }`}>
-                    {formData.status === 'مدفوع' && '✓ مدفوع بالكامل'}
-                    {formData.status === 'جزئي' && '⚠ مدفوع جزئياً'}
-                    {formData.status === 'معلق' && '✗ غير مدفوع'}
-                  </div>
+                <div className={`px-2 py-1 rounded text-xs font-medium text-center ${
+                  formData.status === 'مدفوع' 
+                    ? 'bg-green-100 text-green-800 border border-green-200' 
+                    : formData.status === 'جزئي'
+                    ? 'bg-yellow-100 text-yellow-800 border border-yellow-200'
+                    : 'bg-red-100 text-red-800 border border-red-200'
+                }`}>
+                  {formData.status === 'مدفوع' && '✓ مدفوع بالكامل'}
+                  {formData.status === 'جزئي' && '⚠ مدفوع جزئياً'}
+                  {formData.status === 'معلق' && '✗ غير مدفوع'}
                 </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          </div>
 
-          {/* Design Details Section */}
-          <Card className="bg-white border-[#E6D9C4] rounded-lg shadow-sm">
-            <CardHeader className="py-2 border-b border-[#EEE1CD]">
-              <div className="flex items-center gap-2 px-2">
-                <Palette className="h-4 w-4 text-[#1F4529]" />
-                <CardTitle className="text-[#13312A] arabic-text text-base">تفاصيل التصميم</CardTitle>
-              </div>
-            </CardHeader>
-            <CardContent className="grid grid-cols-1 md:grid-cols-1 gap-3 py-3">
+          {/* الصف الثاني: تفاصيل التصميم، صورة القماش، معلومات إضافية */}
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+            {/* Design Details Section */}
+            <Card className="bg-white border-[#E6D9C4] rounded-xl shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
+              <CardHeader className="py-1 border-b border-[#EEE1CD] min-h-[28px]">
+                <CardTitle className="text-[#1F4529] arabic-text text-sm font-bold">تفاصيل التصميم</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2 py-1">
               <div>
-                <Label className="text-[#13312A] arabic-text">نوع القماش</Label>
+                <Label className="text-[#13312A] arabic-text text-xs">نوع القماش</Label>
                 <Popover open={isFabricPopoverOpen} onOpenChange={setIsFabricPopoverOpen}>
                   <PopoverTrigger asChild>
                     <Button
@@ -1137,7 +1122,7 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated,
                 </Popover>
               </div>
               <div>
-                <Label className="text-[#13312A] arabic-text">مصدر القماش</Label>
+                <Label className="text-[#13312A] arabic-text text-xs">مصدر القماش</Label>
                 <Popover open={isSourcePopoverOpen} onOpenChange={setIsSourcePopoverOpen}>
                   <PopoverTrigger asChild>
                     <Button
@@ -1215,7 +1200,7 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated,
                 </Popover>
               </div>
               <div>
-                <Label className="text-[#13312A] arabic-text">نوع الياقة</Label>
+                <Label className="text-[#13312A] arabic-text text-xs">نوع الياقة</Label>
                 <Popover open={isCollarPopoverOpen} onOpenChange={setIsCollarPopoverOpen}>
                   <PopoverTrigger asChild>
                     <Button
@@ -1293,7 +1278,7 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated,
                 </Popover>
               </div>
               <div>
-                <Label className="text-[#13312A] arabic-text">أسلوب الصدر</Label>
+                <Label className="text-[#13312A] arabic-text text-xs">أسلوب الصدر</Label>
                 <Popover open={isChestStylePopoverOpen} onOpenChange={setIsChestStylePopoverOpen}>
                   <PopoverTrigger asChild>
                     <Button
@@ -1371,7 +1356,7 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated,
                 </Popover>
               </div>
               <div>
-                <Label className="text-[#13312A] arabic-text">نهاية الردن</Label>
+                <Label className="text-[#13312A] arabic-text text-xs">نهاية الردن</Label>
                 <Popover open={isSleeveEndPopoverOpen} onOpenChange={setIsSleeveEndPopoverOpen}>
                   <PopoverTrigger asChild>
                     <Button
@@ -1449,7 +1434,7 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated,
                 </Popover>
               </div>
               <div>
-                <Label className="text-[#13312A] arabic-text">نوع البنيجة</Label>
+                <Label className="text-[#13312A] arabic-text text-xs">نوع البنيجة</Label>
                 <Popover open={isBunijaPopoverOpen} onOpenChange={setIsBunijaPopoverOpen}>
                   <PopoverTrigger asChild>
                     <Button
@@ -1527,20 +1512,16 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated,
                 </Popover>
               </div>
             </CardContent>
-          </Card>
-          </div>
-          <div className="grid grid-cols-3 gap-5">
-          {/* Fabric Image Upload Section */}
-          <Card className="bg-white border-[#E6D9C4] rounded-lg shadow-sm">
-            <CardHeader className="py-2 border-b border-[#EEE1CD]">
-              <div className="flex items-center gap-2 px-2">
-                <ImageIcon className="h-4 w-4 text-[#1F4529]" />
-                <CardTitle className="text-[#13312A] arabic-text text-base">صورة القماش</CardTitle>
-              </div>
-            </CardHeader>
-            <CardContent className="py-3">
+            </Card>
+
+            {/* Fabric Image Upload Section */}
+            <Card className="bg-white border-[#E6D9C4] rounded-xl shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
+              <CardHeader className="py-1 border-b border-[#EEE1CD] min-h-[28px]">
+                <CardTitle className="text-[#1F4529] arabic-text text-sm font-bold">صورة القماش</CardTitle>
+              </CardHeader>
+            <CardContent className="py-2">
               <div>
-                <Label className="text-[#13312A] arabic-text">صورة القماش</Label>
+                <Label className="text-[#13312A] arabic-text text-xs">صورة القماش</Label>
                 <p className="text-xs text-gray-500 mb-2">اختر صورة القماش المستخدم في الطلب</p>
                 <div className="max-h-[280px] overflow-hidden rounded-md border border-[#C69A72]/40">
                   <ImageUpload
@@ -1640,37 +1621,34 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated,
                 </div>
               </div>
             </CardContent>
-          </Card>
+            </Card>
 
-          {/* Additional Information */}
-          <Card className="bg-white border-[#E6D9C4] rounded-lg shadow-sm">
-            <CardHeader className="py-2 border-b border-[#EEE1CD]">
-              <div className="flex items-center gap-2 px-2">
-                <Info className="h-4 w-4 text-[#1F4529]" />
-                <CardTitle className="text-[#13312A] arabic-text text-base">معلومات إضافية</CardTitle>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-3 py-3">
+            {/* Additional Information */}
+            <Card className="bg-white border-[#E6D9C4] rounded-xl shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
+              <CardHeader className="py-1 border-b border-[#EEE1CD] min-h-[28px]">
+                <CardTitle className="text-[#1F4529] arabic-text text-sm font-bold">معلومات إضافية</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2 py-1">
               <div>
-                <Label className="text-[#13312A] arabic-text">تاريخ التسليم</Label>
+                <Label className="text-[#13312A] arabic-text text-xs">تاريخ التسليم</Label>
                 <Input 
                   type="date"
-                  className="bg-white border-[#C69A72] text-right"
+                  className="bg-white border-[#C69A72] text-right h-8 text-sm"
                   value={formData.deliveryDate}
                   onChange={(e) => setFormData(prev => ({ ...prev, deliveryDate: e.target.value }))}
                 />
               </div>
               <div>
-                <Label className="text-[#13312A] arabic-text">ملاحظات</Label>
+                <Label className="text-[#13312A] arabic-text text-xs">ملاحظات</Label>
                 <Textarea 
                   placeholder="أي ملاحظات إضافية..."
-                  className="bg-white border-[#C69A72] text-right"
+                  className="bg-white border-[#C69A72] text-right text-sm"
                   value={formData.notes}
                   onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
                 />
               </div>
             </CardContent>
-          </Card>
+            </Card>
           </div>
 
           {/* Error Display */}
@@ -1683,7 +1661,7 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated,
         </div>
 
         {/* Dialog Footer - Fixed at bottom */}
-        <DialogFooter className="flex-shrink-0 flex gap-2 pt-4 border-t border-[#C69A72]/20 bg-[#F6E9CA]">
+        <DialogFooter className="flex-shrink-0 sticky bottom-0 left-0 right-0 flex gap-2 pt-3 pb-3 px-4 border-t border-[#4A5568] bg-[#2D3748]">
             <Button 
               type="button"
               variant="outline" 

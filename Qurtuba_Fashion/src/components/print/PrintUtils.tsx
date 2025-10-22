@@ -388,15 +388,13 @@ export const openPrintInvoiceWindow = (title: string, content: React.ReactElemen
     <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
     <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet" />
     <style>
-      ${brandPrintStyles}
       @page { size: A5 landscape; margin: 10mm; }
+      html, body { padding: 0; margin: 0; background: #ffffff; }
+      * { box-sizing: border-box; }
     </style>
   </head>
   <body>
-    <div class="print-container">
-      <div class="print-inner">${markup}</div>
-      <div class="print-footer">تم إنشاء هذا المستند من خلال نظام إدارة أزياء قرطبة</div>
-    </div>
+    ${markup}
     <script>
       window.onload = () => {
         window.focus();

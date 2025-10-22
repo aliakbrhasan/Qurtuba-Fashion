@@ -102,7 +102,7 @@ export function InvoiceDetailsDialogWithImages({
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('ar-SA', {
+    return new Date(dateString).toLocaleDateString('ar-IQ', {
       year: 'numeric',
       month: 'long',
       day: 'numeric'
@@ -110,7 +110,7 @@ export function InvoiceDetailsDialogWithImages({
   };
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('ar-SA', {
+    return new Intl.NumberFormat('ar-IQ', {
       style: 'currency',
       currency: 'IQD',
       minimumFractionDigits: 0
