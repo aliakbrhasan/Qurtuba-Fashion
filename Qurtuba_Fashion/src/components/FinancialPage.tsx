@@ -42,7 +42,7 @@ export function FinancialPage() {
   };
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('ar-IQ', {
+    return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: 'IQD',
       minimumFractionDigits: 0,
@@ -112,7 +112,7 @@ export function FinancialPage() {
           التقارير المالية والإحصائيات
         </h1>
         <p className="text-[#155446] arabic-text">
-          نظرة شاملة على الأداء المالي - {new Date().toLocaleDateString('ar-IQ')}
+          نظرة شاملة على الأداء المالي - {new Date().toLocaleDateString('en-US')}
         </p>
       </div>
 

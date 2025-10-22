@@ -24,6 +24,7 @@ export interface InvoiceFormData {
     shoulder: number;
     waist: number;
     chest: number;
+    collar: number;
   };
   designDetails?: {
     fabricType: string[];
@@ -312,7 +313,7 @@ export class InvoiceService {
 
   // Format currency
   static formatCurrency(amount: number): string {
-    return new Intl.NumberFormat('ar-IQ', {
+    return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: 'IQD',
       minimumFractionDigits: 0,
@@ -322,7 +323,7 @@ export class InvoiceService {
 
   // Format date
   static formatDate(date: string): string {
-    return new Date(date).toLocaleDateString('ar-IQ', {
+    return new Date(date).toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'long',
       day: 'numeric',

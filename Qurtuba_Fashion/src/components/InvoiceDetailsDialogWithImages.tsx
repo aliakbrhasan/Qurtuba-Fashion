@@ -102,7 +102,7 @@ export function InvoiceDetailsDialogWithImages({
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('ar-IQ', {
+    return new Date(dateString).toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'long',
       day: 'numeric'
@@ -110,7 +110,7 @@ export function InvoiceDetailsDialogWithImages({
   };
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('ar-IQ', {
+    return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: 'IQD',
       minimumFractionDigits: 0
@@ -289,7 +289,7 @@ export function InvoiceDetailsDialogWithImages({
                   )}
                   {invoice.measurements.waist && (
                     <div className="text-center">
-                      <p className="text-sm text-gray-600 arabic-text">الخصر</p>
+                      <p className="text-sm text-gray-600 arabic-text">الردن</p>
                       <p className="text-lg font-medium text-[#13312A]">{invoice.measurements.waist} سم</p>
                     </div>
                   )}

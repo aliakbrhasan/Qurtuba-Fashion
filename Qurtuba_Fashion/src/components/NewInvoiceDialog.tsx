@@ -42,7 +42,8 @@ export function NewInvoiceDialog({ isOpen, onOpenChange }: NewInvoiceDialogProps
       height: '',
       shoulder: '',
       waist: '',
-      chest: ''
+      chest: '',
+      collar: ''
     }
   });
 
@@ -160,7 +161,8 @@ export function NewInvoiceDialog({ isOpen, onOpenChange }: NewInvoiceDialogProps
           height: '',
           shoulder: '',
           waist: '',
-          chest: ''
+          chest: '',
+          collar: ''
         }
       });
       setSubmitError(null);
@@ -249,7 +251,8 @@ export function NewInvoiceDialog({ isOpen, onOpenChange }: NewInvoiceDialogProps
           length: parseFloat(formData.measurements.height) || 0,
           shoulder: parseFloat(formData.measurements.shoulder) || 0,
           waist: parseFloat(formData.measurements.waist) || 0,
-          chest: parseFloat(formData.measurements.chest) || 0
+          chest: parseFloat(formData.measurements.chest) || 0,
+          collar: parseFloat(formData.measurements.collar) || 0
         },
         designDetails: {
           fabricType: fabricOptions.filter(opt => selectedFabricOptions.includes(opt.id)).map(opt => opt.label),
@@ -615,42 +618,57 @@ export function NewInvoiceDialog({ isOpen, onOpenChange }: NewInvoiceDialogProps
               <CardHeader>
                 <CardTitle className="text-[#13312A] arabic-text text-lg">القياسات</CardTitle>
               </CardHeader>
-              <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div>
+              <CardContent className="space-y-4">
+                {/* الصف الأول: الطول، الكتف، الردن - 3 أعمدة */}
+                <div className="grid grid-cols-3 gap-4 min-w-0">
+                  <div className="min-w-[120px]">
                   <Label className="text-[#13312A] arabic-text">الطول</Label>
                   <Input 
                     placeholder="سم" 
-                    className="bg-white border-[#C69A72] text-right"
+                      className="bg-white border-[#C69A72] text-right min-w-0"
                     value={formData.measurements.height}
                     onChange={(e) => setFormData({...formData, measurements: {...formData.measurements, height: e.target.value}})}
                   />
                 </div>
-                <div>
+                  <div className="min-w-[120px]">
                   <Label className="text-[#13312A] arabic-text">الكتف</Label>
                   <Input 
                     placeholder="سم" 
-                    className="bg-white border-[#C69A72] text-right"
+                      className="bg-white border-[#C69A72] text-right min-w-0"
                     value={formData.measurements.shoulder}
                     onChange={(e) => setFormData({...formData, measurements: {...formData.measurements, shoulder: e.target.value}})}
                   />
                 </div>
-                <div>
-                  <Label className="text-[#13312A] arabic-text">الخصر</Label>
+                  <div className="min-w-[120px]">
+                  <Label className="text-[#13312A] arabic-text">الردن</Label>
                   <Input 
                     placeholder="سم" 
-                    className="bg-white border-[#C69A72] text-right"
+                      className="bg-white border-[#C69A72] text-right min-w-0"
                     value={formData.measurements.waist}
                     onChange={(e) => setFormData({...formData, measurements: {...formData.measurements, waist: e.target.value}})}
                   />
                 </div>
-                <div>
+                </div>
+                {/* الصف الثاني: الصدر، الياقة - 2 أعمدة */}
+                <div className="grid grid-cols-2 gap-4 min-w-0">
+                  <div className="min-w-[120px]">
                   <Label className="text-[#13312A] arabic-text">الصدر</Label>
                   <Input 
                     placeholder="سم" 
-                    className="bg-white border-[#C69A72] text-right"
+                      className="bg-white border-[#C69A72] text-right min-w-0"
                     value={formData.measurements.chest}
                     onChange={(e) => setFormData({...formData, measurements: {...formData.measurements, chest: e.target.value}})}
                   />
+                  </div>
+                  <div className="min-w-[120px]">
+                    <Label className="text-[#13312A] arabic-text">الياقة</Label>
+                    <Input 
+                      placeholder="سم" 
+                      className="bg-white border-[#C69A72] text-right min-w-0"
+                      value={formData.measurements.collar}
+                      onChange={(e) => setFormData({...formData, measurements: {...formData.measurements, collar: e.target.value}})}
+                    />
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -659,8 +677,10 @@ export function NewInvoiceDialog({ isOpen, onOpenChange }: NewInvoiceDialogProps
               <CardHeader>
                 <CardTitle className="text-[#13312A] arabic-text text-lg">تفاصيل التصميم</CardTitle>
               </CardHeader>
-              <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
+              <CardContent className="space-y-4">
+                {/* الصف الأول: نوع القماش، مصدر القماش، نوع الياقة - 3 أعمدة */}
+                <div className="measurements-grid-3 gap-4 min-w-0">
+                  <div className="min-w-[120px]">
                   <Label className="text-[#13312A] arabic-text">نوع القماش</Label>
                   <Popover open={isFabricPopoverOpen} onOpenChange={setIsFabricPopoverOpen}>
                     <PopoverTrigger asChild>
@@ -735,7 +755,7 @@ export function NewInvoiceDialog({ isOpen, onOpenChange }: NewInvoiceDialogProps
                     </PopoverContent>
                   </Popover>
                 </div>
-                <div>
+                  <div className="min-w-[120px]">
                   <Label className="text-[#13312A] arabic-text">مصدر القماش</Label>
                   <Popover open={isSourcePopoverOpen} onOpenChange={setIsSourcePopoverOpen}>
                     <PopoverTrigger asChild>
@@ -784,8 +804,7 @@ export function NewInvoiceDialog({ isOpen, onOpenChange }: NewInvoiceDialogProps
                       </Command>
                     </PopoverContent>
                   </Popover>
-                </div>
-                <div>
+                  <div className="min-w-[120px]">
                   <Label className="text-[#13312A] arabic-text">نوع الياقة</Label>
                   <Popover open={isCollarPopoverOpen} onOpenChange={setIsCollarPopoverOpen}>
                     <PopoverTrigger asChild>
@@ -856,7 +875,9 @@ export function NewInvoiceDialog({ isOpen, onOpenChange }: NewInvoiceDialogProps
                     </PopoverContent>
                   </Popover>
                 </div>
-                <div>
+                {/* الصف الثاني: أسلوب الصدر، نهاية الكم - 2 أعمدة */}
+                <div className="measurements-grid-2 gap-4 min-w-0">
+                  <div className="min-w-[120px]">
                   <Label className="text-[#13312A] arabic-text">أسلوب الصدر</Label>
                   <Popover open={isChestStylePopoverOpen} onOpenChange={setIsChestStylePopoverOpen}>
                     <PopoverTrigger asChild>
@@ -997,8 +1018,7 @@ export function NewInvoiceDialog({ isOpen, onOpenChange }: NewInvoiceDialogProps
                       </Command>
                     </PopoverContent>
                   </Popover>
-                </div>
-                <div>
+                  <div className="min-w-[120px]">
                   <Label className="text-[#13312A] arabic-text">نوع البنيجة</Label>
                   <Popover open={isBunijaPopoverOpen} onOpenChange={setIsBunijaPopoverOpen}>
                     <PopoverTrigger asChild>

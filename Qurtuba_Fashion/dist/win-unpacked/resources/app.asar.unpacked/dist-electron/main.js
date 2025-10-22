@@ -95,8 +95,27 @@ const createWindow = () => {
             event.preventDefault();
         }
     });
-    mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-        // Deny all new windows/popups
+    mainWindow.webContents.setWindowOpenHandler((details) => {
+        const { url } = details;
+        // Allow in-app print windows created with window.open('about:blank', ...)
+        if (url === 'about:blank') {
+            return {
+                action: 'allow',
+                overrideBrowserWindowOptions: {
+                    show: true,
+                    width: 900,
+                    height: 700,
+                    webPreferences: {
+                        nodeIntegration: false,
+                        contextIsolation: true,
+                        sandbox: true,
+                        webSecurity: true,
+                        allowRunningInsecureContent: false,
+                    },
+                },
+            };
+        }
+        // Deny all other external/new windows
         return { action: 'deny' };
     });
 };

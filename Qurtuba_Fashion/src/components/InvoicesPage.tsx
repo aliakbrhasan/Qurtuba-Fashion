@@ -11,6 +11,8 @@ import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 // import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { useInvoices } from '@/hooks/useInvoices';
+import { usePermissions } from '@/hooks/usePermissions';
+import { useAuth } from './ProtectedRoute';
 // import { InvoiceService } from '@/services/invoice.service';
 import {
   Plus,
@@ -32,6 +34,7 @@ import {
   ArrowUpDown,
   FilterX,
   RefreshCw,
+  Trash2,
 } from 'lucide-react';
 import { ArrowUp, ArrowDown } from 'lucide-react';
 import { ImageWithFallback } from './figma/ImageWithFallback';
@@ -44,11 +47,24 @@ import {
 import { openPrintWindow, openPrintInvoiceWindow, formatPrintDateTime } from './print/PrintUtils';
 
 const RECEIPT_A5_STYLES = `
-  @page { size: A5 landscape; margin: 0.5cm; }
-  @media print { * { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+  @page { 
+    size: A5 landscape; 
+    margin: 6mm; 
+  }
+  @media print { 
+    * { 
+      -webkit-print-color-adjust: exact; 
+      print-color-adjust: exact; 
+    }
+    body { 
+      margin: 0; 
+      padding: 0; 
+    }
+  }
 `;
 // import { InvoiceDetailsPage } from './InvoiceDetailsPage';
 import { InvoiceDetailsDialog } from './InvoiceDetailsDialog';
+import { NewInvoiceDialogWithDB } from './NewInvoiceDialogWithDB';
 
 type DateParts = {
   year: string;
@@ -76,7 +92,7 @@ const dayOptions = Array.from({ length: 31 }, (_, index) => (index + 1).toString
 const getLastDayOfMonth = (year: number, month: number) => new Date(year, month, 0).getDate();
 
 const formatRangeDate = (date: Date) =>
-  new Intl.DateTimeFormat('ar-IQ', {
+  new Intl.DateTimeFormat('en-US', {
     year: 'numeric',
     month: 'long',
     day: 'numeric',
@@ -165,9 +181,17 @@ export function InvoicesPage({ onCreateInvoice, onViewInvoiceDetails, onMarkAsPa
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
   const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isDuplicateDialogOpen, setIsDuplicateDialogOpen] = useState(false);
+  const [invoiceToEdit, setInvoiceToEdit] = useState<Invoice | null>(null);
+  const [invoiceToDuplicate, setInvoiceToDuplicate] = useState<Invoice | null>(null);
   
   // Use the database hook
   const { invoices: dbInvoices, loading, error, markAsPaid: markInvoiceAsPaid, loadInvoices } = useInvoices();
+  
+  // Use permissions and auth hooks
+  const { currentUser } = useAuth();
+  const { hasActionPermission } = usePermissions(currentUser);
 
   // Transform database invoices to match the expected format
   const invoices: Invoice[] = dbInvoices.map(invoice => ({
@@ -703,6 +727,44 @@ export function InvoicesPage({ onCreateInvoice, onViewInvoiceDetails, onMarkAsPa
     return invoice.status === 'معلق' || invoice.status === 'جزئي';
   };
 
+  const handleEditInvoice = (invoice: Invoice) => {
+    if (hasActionPermission('edit_invoice')) {
+      setInvoiceToEdit(invoice);
+      setIsEditDialogOpen(true);
+    }
+  };
+
+  const handleDuplicateInvoice = (invoice: Invoice) => {
+    if (hasActionPermission('create_invoice')) {
+      setInvoiceToDuplicate(invoice);
+      setIsDuplicateDialogOpen(true);
+    }
+  };
+
+  // Note: handlers inlined in onOpenChange; kept no extra functions
+
+  const handleDeleteInvoice = async (invoice: Invoice) => {
+    const confirmMessage = `هل أنت متأكد من حذف الفاتورة رقم ${invoice.id}؟\n\nهذا الإجراء لا يمكن التراجع عنه.`;
+    
+    if (window.confirm(confirmMessage)) {
+      try {
+        const { InvoiceService } = await import('@/services/invoice.service');
+        await InvoiceService.deleteInvoice(invoice.id);
+        
+        // Refresh data after deletion
+        if (loadInvoices) {
+          await loadInvoices();
+        }
+        
+        // Show success message
+        alert('تم حذف الفاتورة بنجاح!');
+      } catch (error) {
+        console.error('Error deleting invoice:', error);
+        alert(`حدث خطأ في حذف الفاتورة: ${error instanceof Error ? error.message : 'خطأ غير معروف'}`);
+      }
+    }
+  };
+
   return (
     <>
     <div className="min-h-screen bg-gradient-to-br from-[#F6E9CA] to-[#FDFBF7]">
@@ -1072,14 +1134,18 @@ export function InvoicesPage({ onCreateInvoice, onViewInvoiceDetails, onMarkAsPa
                                         <Eye className="w-4 h-4 ml-2" />
                                         عرض التفاصيل
                                       </DropdownMenuItem>
-                                      <DropdownMenuItem className="arabic-text">
-                                        <Edit className="w-4 h-4 ml-2" />
-                                        تعديل الفاتورة
-                                      </DropdownMenuItem>
-                                      <DropdownMenuItem className="arabic-text">
-                                        <Copy className="w-4 h-4 ml-2" />
-                                        تكرار الفاتورة
-                                      </DropdownMenuItem>
+                                      {hasActionPermission('edit_invoice') && (
+                                        <DropdownMenuItem onClick={() => handleEditInvoice(invoice)} className="arabic-text">
+                                          <Edit className="w-4 h-4 ml-2" />
+                                          تعديل الفاتورة
+                                        </DropdownMenuItem>
+                                      )}
+                                      {hasActionPermission('create_invoice') && (
+                                        <DropdownMenuItem onClick={() => handleDuplicateInvoice(invoice)} className="arabic-text">
+                                          <Copy className="w-4 h-4 ml-2" />
+                                          تكرار الفاتورة
+                                        </DropdownMenuItem>
+                                      )}
                                       <DropdownMenuItem onClick={() => handleExportPDF(invoice)} className="arabic-text">
                                         <Download className="w-4 h-4 ml-2" />
                                         تصدير إلى PDF
@@ -1092,6 +1158,15 @@ export function InvoicesPage({ onCreateInvoice, onViewInvoiceDetails, onMarkAsPa
                                         <FileImage className="w-4 h-4 ml-2" />
                                         حفظ كصورة
                                       </DropdownMenuItem>
+                                      {hasActionPermission('delete_invoice') && (
+                                        <DropdownMenuItem 
+                                          onClick={() => handleDeleteInvoice(invoice)} 
+                                          className="arabic-text text-red-600 hover:text-red-700 hover:bg-red-50"
+                                        >
+                                          <Trash2 className="w-4 h-4 ml-2" />
+                                          حذف الفاتورة
+                                        </DropdownMenuItem>
+                                      )}
                                     </DropdownMenuContent>
                                   </DropdownMenu>
                                 </div>
@@ -1207,14 +1282,31 @@ export function InvoicesPage({ onCreateInvoice, onViewInvoiceDetails, onMarkAsPa
                                     <Eye className="w-4 h-4 ml-2" />
                                     عرض التفاصيل
                                   </DropdownMenuItem>
-                                  <DropdownMenuItem className="arabic-text">
-                                    <Edit className="w-4 h-4 ml-2" />
-                                    تعديل
-                                  </DropdownMenuItem>
+                                  {hasActionPermission('edit_invoice') && (
+                                    <DropdownMenuItem onClick={() => handleEditInvoice(invoice)} className="arabic-text">
+                                      <Edit className="w-4 h-4 ml-2" />
+                                      تعديل
+                                    </DropdownMenuItem>
+                                  )}
+                                  {hasActionPermission('create_invoice') && (
+                                    <DropdownMenuItem onClick={() => handleDuplicateInvoice(invoice)} className="arabic-text">
+                                      <Copy className="w-4 h-4 ml-2" />
+                                      تكرار
+                                    </DropdownMenuItem>
+                                  )}
                                   <DropdownMenuItem onClick={() => handleExportPDF(invoice)} className="arabic-text">
                                     <Download className="w-4 h-4 ml-2" />
                                     تصدير PDF
                                   </DropdownMenuItem>
+                                  {hasActionPermission('delete_invoice') && (
+                                    <DropdownMenuItem 
+                                      onClick={() => handleDeleteInvoice(invoice)} 
+                                      className="arabic-text text-red-600 hover:text-red-700 hover:bg-red-50"
+                                    >
+                                      <Trash2 className="w-4 h-4 ml-2" />
+                                      حذف الفاتورة
+                                    </DropdownMenuItem>
+                                  )}
                                 </DropdownMenuContent>
                               </DropdownMenu>
                             </div>
@@ -1377,6 +1469,69 @@ export function InvoicesPage({ onCreateInvoice, onViewInvoiceDetails, onMarkAsPa
           isOpen={isDetailsDialogOpen}
           onOpenChange={setIsDetailsDialogOpen}
           invoice={selectedInvoice!}
+        />
+      )}
+
+      {/* Edit Invoice Dialog */}
+      {invoiceToEdit && (
+        <NewInvoiceDialogWithDB
+          isOpen={isEditDialogOpen}
+          onOpenChange={(open) => {
+            setIsEditDialogOpen(open);
+            if (!open) setInvoiceToEdit(null);
+          }}
+          onInvoiceCreated={() => {
+            setIsEditDialogOpen(false);
+            setInvoiceToEdit(null);
+            if (loadInvoices) {
+              loadInvoices();
+            }
+          }}
+          prefillCustomer={{
+            id: invoiceToEdit.id, // Pass the invoice ID for editing
+            name: invoiceToEdit.customerName,
+            phone: invoiceToEdit.phone,
+            address: invoiceToEdit.address,
+            total: invoiceToEdit.total,
+            paidAmount: invoiceToEdit.paid,
+            status: invoiceToEdit.status,
+            deliveryDate: typeof invoiceToEdit.deliveryDate === 'string' ? invoiceToEdit.deliveryDate : invoiceToEdit.deliveryDate.toISOString().split('T')[0],
+            notes: invoiceToEdit.notes,
+            items: [],
+            measurements: invoiceToEdit.measurements,
+            designDetails: invoiceToEdit.designDetails
+          }}
+        />
+      )}
+
+      {/* Duplicate Invoice Dialog */}
+      {invoiceToDuplicate && (
+        <NewInvoiceDialogWithDB
+          isOpen={isDuplicateDialogOpen}
+          onOpenChange={(open) => {
+            setIsDuplicateDialogOpen(open);
+            if (!open) setInvoiceToDuplicate(null);
+          }}
+          onInvoiceCreated={() => {
+            setIsDuplicateDialogOpen(false);
+            setInvoiceToDuplicate(null);
+            if (loadInvoices) {
+              loadInvoices();
+            }
+          }}
+          prefillCustomer={{
+            name: invoiceToDuplicate.customerName,
+            phone: invoiceToDuplicate.phone,
+            address: invoiceToDuplicate.address,
+            total: invoiceToDuplicate.total,
+            paidAmount: 0, // Reset paid amount for duplicate
+            status: 'معلق', // Reset status for duplicate
+            deliveryDate: typeof invoiceToDuplicate.deliveryDate === 'string' ? invoiceToDuplicate.deliveryDate : invoiceToDuplicate.deliveryDate.toISOString().split('T')[0],
+            notes: invoiceToDuplicate.notes,
+            items: [],
+            measurements: invoiceToDuplicate.measurements,
+            designDetails: invoiceToDuplicate.designDetails
+          }}
         />
       )}
     </>

@@ -18,6 +18,7 @@ export interface Customer {
     shoulder: number;
     waist: number;
     chest: number;
+    collar: number;
   };
   notes?: string;
   created_at: string;
@@ -562,7 +563,7 @@ export class DatabaseService {
           label: 'جديد',
           totalSpent: paid,
           lastOrder: lastOrderDate,
-          measurements: { height: 0, shoulder: 0, waist: 0, chest: 0 },
+          measurements: { height: 0, shoulder: 0, waist: 0, chest: 0, collar: 0 },
           notes: '',
           created_at: (created as any).created_at,
         } as any);
@@ -680,7 +681,7 @@ export class DatabaseService {
             label: 'جديد',
             totalSpent: paid,
             lastOrder: lastOrderDate,
-            measurements: { height: 0, shoulder: 0, waist: 0, chest: 0 },
+            measurements: { height: 0, shoulder: 0, waist: 0, chest: 0, collar: 0 },
             notes: '',
             created_at: inv.created_at,
           } as any);

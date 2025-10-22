@@ -4,7 +4,6 @@ import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Label } from './ui/label';
 import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Button } from './ui/button';
 import { X, Plus, Pencil, Trash2, Check, ChevronDown, Camera, AlertCircle } from 'lucide-react';
 import { InvoiceService, InvoiceFormData } from '@/services/invoice.service';
@@ -19,7 +18,33 @@ interface NewInvoiceDialogProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   onInvoiceCreated?: () => void;
-  prefillCustomer?: { name?: string; phone?: string; address?: string };
+  prefillCustomer?: { 
+    id?: string; // Invoice ID for editing existing invoices
+    name?: string; 
+    phone?: string; 
+    address?: string;
+    total?: number;
+    paidAmount?: number;
+    status?: string;
+    deliveryDate?: string;
+    notes?: string;
+    items?: any[];
+    measurements?: {
+      length?: number;
+      shoulder?: number;
+      waist?: number;
+      chest?: number;
+      collar?: number;
+    };
+    designDetails?: {
+      fabricType?: string[];
+      fabricSource?: string[];
+      collarType?: string[];
+      chestStyle?: string[];
+      sleeveEnd?: string[];
+      bunijaType?: string;
+    };
+  };
 }
 
 interface FabricOption {
@@ -38,19 +63,33 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated,
     customerName: prefillCustomer?.name || '',
     customerPhone: prefillCustomer?.phone || '',
     customerAddress: prefillCustomer?.address || '',
-    total: 0,
-    paidAmount: 0,
-    status: 'معلق',
-    deliveryDate: '',
-    notes: '',
-    items: [],
-    measurements: {
+    total: prefillCustomer?.total || 0,
+    paidAmount: prefillCustomer?.paidAmount || 0,
+    status: prefillCustomer?.status || 'معلق',
+    deliveryDate: prefillCustomer?.deliveryDate || '',
+    notes: prefillCustomer?.notes || '',
+    items: prefillCustomer?.items || [],
+    measurements: prefillCustomer?.measurements ? {
+      length: prefillCustomer.measurements.length || 0,
+      shoulder: prefillCustomer.measurements.shoulder || 0,
+      waist: prefillCustomer.measurements.waist || 0,
+      chest: prefillCustomer.measurements.chest || 0,
+      collar: (prefillCustomer.measurements as any)?.collar || 0
+    } : {
       length: 0,
       shoulder: 0,
       waist: 0,
-      chest: 0
+      chest: 0,
+      collar: 0
     },
-    designDetails: {
+    designDetails: prefillCustomer?.designDetails ? {
+      fabricType: prefillCustomer.designDetails.fabricType || [],
+      fabricSource: prefillCustomer.designDetails.fabricSource || [],
+      collarType: prefillCustomer.designDetails.collarType || [],
+      chestStyle: prefillCustomer.designDetails.chestStyle || [],
+      sleeveEnd: prefillCustomer.designDetails.sleeveEnd || [],
+      bunijaType: prefillCustomer.designDetails.bunijaType || ''
+    } : {
       fabricType: [],
       fabricSource: [],
       collarType: [],
@@ -68,6 +107,40 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated,
         customerName: prefillCustomer.name || prev.customerName,
         customerPhone: prefillCustomer.phone || prev.customerPhone,
         customerAddress: prefillCustomer.address || prev.customerAddress,
+        total: prefillCustomer.total || prev.total,
+        paidAmount: prefillCustomer.paidAmount || prev.paidAmount,
+        status: prefillCustomer.status || prev.status,
+        deliveryDate: prefillCustomer.deliveryDate || prev.deliveryDate,
+        notes: prefillCustomer.notes || prev.notes,
+        items: prefillCustomer.items || prev.items,
+                measurements: prefillCustomer.measurements ? {
+                  length: prefillCustomer.measurements.length || (prev.measurements?.length || 0),
+                  shoulder: prefillCustomer.measurements.shoulder || (prev.measurements?.shoulder || 0),
+                  waist: prefillCustomer.measurements.waist || (prev.measurements?.waist || 0),
+                  chest: prefillCustomer.measurements.chest || (prev.measurements?.chest || 0),
+                  collar: prefillCustomer.measurements.collar || (prev.measurements?.collar || 0)
+                } : (prev.measurements || {
+                  length: 0,
+                  shoulder: 0,
+                  waist: 0,
+                  chest: 0,
+                  collar: 0
+                }),
+        designDetails: prefillCustomer.designDetails ? {
+          fabricType: prefillCustomer.designDetails.fabricType || (prev.designDetails?.fabricType || []),
+          fabricSource: prefillCustomer.designDetails.fabricSource || (prev.designDetails?.fabricSource || []),
+          collarType: prefillCustomer.designDetails.collarType || (prev.designDetails?.collarType || []),
+          chestStyle: prefillCustomer.designDetails.chestStyle || (prev.designDetails?.chestStyle || []),
+          sleeveEnd: prefillCustomer.designDetails.sleeveEnd || (prev.designDetails?.sleeveEnd || []),
+          bunijaType: prefillCustomer.designDetails.bunijaType || (prev.designDetails?.bunijaType || '')
+        } : (prev.designDetails || {
+          fabricType: [],
+          fabricSource: [],
+          collarType: [],
+          chestStyle: [],
+          sleeveEnd: [],
+          bunijaType: ''
+        }),
       }));
     }
   }, [isOpen, prefillCustomer]);
@@ -318,7 +391,8 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated,
           length: 0,
           shoulder: 0,
           waist: 0,
-          chest: 0
+          chest: 0,
+          collar: 0
         },
         designDetails: {
           fabricType: selectedFabricOption ? [fabricOptions.find(opt => opt.id === selectedFabricOption)?.label || ''] : [],
@@ -374,21 +448,48 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated,
 
       // Upload fabric image first if any
       // نبدأ بحفظ الفاتورة محلياً أولاً ثم نرفع الصورة بالخلفية إن وُجدت
-      // 1) Create invoice locally first (non-blocking of any uploads)
-      const created = await createInvoice(formData);
+      // Check if this is an edit operation (has invoice ID) or create operation
+      const isEdit = prefillCustomer?.id;
+      let result;
+
+      if (isEdit && prefillCustomer?.id) {
+        // Update existing invoice
+        const updates: Partial<any> = {
+          customer_name: formData.customerName,
+          customer_phone: formData.customerPhone,
+          customer_address: formData.customerAddress,
+          total: formData.total,
+          paid_amount: formData.paidAmount,
+          status: formData.status,
+          due_date: formData.deliveryDate,
+          notes: formData.notes,
+          items: formData.items.map(item => ({
+            item_name: item.itemName,
+            description: item.description,
+            quantity: item.quantity,
+            unit_price: item.unitPrice,
+            total_price: item.totalPrice
+          }))
+        };
+
+        result = await InvoiceService.updateInvoice(prefillCustomer.id, updates);
+      } else {
+        // Create new invoice
+        result = await createInvoice(formData);
+      }
 
       // 2) Upload image and persist URL to invoice so it appears in details page
-      if (fabricImage && fabricImageFile && created?.id) {
+      if (fabricImage && fabricImageFile && result?.id) {
         try {
           const uploaded = await ImageService.uploadImage(
             fabricImageFile,
             'invoice',
-            created.id,
+            result.id,
             { createThumbnail: true }
           );
           const newUrl = (uploaded as any).publicUrl || (uploaded as any).data_url || (uploaded as any).url || '';
           if (newUrl) {
-            try { await InvoiceService.updateInvoice(created.id, { fabric_image_url: newUrl } as any); } catch {}
+            try { await InvoiceService.updateInvoice(result.id, { fabric_image_url: newUrl } as any); } catch {}
           }
         } catch (imageError) {
           console.warn('Fabric image upload failed:', imageError);
@@ -830,57 +931,61 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated,
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogOverlay className="fixed inset-0 z-[999] bg-[#000000]" />
       <DialogContent fullScreen className="bg-[#F6E9CA] flex flex-col">
-        <DialogHeader className="flex-shrink-0 relative">
+        <DialogHeader className="flex-shrink-0 relative pr-24 pt-4 pb-2">
           <Button
             type="button"
             variant="ghost"
             size="icon"
             onClick={() => onOpenChange(false)}
-            className="absolute left-4 top-4 h-8 w-8 rounded-full hover:bg-gray-100 text-gray-500 hover:text-gray-700"
+            className="absolute right-4 top-4 h-8 w-8 rounded-full bg-white border border-gray-300 shadow hover:bg-gray-100 text-gray-600 hover:text-gray-800 z-10"
           >
             <X className="h-4 w-4" />
           </Button>
-          <DialogTitle className="text-[#13312A] arabic-text">إنشاء فاتورة جديدة</DialogTitle>
-          <DialogDescription className="text-[#155446] arabic-text">
-            أدخل بيانات الزبون والطلب لإصدار الفاتورة
-          </DialogDescription>
+          <div className="pr-10">
+            <DialogTitle className="text-[#13312A] arabic-text text-lg font-bold">إنشاء فاتورة جديدة</DialogTitle>
+            <DialogDescription className="text-[#155446] arabic-text text-sm mt-1">
+              أدخل بيانات الزبون والطلب لإصدار الفاتورة
+            </DialogDescription>
+          </div>
         </DialogHeader>
 
         <div className="flex-1 overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-[#4A5568] scrollbar-track-[#2D3748] hover:scrollbar-thumb-[#718096]" dir="rtl">
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* الصف الأول: بيانات الزبون، القياسات، معلومات الدفع */}
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+          {/* الصف الأول: بيانات الزبون، القياسات، ملاحظات */}
+          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-3 gap-3 min-w-0">
             {/* Customer Information */}
-            <Card className="bg-white border-[#E6D9C4] rounded-xl shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
-              <CardHeader className="py-1 border-b border-[#EEE1CD] min-h-[28px]">
-                <CardTitle className="text-[#1F4529] arabic-text text-sm font-bold">بيانات الزبون</CardTitle>
+            <Card className="bg-white border-[#E6D9C4] rounded-xl shadow-[0_2px_8px_rgba(0,0,0,0.04)] min-w-0 flex flex-col">
+              <CardHeader className="py-0.5 border-b border-[#EEE1CD] min-h-[24px]">
+                <CardTitle className="text-[#1F4529] arabic-text text-base font-bold">بيانات الزبون</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-2 py-1">
-                <div>
-                  <Label className="text-[#13312A] arabic-text text-xs">اسم الزبون *</Label>
-                  <Input 
-                    placeholder="أدخل اسم الزبون" 
-                    className="bg-white border-[#C69A72] text-right h-7 text-xs"
-                    value={formData.customerName}
-                    onChange={(e) => setFormData(prev => ({ ...prev, customerName: e.target.value }))}
-                    required
-                  />
-                </div>
-                <div>
-                  <Label className="text-[#13312A] arabic-text text-xs">رقم الهاتف *</Label>
-                  <Input 
-                    placeholder="077xxxxxxxx" 
-                    className="bg-white border-[#C69A72] text-right h-7 text-xs"
-                    value={formData.customerPhone}
-                    onChange={(e) => setFormData(prev => ({ ...prev, customerPhone: e.target.value }))}
-                    required
-                  />
+              <CardContent className="space-y-2 py-1 flex-1 min-w-0">
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <Label className="text-[#13312A] arabic-text text-xs">اسم الزبون *</Label>
+                    <Input 
+                      placeholder="أدخل اسم الزبون" 
+                      className="bg-white border-[#C69A72] text-right h-7 text-xs w-full min-w-0"
+                      value={formData.customerName}
+                      onChange={(e) => setFormData(prev => ({ ...prev, customerName: e.target.value }))}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-[#13312A] arabic-text text-xs">رقم الهاتف *</Label>
+                    <Input 
+                      placeholder="077xxxxxxxx" 
+                      className="bg-white border-[#C69A72] text-right h-7 text-xs w-full min-w-0"
+                      value={formData.customerPhone}
+                      onChange={(e) => setFormData(prev => ({ ...prev, customerPhone: e.target.value }))}
+                      required
+                    />
+                  </div>
                 </div>
                 <div>
                   <Label className="text-[#13312A] arabic-text text-xs">العنوان</Label>
                   <Input 
                     placeholder="أدخل العنوان" 
-                    className="bg-white border-[#C69A72] text-right h-7 text-xs"
+                    className="bg-white border-[#C69A72] text-right h-7 text-xs w-full min-w-0"
                     value={formData.customerAddress}
                     onChange={(e) => setFormData(prev => ({ ...prev, customerAddress: e.target.value }))}
                   />
@@ -889,138 +994,669 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated,
             </Card>
 
             {/* Measurements */}
-            <Card className="bg-white border-[#E6D9C4] rounded-xl shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
-              <CardHeader className="py-1 border-b border-[#EEE1CD] min-h-[28px]">
-                <CardTitle className="text-[#1F4529] arabic-text text-sm font-bold">القياسات</CardTitle>
+            <Card className="bg-white border-[#E6D9C4] rounded-xl shadow-[0_2px_8px_rgba(0,0,0,0.04)] min-w-0 flex flex-col">
+              <CardHeader className="py-0.5 border-b border-[#EEE1CD] min-h-[24px]">
+                <CardTitle className="text-[#1F4529] arabic-text text-base font-bold">القياسات</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-2 py-1">
+              <CardContent className="py-1 flex-1 min-w-0">
+                {/* الصف الأول: الطول، الكتف، الردن - 3 أعمدة */}
+                <div className="measurements-grid-3 gap-1 mb-2 min-w-0">
+                  <div className="space-y-1 min-w-0 flex-shrink-0">
+                    <Label className="text-[#13312A] arabic-text text-xs">الطول (سم)</Label>
+                    <Input 
+                      type="number"
+                      placeholder="0"
+                      className="bg-white border-[#C69A72] text-right h-7 text-xs w-full min-w-0"
+                      value={formData.measurements?.length || ''}
+                      onChange={(e) => setFormData(prev => ({
+                        ...prev,
+                        measurements: { ...prev.measurements!, length: Number(e.target.value) }
+                      }))}
+                      onFocus={handleFocus}
+                      onWheel={handleWheel}
+                    />
+                  </div>
+                  <div className="space-y-1 min-w-0 flex-shrink-0">
+                    <Label className="text-[#13312A] arabic-text text-xs">الكتف (سم)</Label>
+                    <Input 
+                      type="number"
+                      placeholder="0"
+                      className="bg-white border-[#C69A72] text-right h-7 text-xs w-full min-w-0"
+                      value={formData.measurements?.shoulder || ''}
+                      onChange={(e) => setFormData(prev => ({
+                        ...prev,
+                        measurements: { ...prev.measurements!, shoulder: Number(e.target.value) }
+                      }))}
+                      onFocus={handleFocus}
+                      onWheel={handleWheel}
+                    />
+                  </div>
+                  <div className="space-y-1 min-w-0 flex-shrink-0">
+                    <Label className="text-[#13312A] arabic-text text-xs">الردن (سم)</Label>
+                    <Input 
+                      type="number"
+                      placeholder="0"
+                      className="bg-white border-[#C69A72] text-right h-7 text-xs w-full min-w-0"
+                      value={formData.measurements?.waist || ''}
+                      onChange={(e) => setFormData(prev => ({
+                        ...prev,
+                        measurements: { ...prev.measurements!, waist: Number(e.target.value) }
+                      }))}
+                      onFocus={handleFocus}
+                      onWheel={handleWheel}
+                    />
+                  </div>
+                </div>
+                {/* الصف الثاني: الصدر، الياخة - 2 أعمدة */}
+                <div className="measurements-grid-2 gap-1 min-w-0">
+                  <div className="space-y-1 min-w-0 flex-shrink-0">
+                    <Label className="text-[#13312A] arabic-text text-xs">الصدر (سم)</Label>
+                    <Input 
+                      type="number"
+                      placeholder="0"
+                      className="bg-white border-[#C69A72] text-right h-7 text-xs w-full min-w-0"
+                      value={formData.measurements?.chest || ''}
+                      onChange={(e) => setFormData(prev => ({
+                        ...prev,
+                        measurements: { ...prev.measurements!, chest: Number(e.target.value) }
+                      }))}
+                      onFocus={handleFocus}
+                      onWheel={handleWheel}
+                    />
+                  </div>
+                  <div className="space-y-1 min-w-0 flex-shrink-0">
+                    <Label className="text-[#13312A] arabic-text text-xs">الياخة (سم)</Label>
+                    <Input 
+                      type="number"
+                      placeholder="0"
+                      className="bg-white border-[#C69A72] text-right h-7 text-xs w-full min-w-0"
+                      value={formData.measurements?.collar || ''}
+                      onChange={(e) => setFormData(prev => ({
+                        ...prev,
+                        measurements: { ...prev.measurements!, collar: Number(e.target.value) }
+                      }))}
+                      onFocus={handleFocus}
+                      onWheel={handleWheel}
+                    />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Notes Section */}
+            <Card className="bg-white border-[#E6D9C4] rounded-xl shadow-[0_2px_8px_rgba(0,0,0,0.04)] min-w-0 flex flex-col">
+              <CardHeader className="py-0.5 border-b border-[#EEE1CD] min-h-[24px]">
+                <CardTitle className="text-[#1F4529] arabic-text text-base font-bold">ملاحظات</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2 py-1 flex-1 min-w-0">
                 <div>
-                  <Label className="text-[#13312A] arabic-text text-xs">الطول (سم)</Label>
-                  <Input 
-                    type="number"
-                    placeholder="0"
-                    className="bg-white border-[#C69A72] text-right h-7 text-xs"
-                    value={formData.measurements?.length || ''}
-                    onChange={(e) => setFormData(prev => ({
-                      ...prev,
-                      measurements: { ...prev.measurements!, length: Number(e.target.value) }
-                    }))}
-                    onFocus={handleFocus}
-                    onWheel={handleWheel}
+                  <Label className="text-[#13312A] arabic-text text-xs">ملاحظات إضافية</Label>
+                  <Textarea 
+                    placeholder="أي ملاحظات إضافية..."
+                    className="bg-white border-[#C69A72] text-right text-xs h-16 w-full min-w-0 resize-none"
+                    value={formData.notes}
+                    onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
                   />
                 </div>
                 <div>
-                  <Label className="text-[#13312A] arabic-text text-xs">الكتف (سم)</Label>
+                  <Label className="text-[#13312A] arabic-text text-xs">تاريخ التسليم</Label>
                   <Input 
-                    type="number"
-                    placeholder="0"
-                    className="bg-white border-[#C69A72] text-right h-7 text-xs"
-                    value={formData.measurements?.shoulder || ''}
-                    onChange={(e) => setFormData(prev => ({
-                      ...prev,
-                      measurements: { ...prev.measurements!, shoulder: Number(e.target.value) }
-                    }))}
-                    onFocus={handleFocus}
-                    onWheel={handleWheel}
+                    type="date"
+                    className="bg-white border-[#C69A72] text-right h-7 text-xs w-full min-w-0"
+                    value={formData.deliveryDate}
+                    onChange={(e) => setFormData(prev => ({ ...prev, deliveryDate: e.target.value }))}
                   />
                 </div>
-                <div>
-                  <Label className="text-[#13312A] arabic-text text-xs">الخصر (سم)</Label>
-                  <Input 
-                    type="number"
-                    placeholder="0"
-                    className="bg-white border-[#C69A72] text-right h-7 text-xs"
-                    value={formData.measurements?.waist || ''}
-                    onChange={(e) => setFormData(prev => ({
-                      ...prev,
-                      measurements: { ...prev.measurements!, waist: Number(e.target.value) }
-                    }))}
-                    onFocus={handleFocus}
-                    onWheel={handleWheel}
-                  />
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* الصف الثاني: تفاصيل التصميم، معلومات الدفع، صورة القماش */}
+          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-3 gap-3 min-w-0">
+            {/* Design Details Section */}
+            <Card className="bg-white border-[#E6D9C4] rounded-xl shadow-[0_2px_8px_rgba(0,0,0,0.04)] min-w-0 flex flex-col">
+              <CardHeader className="py-0.5 border-b border-[#EEE1CD] min-h-[24px]">
+                <CardTitle className="text-[#1F4529] arabic-text text-base font-bold">تفاصيل التصميم</CardTitle>
+              </CardHeader>
+              <CardContent className="py-1 flex-1 min-w-0">
+                {/* الصف الأول: نوع القماش، مصدر القماش، نوع الياخة - 3 أعمدة */}
+                <div className="measurements-grid-3 gap-1 mb-2 min-w-0">
+                  <div className="min-w-[120px] flex-shrink-0">
+                    <Label className="text-[#13312A] arabic-text text-xs">نوع القماش</Label>
+                    <Popover open={isFabricPopoverOpen} onOpenChange={setIsFabricPopoverOpen}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className={cn(
+                            'w-full justify-between bg-white border-[#C69A72] text-[#155446] arabic-text h-7 text-xs',
+                            !selectedFabricLabel && 'text-muted-foreground',
+                          )}
+                        >
+                          <span className="flex-1 text-right truncate">
+                            {selectedFabricLabel || 'اختر نوع القماش'}
+                          </span>
+                          <ChevronDown className="ml-2 h-3 w-3 shrink-0" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-72 p-0 bg-[#F6E9CA] border-[#C69A72]">
+                        <Command className="arabic-text text-right">
+                          <CommandInput placeholder="ابحث عن نوع القماش..." className="text-right" />
+                          <CommandList className="text-right">
+                            <CommandEmpty>لا توجد أنواع مطابقة</CommandEmpty>
+                            <CommandItem
+                              value="add-new"
+                              onSelect={() => {
+                                setIsFabricPopoverOpen(false);
+                                handleQuickAddDialogOpenChange(true);
+                              }}
+                              className="flex flex-row-reverse items-center justify-end gap-2 text-[#155446]"
+                            >
+                              <Plus className="h-4 w-4" />
+                              <span>إضافة نوع جديد</span>
+                            </CommandItem>
+                            <CommandSeparator className="bg-[#C69A72]/50" />
+                            {fabricOptions.map((option) => {
+                              const isSelected = selectedFabricOption === option.id;
+                              return (
+                                <CommandItem
+                                  key={option.id}
+                                  value={option.label}
+                                  onSelect={() => {
+                                    selectFabricOption(option.id);
+                                    setIsFabricPopoverOpen(false);
+                                  }}
+                                  className="flex items-center justify-between gap-2"
+                                >
+                                  <span className="flex-1 text-right">{option.label}</span>
+                                  <Check
+                                    className={cn(
+                                      'h-4 w-4 text-[#155446] transition-opacity',
+                                      isSelected ? 'opacity-100' : 'opacity-0',
+                                    )}
+                                  />
+                                </CommandItem>
+                              );
+                            })}
+                          </CommandList>
+                          <div className="border-t border-[#C69A72]/50 px-2 py-2">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              onClick={() => {
+                                setIsFabricPopoverOpen(false);
+                                handleFabricManagerOpenChange(true);
+                              }}
+                              className="w-full flex-row-reverse justify-center text-[#155446]"
+                            >
+                              <Pencil className="h-4 w-4" />
+                              تعديل الأنواع
+                            </Button>
+                          </div>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                  <div className="min-w-[120px] flex-shrink-0">
+                    <Label className="text-[#13312A] arabic-text text-xs">مصدر القماش</Label>
+                    <Popover open={isSourcePopoverOpen} onOpenChange={setIsSourcePopoverOpen}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className={cn(
+                            'w-full justify-between bg-white border-[#C69A72] text-[#155446] arabic-text h-7 text-xs',
+                            !selectedFabricSource && 'text-muted-foreground',
+                          )}
+                        >
+                          <span className="flex-1 text-right truncate">
+                            {selectedFabricSource 
+                              ? fabricSourceOptions.find(o => o.id === selectedFabricSource)?.label || ''
+                              : 'اختر مصدر القماش'}
+                          </span>
+                          <ChevronDown className="ml-2 h-3 w-3 shrink-0" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-72 p-0 bg-[#F6E9CA] border-[#C69A72]">
+                        <Command className="arabic-text text-right">
+                          <CommandInput placeholder="ابحث عن مصدر القماش..." className="text-right" />
+                          <CommandList className="text-right">
+                            <CommandEmpty>لا توجد مصادر مطابقة</CommandEmpty>
+                            <CommandItem
+                              value="add-new"
+                              onSelect={() => {
+                                setIsSourcePopoverOpen(false);
+                                openSourceQuickAdd(true);
+                              }}
+                              className="flex flex-row-reverse items-center justify-end gap-2 text-[#155446]"
+                            >
+                              <Plus className="h-4 w-4" />
+                              <span>إضافة مصدر جديد</span>
+                            </CommandItem>
+                            <CommandSeparator className="bg-[#C69A72]/50" />
+                            {fabricSourceOptions.map((option) => {
+                              const isSelected = selectedFabricSource === option.id;
+                              return (
+                                <CommandItem
+                                  key={option.id}
+                                  value={option.label}
+                                  onSelect={() => {
+                                    selectFabricSource(option.id);
+                                    setIsSourcePopoverOpen(false);
+                                  }}
+                                  className="flex items-center justify-between gap-2"
+                                >
+                                  <span className="flex-1 text-right">{option.label}</span>
+                                  <Check
+                                    className={cn(
+                                      'h-4 w-4 text-[#155446] transition-opacity',
+                                      isSelected ? 'opacity-100' : 'opacity-0',
+                                    )}
+                                  />
+                                </CommandItem>
+                              );
+                            })}
+                          </CommandList>
+                          <div className="border-t border-[#C69A72]/50 px-2 py-2">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              onClick={() => {
+                                setIsSourcePopoverOpen(false);
+                                openSourceManager(true);
+                              }}
+                              className="w-full flex-row-reverse justify-center text-[#155446]"
+                            >
+                              <Pencil className="h-4 w-4" />
+                              تعديل المصادر
+                            </Button>
+                          </div>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                  <div className="min-w-[120px] flex-shrink-0">
+                    <Label className="text-[#13312A] arabic-text text-xs">نوع الياخة</Label>
+                    <Popover open={isCollarPopoverOpen} onOpenChange={setIsCollarPopoverOpen}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className={cn(
+                            'w-full justify-between bg-white border-[#C69A72] text-[#155446] arabic-text h-7 text-xs',
+                            !selectedCollarOption && 'text-muted-foreground',
+                          )}
+                        >
+                          <span className="flex-1 text-right truncate">
+                            {selectedCollarOption 
+                              ? collarOptions.find(o => o.id === selectedCollarOption)?.label || ''
+                              : 'اختر نوع الياخة'}
+                          </span>
+                          <ChevronDown className="ml-2 h-3 w-3 shrink-0" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-72 p-0 bg-[#F6E9CA] border-[#C69A72]">
+                        <Command className="arabic-text text-right">
+                          <CommandInput placeholder="ابحث عن نوع الياخة..." className="text-right" />
+                          <CommandList className="text-right">
+                            <CommandEmpty>لا توجد أنواع مطابقة</CommandEmpty>
+                            <CommandItem
+                              value="add-new"
+                              onSelect={() => {
+                                setIsCollarPopoverOpen(false);
+                                openCollarQuickAdd(true);
+                              }}
+                              className="flex flex-row-reverse items-center justify-end gap-2 text-[#155446]"
+                            >
+                              <Plus className="h-4 w-4" />
+                              <span>إضافة نوع جديد</span>
+                            </CommandItem>
+                            <CommandSeparator className="bg-[#C69A72]/50" />
+                            {collarOptions.map((option) => {
+                              const isSelected = selectedCollarOption === option.id;
+                              return (
+                                <CommandItem
+                                  key={option.id}
+                                  value={option.label}
+                                  onSelect={() => {
+                                    selectCollarOption(option.id);
+                                    setIsCollarPopoverOpen(false);
+                                  }}
+                                  className="flex items-center justify-between gap-2"
+                                >
+                                  <span className="flex-1 text-right">{option.label}</span>
+                                  <Check
+                                    className={cn(
+                                      'h-4 w-4 text-[#155446] transition-opacity',
+                                      isSelected ? 'opacity-100' : 'opacity-0',
+                                    )}
+                                  />
+                                </CommandItem>
+                              );
+                            })}
+                          </CommandList>
+                          <div className="border-t border-[#C69A72]/50 px-2 py-2">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              onClick={() => {
+                                setIsCollarPopoverOpen(false);
+                                openCollarManager(true);
+                              }}
+                              className="w-full flex-row-reverse justify-center text-[#155446]"
+                            >
+                              <Pencil className="h-4 w-4" />
+                              تعديل الأنواع
+                            </Button>
+                          </div>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
                 </div>
-                <div>
-                  <Label className="text-[#13312A] arabic-text text-xs">الصدر (سم)</Label>
-                  <Input 
-                    type="number"
-                    placeholder="0"
-                    className="bg-white border-[#C69A72] text-right h-7 text-xs"
-                    value={formData.measurements?.chest || ''}
-                    onChange={(e) => setFormData(prev => ({
-                      ...prev,
-                      measurements: { ...prev.measurements!, chest: Number(e.target.value) }
-                    }))}
-                    onFocus={handleFocus}
-                    onWheel={handleWheel}
-                  />
+                {/* الصف الثاني: أسلوب الصدر، نهاية الردن، نوع البنيجة - 3 أعمدة */}
+                <div className="measurements-grid-3 gap-2 min-w-0">
+                  <div className="min-w-[120px] flex-shrink-0">
+                    <Label className="text-[#13312A] arabic-text text-xs">أسلوب الصدر</Label>
+                    <Popover open={isChestStylePopoverOpen} onOpenChange={setIsChestStylePopoverOpen}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className={cn(
+                            'w-full justify-between bg-white border-[#C69A72] text-[#155446] arabic-text h-7 text-xs',
+                            !selectedChestStyleOption && 'text-muted-foreground',
+                          )}
+                        >
+                          <span className="flex-1 text-right truncate">
+                            {selectedChestStyleOption 
+                              ? chestStyleOptions.find(o => o.id === selectedChestStyleOption)?.label || ''
+                              : 'اختر أسلوب الصدر'}
+                          </span>
+                          <ChevronDown className="ml-2 h-3 w-3 shrink-0" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-72 p-0 bg-[#F6E9CA] border-[#C69A72]">
+                        <Command className="arabic-text text-right">
+                          <CommandInput placeholder="ابحث عن أسلوب الصدر..." className="text-right" />
+                          <CommandList className="text-right">
+                            <CommandEmpty>لا توجد أنماط مطابقة</CommandEmpty>
+                            <CommandItem
+                              value="add-new"
+                              onSelect={() => {
+                                setIsChestStylePopoverOpen(false);
+                                openChestStyleQuickAdd(true);
+                              }}
+                              className="flex flex-row-reverse items-center justify-end gap-2 text-[#155446]"
+                            >
+                              <Plus className="h-4 w-4" />
+                              <span>إضافة نمط جديد</span>
+                            </CommandItem>
+                            <CommandSeparator className="bg-[#C69A72]/50" />
+                            {chestStyleOptions.map((option) => {
+                              const isSelected = selectedChestStyleOption === option.id;
+                              return (
+                                <CommandItem
+                                  key={option.id}
+                                  value={option.label}
+                                  onSelect={() => {
+                                    selectChestStyleOption(option.id);
+                                    setIsChestStylePopoverOpen(false);
+                                  }}
+                                  className="flex items-center justify-between gap-2"
+                                >
+                                  <span className="flex-1 text-right">{option.label}</span>
+                                  <Check
+                                    className={cn(
+                                      'h-4 w-4 text-[#155446] transition-opacity',
+                                      isSelected ? 'opacity-100' : 'opacity-0',
+                                    )}
+                                  />
+                                </CommandItem>
+                              );
+                            })}
+                          </CommandList>
+                          <div className="border-t border-[#C69A72]/50 px-2 py-2">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              onClick={() => {
+                                setIsChestStylePopoverOpen(false);
+                                openChestStyleManager(true);
+                              }}
+                              className="w-full flex-row-reverse justify-center text-[#155446]"
+                            >
+                              <Pencil className="h-4 w-4" />
+                              تعديل الأنماط
+                            </Button>
+                          </div>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                  <div className="min-w-[120px] flex-shrink-0">
+                    <Label className="text-[#13312A] arabic-text text-xs">نهاية الردن</Label>
+                    <Popover open={isSleeveEndPopoverOpen} onOpenChange={setIsSleeveEndPopoverOpen}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className={cn(
+                            'w-full justify-between bg-white border-[#C69A72] text-[#155446] arabic-text h-7 text-xs',
+                            !selectedSleeveEndOption && 'text-muted-foreground',
+                          )}
+                        >
+                          <span className="flex-1 text-right truncate">
+                            {selectedSleeveEndOption 
+                              ? sleeveEndOptions.find(o => o.id === selectedSleeveEndOption)?.label || ''
+                              : 'اختر نهاية الردن'}
+                          </span>
+                          <ChevronDown className="ml-2 h-3 w-3 shrink-0" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-72 p-0 bg-[#F6E9CA] border-[#C69A72]">
+                        <Command className="arabic-text text-right">
+                          <CommandInput placeholder="ابحث عن نهاية الردن..." className="text-right" />
+                          <CommandList className="text-right">
+                            <CommandEmpty>لا توجد أنماط مطابقة</CommandEmpty>
+                            <CommandItem
+                              value="add-new"
+                              onSelect={() => {
+                                setIsSleeveEndPopoverOpen(false);
+                                openSleeveEndQuickAdd(true);
+                              }}
+                              className="flex flex-row-reverse items-center justify-end gap-2 text-[#155446]"
+                            >
+                              <Plus className="h-4 w-4" />
+                              <span>إضافة نمط جديد</span>
+                            </CommandItem>
+                            <CommandSeparator className="bg-[#C69A72]/50" />
+                            {sleeveEndOptions.map((option) => {
+                              const isSelected = selectedSleeveEndOption === option.id;
+                              return (
+                                <CommandItem
+                                  key={option.id}
+                                  value={option.label}
+                                  onSelect={() => {
+                                    selectSleeveEndOption(option.id);
+                                    setIsSleeveEndPopoverOpen(false);
+                                  }}
+                                  className="flex items-center justify-between gap-2"
+                                >
+                                  <span className="flex-1 text-right">{option.label}</span>
+                                  <Check
+                                    className={cn(
+                                      'h-4 w-4 text-[#155446] transition-opacity',
+                                      isSelected ? 'opacity-100' : 'opacity-0',
+                                    )}
+                                  />
+                                </CommandItem>
+                              );
+                            })}
+                          </CommandList>
+                          <div className="border-t border-[#C69A72]/50 px-2 py-2">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              onClick={() => {
+                                setIsSleeveEndPopoverOpen(false);
+                                openSleeveEndManager(true);
+                              }}
+                              className="w-full flex-row-reverse justify-center text-[#155446]"
+                            >
+                              <Pencil className="h-4 w-4" />
+                              تعديل الأنماط
+                            </Button>
+                          </div>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                  <div className="min-w-[120px] flex-shrink-0">
+                    <Label className="text-[#13312A] arabic-text text-xs">نوع البنيجة</Label>
+                    <Popover open={isBunijaPopoverOpen} onOpenChange={setIsBunijaPopoverOpen}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className={cn(
+                            'w-full justify-between bg-white border-[#C69A72] text-[#155446] arabic-text h-7 text-xs',
+                            !selectedBunijaOption && 'text-muted-foreground',
+                          )}
+                        >
+                          <span className="flex-1 text-right truncate">
+                            {selectedBunijaOption 
+                              ? bunijaOptions.find(o => o.id === selectedBunijaOption)?.label || ''
+                              : 'اختر نوع البنيجة'}
+                          </span>
+                          <ChevronDown className="ml-2 h-3 w-3 shrink-0" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-72 p-0 bg-[#F6E9CA] border-[#C69A72]">
+                        <Command className="arabic-text text-right">
+                          <CommandInput placeholder="ابحث عن نوع البنيجة..." className="text-right" />
+                          <CommandList className="text-right">
+                            <CommandEmpty>لا توجد أنواع مطابقة</CommandEmpty>
+                            <CommandItem
+                              value="add-new"
+                              onSelect={() => {
+                                setIsBunijaPopoverOpen(false);
+                                openBunijaQuickAdd(true);
+                              }}
+                              className="flex flex-row-reverse items-center justify-end gap-2 text-[#155446]"
+                            >
+                              <Plus className="h-4 w-4" />
+                              <span>إضافة نوع جديد</span>
+                            </CommandItem>
+                            <CommandSeparator className="bg-[#C69A72]/50" />
+                            {bunijaOptions.map((option) => {
+                              const isSelected = selectedBunijaOption === option.id;
+                              return (
+                                <CommandItem
+                                  key={option.id}
+                                  value={option.label}
+                                  onSelect={() => {
+                                    selectBunijaOption(option.id);
+                                    setIsBunijaPopoverOpen(false);
+                                  }}
+                                  className="flex items-center justify-between gap-2"
+                                >
+                                  <span className="flex-1 text-right">{option.label}</span>
+                                  <Check
+                                    className={cn(
+                                      'h-4 w-4 text-[#155446] transition-opacity',
+                                      isSelected ? 'opacity-100' : 'opacity-0',
+                                    )}
+                                  />
+                                </CommandItem>
+                              );
+                            })}
+                          </CommandList>
+                          <div className="border-t border-[#C69A72]/50 px-2 py-2">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              onClick={() => {
+                                setIsBunijaPopoverOpen(false);
+                                openBunijaManager(true);
+                              }}
+                              className="w-full flex-row-reverse justify-center text-[#155446]"
+                            >
+                              <Pencil className="h-4 w-4" />
+                              تعديل الأنواع
+                            </Button>
+                          </div>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
                 </div>
               </CardContent>
             </Card>
 
             {/* Payment Information */}
-            <Card className="bg-white border-[#E6D9C4] rounded-xl shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
-              <CardHeader className="py-1 border-b border-[#EEE1CD] min-h-[28px]">
-                <CardTitle className="text-[#1F4529] arabic-text text-sm font-bold">معلومات الدفع</CardTitle>
+            <Card className="bg-white border-[#E6D9C4] rounded-xl shadow-[0_2px_8px_rgba(0,0,0,0.04)] min-w-0 flex flex-col">
+              <CardHeader className="py-0.5 border-b border-[#EEE1CD] min-h-[24px]">
+                <CardTitle className="text-[#1F4529] arabic-text text-base font-bold">معلومات الدفع</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-2 py-1">
-                <div>
-                  <Label className="text-[#13312A] arabic-text text-xs">المجموع</Label>
-                  <Input 
-                    type="number"
-                    placeholder="0"
-                    className="bg-white border-[#C69A72] text-right h-7 text-xs"
-                    value={formData.total}
-                    onChange={(e) => setFormData(prev => ({ ...prev, total: Number(e.target.value) }))}
-                    onFocus={handleFocus}
-                    onWheel={handleWheel}
-                  />
+              <CardContent className="py-1 flex-1 min-w-0">
+                {/* الصف الأول: المجموع، المدفوع، المتبقي - 3 أعمدة */}
+                <div className="measurements-grid-3 gap-2 mb-2 min-w-0">
+                  <div className="space-y-1 min-w-[120px] flex-shrink-0">
+                    <Label className="text-[#13312A] arabic-text text-xs">المجموع</Label>
+                    <Input 
+                      type="number"
+                      placeholder="0"
+                      className="bg-white border-[#C69A72] text-right h-7 text-xs w-full"
+                      value={formData.total}
+                      onChange={(e) => setFormData(prev => ({ ...prev, total: Number(e.target.value) }))}
+                      onFocus={handleFocus}
+                      onWheel={handleWheel}
+                    />
+                  </div>
+                  <div className="space-y-1 min-w-[120px] flex-shrink-0">
+                    <Label className="text-[#13312A] arabic-text text-xs">المدفوع</Label>
+                    <Input 
+                      type="number"
+                      placeholder="0"
+                      className="bg-white border-[#C69A72] text-right h-7 text-xs w-full"
+                      value={formData.paidAmount}
+                      onChange={(e) => setFormData(prev => ({ ...prev, paidAmount: Number(e.target.value) }))}
+                      onFocus={handleFocus}
+                      onWheel={handleWheel}
+                    />
+                  </div>
+                  <div className="space-y-1 min-w-[120px] flex-shrink-0">
+                    <Label className="text-[#13312A] arabic-text text-xs">المتبقي</Label>
+                    <Input 
+                      type="number"
+                      placeholder="0"
+                      className="bg-gray-50 border-[#C69A72] text-right h-7 text-xs w-full"
+                      value={remainingAmount}
+                      readOnly
+                    />
+                  </div>
                 </div>
-                <div>
-                  <Label className="text-[#13312A] arabic-text text-xs">المدفوع</Label>
-                  <Input 
-                    type="number"
-                    placeholder="0"
-                    className="bg-white border-[#C69A72] text-right h-7 text-xs"
-                    value={formData.paidAmount}
-                    onChange={(e) => setFormData(prev => ({ ...prev, paidAmount: Number(e.target.value) }))}
-                    onFocus={handleFocus}
-                    onWheel={handleWheel}
-                  />
-                </div>
-                <div>
-                  <Label className="text-[#13312A] arabic-text text-xs">المتبقي</Label>
-                  <Input 
-                    type="number"
-                    placeholder="0"
-                    className="bg-gray-50 border-[#C69A72] text-right h-7 text-xs"
-                    value={remainingAmount}
-                    readOnly
-                  />
-                </div>
-                <div>
-                  <Label className="text-[#13312A] arabic-text text-xs">تاريخ الدفع</Label>
-                  <Input 
-                    type="date"
-                    className="bg-white border-[#C69A72] text-right h-7 text-xs"
-                    value={paymentDate}
-                    onChange={(e) => setPaymentDate(e.target.value)}
-                  />
-                </div>
-                <div>
-                  <Label className="text-[#13312A] arabic-text text-xs">الحالة</Label>
-                  <Select 
-                    value={formData.status}
-                    onValueChange={(value: string) => setFormData(prev => ({ ...prev, status: value }))}
-                  >
-                    <SelectTrigger className="bg-white border-[#C69A72] text-right h-8 text-sm" aria-label="اختيار الزبون" title="اختيار الزبون">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="معلق">معلق</SelectItem>
-                      <SelectItem value="جزئي">جزئي</SelectItem>
-                      <SelectItem value="مدفوع">مدفوع</SelectItem>
-                    </SelectContent>
-                  </Select>
+                {/* الصف الثاني: تاريخ الدفع، الحالة - 2 أعمدة */}
+                <div className="measurements-grid-2 gap-2 min-w-0">
+                  <div className="space-y-1 min-w-[120px] flex-shrink-0">
+                    <Label className="text-[#13312A] arabic-text text-xs">تاريخ الدفع</Label>
+                    <Input 
+                      type="date"
+                      className="bg-white border-[#C69A72] text-right h-7 text-xs w-full"
+                      value={paymentDate}
+                      onChange={(e) => setPaymentDate(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1 min-w-[120px] flex-shrink-0">
+                    <Label className="text-[#13312A] arabic-text text-xs">الحالة</Label>
+                    <Input 
+                      type="text"
+                      className="bg-gray-50 border-[#C69A72] text-right h-7 text-xs w-full"
+                      value={formData.status}
+                      readOnly
+                    />
+                  </div>
                 </div>
                 <div className={`px-2 py-1 rounded text-xs font-medium text-center ${
                   formData.status === 'مدفوع' 
@@ -1035,617 +1671,79 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated,
                 </div>
               </CardContent>
             </Card>
-          </div>
 
-          {/* الصف الثاني: تفاصيل التصميم، صورة القماش، معلومات إضافية */}
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-            {/* Design Details Section */}
-            <Card className="bg-white border-[#E6D9C4] rounded-xl shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
-              <CardHeader className="py-1 border-b border-[#EEE1CD] min-h-[28px]">
-                <CardTitle className="text-[#1F4529] arabic-text text-sm font-bold">تفاصيل التصميم</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2 py-1">
-              <div>
-                <Label className="text-[#13312A] arabic-text text-xs">نوع القماش</Label>
-                <Popover open={isFabricPopoverOpen} onOpenChange={setIsFabricPopoverOpen}>
-                  <PopoverTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className={cn(
-                        'w-full justify-between bg-white border-[#C69A72] text-[#155446] arabic-text',
-                        !selectedFabricLabel && 'text-muted-foreground',
-                      )}
-                    >
-                      <span className="flex-1 text-right truncate">
-                        {selectedFabricLabel || 'اختر نوع القماش'}
-                      </span>
-                      <ChevronDown className="ml-2 h-4 w-4 shrink-0" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-72 p-0 bg-[#F6E9CA] border-[#C69A72]">
-                    <Command className="arabic-text text-right">
-                      <CommandInput placeholder="ابحث عن نوع القماش..." className="text-right" />
-                      <CommandList className="text-right">
-                        <CommandEmpty>لا توجد أنواع مطابقة</CommandEmpty>
-                        <CommandItem
-                          value="add-new"
-                          onSelect={() => {
-                            setIsFabricPopoverOpen(false);
-                            handleQuickAddDialogOpenChange(true);
-                          }}
-                          className="flex flex-row-reverse items-center justify-end gap-2 text-[#155446]"
-                        >
-                          <Plus className="h-4 w-4" />
-                          <span>إضافة نوع جديد</span>
-                        </CommandItem>
-                        <CommandSeparator className="bg-[#C69A72]/50" />
-                        {fabricOptions.map((option) => {
-                          const isSelected = selectedFabricOption === option.id;
-                          return (
-                            <CommandItem
-                              key={option.id}
-                              value={option.label}
-                              onSelect={() => {
-                                selectFabricOption(option.id);
-                                setIsFabricPopoverOpen(false);
-                              }}
-                              className="flex items-center justify-between gap-2"
-                            >
-                              <span className="flex-1 text-right">{option.label}</span>
-                              <Check
-                                className={cn(
-                                  'h-4 w-4 text-[#155446] transition-opacity',
-                                  isSelected ? 'opacity-100' : 'opacity-0',
-                                )}
-                              />
-                            </CommandItem>
-                          );
-                        })}
-                      </CommandList>
-                      <div className="border-t border-[#C69A72]/50 px-2 py-2">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          onClick={() => {
-                            setIsFabricPopoverOpen(false);
-                            handleFabricManagerOpenChange(true);
-                          }}
-                          className="w-full flex-row-reverse justify-center text-[#155446]"
-                        >
-                          <Pencil className="h-4 w-4" />
-                          تعديل الأنواع
-                        </Button>
-              </div>
-                    </Command>
-                  </PopoverContent>
-                </Popover>
-              </div>
-              <div>
-                <Label className="text-[#13312A] arabic-text text-xs">مصدر القماش</Label>
-                <Popover open={isSourcePopoverOpen} onOpenChange={setIsSourcePopoverOpen}>
-                  <PopoverTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className={cn(
-                        'w-full justify-between bg-white border-[#C69A72] text-[#155446] arabic-text',
-                        !selectedFabricSource && 'text-muted-foreground',
-                      )}
-                    >
-                      <span className="flex-1 text-right truncate">
-                        {selectedFabricSource 
-                          ? fabricSourceOptions.find(o => o.id === selectedFabricSource)?.label || ''
-                          : 'اختر مصدر القماش'}
-                      </span>
-                      <ChevronDown className="ml-2 h-4 w-4 shrink-0" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-72 p-0 bg-[#F6E9CA] border-[#C69A72]">
-                    <Command className="arabic-text text-right">
-                      <CommandInput placeholder="ابحث عن مصدر القماش..." className="text-right" />
-                      <CommandList className="text-right">
-                        <CommandEmpty>لا توجد مصادر مطابقة</CommandEmpty>
-                        <CommandItem
-                          value="add-new"
-                          onSelect={() => {
-                            setIsSourcePopoverOpen(false);
-                            openSourceQuickAdd(true);
-                          }}
-                          className="flex flex-row-reverse items-center justify-end gap-2 text-[#155446]"
-                        >
-                          <Plus className="h-4 w-4" />
-                          <span>إضافة مصدر جديد</span>
-                        </CommandItem>
-                        <CommandSeparator className="bg-[#C69A72]/50" />
-                        {fabricSourceOptions.map((option) => {
-                          const isSelected = selectedFabricSource === option.id;
-                          return (
-                            <CommandItem
-                              key={option.id}
-                              value={option.label}
-                              onSelect={() => {
-                                selectFabricSource(option.id);
-                                setIsSourcePopoverOpen(false);
-                              }}
-                              className="flex items-center justify-between gap-2"
-                            >
-                              <span className="flex-1 text-right">{option.label}</span>
-                              <Check
-                                className={cn(
-                                  'h-4 w-4 text-[#155446] transition-opacity',
-                                  isSelected ? 'opacity-100' : 'opacity-0',
-                                )}
-                              />
-                            </CommandItem>
-                          );
-                        })}
-                      </CommandList>
-                      <div className="border-t border-[#C69A72]/50 px-2 py-2">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          onClick={() => {
-                            setIsSourcePopoverOpen(false);
-                            openSourceManager(true);
-                          }}
-                          className="w-full flex-row-reverse justify-center text-[#155446]"
-                        >
-                          <Pencil className="h-4 w-4" />
-                          تعديل المصادر
-                        </Button>
-              </div>
-                    </Command>
-                  </PopoverContent>
-                </Popover>
-              </div>
-              <div>
-                <Label className="text-[#13312A] arabic-text text-xs">نوع الياقة</Label>
-                <Popover open={isCollarPopoverOpen} onOpenChange={setIsCollarPopoverOpen}>
-                  <PopoverTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className={cn(
-                        'w-full justify-between bg-white border-[#C69A72] text-[#155446] arabic-text',
-                        !selectedCollarOption && 'text-muted-foreground',
-                      )}
-                    >
-                      <span className="flex-1 text-right truncate">
-                        {selectedCollarOption 
-                          ? collarOptions.find(o => o.id === selectedCollarOption)?.label || ''
-                          : 'اختر نوع الياقة'}
-                      </span>
-                      <ChevronDown className="ml-2 h-4 w-4 shrink-0" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-72 p-0 bg-[#F6E9CA] border-[#C69A72]">
-                    <Command className="arabic-text text-right">
-                      <CommandInput placeholder="ابحث عن نوع الياقة..." className="text-right" />
-                      <CommandList className="text-right">
-                        <CommandEmpty>لا توجد أنواع مطابقة</CommandEmpty>
-                        <CommandItem
-                          value="add-new"
-                          onSelect={() => {
-                            setIsCollarPopoverOpen(false);
-                            openCollarQuickAdd(true);
-                          }}
-                          className="flex flex-row-reverse items-center justify-end gap-2 text-[#155446]"
-                        >
-                          <Plus className="h-4 w-4" />
-                          <span>إضافة نوع جديد</span>
-                        </CommandItem>
-                        <CommandSeparator className="bg-[#C69A72]/50" />
-                        {collarOptions.map((option) => {
-                          const isSelected = selectedCollarOption === option.id;
-                          return (
-                            <CommandItem
-                              key={option.id}
-                              value={option.label}
-                              onSelect={() => {
-                                selectCollarOption(option.id);
-                                setIsCollarPopoverOpen(false);
-                              }}
-                              className="flex items-center justify-between gap-2"
-                            >
-                              <span className="flex-1 text-right">{option.label}</span>
-                              <Check
-                                className={cn(
-                                  'h-4 w-4 text-[#155446] transition-opacity',
-                                  isSelected ? 'opacity-100' : 'opacity-0',
-                                )}
-                              />
-                            </CommandItem>
-                          );
-                        })}
-                      </CommandList>
-                      <div className="border-t border-[#C69A72]/50 px-2 py-2">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          onClick={() => {
-                            setIsCollarPopoverOpen(false);
-                            openCollarManager(true);
-                          }}
-                          className="w-full flex-row-reverse justify-center text-[#155446]"
-                        >
-                          <Pencil className="h-4 w-4" />
-                          تعديل الأنواع
-                        </Button>
-                      </div>
-                    </Command>
-                  </PopoverContent>
-                </Popover>
-              </div>
-              <div>
-                <Label className="text-[#13312A] arabic-text text-xs">أسلوب الصدر</Label>
-                <Popover open={isChestStylePopoverOpen} onOpenChange={setIsChestStylePopoverOpen}>
-                  <PopoverTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className={cn(
-                        'w-full justify-between bg-white border-[#C69A72] text-[#155446] arabic-text',
-                        !selectedChestStyleOption && 'text-muted-foreground',
-                      )}
-                    >
-                      <span className="flex-1 text-right truncate">
-                        {selectedChestStyleOption 
-                          ? chestStyleOptions.find(o => o.id === selectedChestStyleOption)?.label || ''
-                          : 'اختر أسلوب الصدر'}
-                      </span>
-                      <ChevronDown className="ml-2 h-4 w-4 shrink-0" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-72 p-0 bg-[#F6E9CA] border-[#C69A72]">
-                    <Command className="arabic-text text-right">
-                      <CommandInput placeholder="ابحث عن أسلوب الصدر..." className="text-right" />
-                      <CommandList className="text-right">
-                        <CommandEmpty>لا توجد أنماط مطابقة</CommandEmpty>
-                        <CommandItem
-                          value="add-new"
-                          onSelect={() => {
-                            setIsChestStylePopoverOpen(false);
-                            openChestStyleQuickAdd(true);
-                          }}
-                          className="flex flex-row-reverse items-center justify-end gap-2 text-[#155446]"
-                        >
-                          <Plus className="h-4 w-4" />
-                          <span>إضافة نمط جديد</span>
-                        </CommandItem>
-                        <CommandSeparator className="bg-[#C69A72]/50" />
-                        {chestStyleOptions.map((option) => {
-                          const isSelected = selectedChestStyleOption === option.id;
-                          return (
-                            <CommandItem
-                              key={option.id}
-                              value={option.label}
-                              onSelect={() => {
-                                selectChestStyleOption(option.id);
-                                setIsChestStylePopoverOpen(false);
-                              }}
-                              className="flex items-center justify-between gap-2"
-                            >
-                              <span className="flex-1 text-right">{option.label}</span>
-                              <Check
-                                className={cn(
-                                  'h-4 w-4 text-[#155446] transition-opacity',
-                                  isSelected ? 'opacity-100' : 'opacity-0',
-                                )}
-                              />
-                            </CommandItem>
-                          );
-                        })}
-                      </CommandList>
-                      <div className="border-t border-[#C69A72]/50 px-2 py-2">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          onClick={() => {
-                            setIsChestStylePopoverOpen(false);
-                            openChestStyleManager(true);
-                          }}
-                          className="w-full flex-row-reverse justify-center text-[#155446]"
-                        >
-                          <Pencil className="h-4 w-4" />
-                          تعديل الأنماط
-                        </Button>
-                      </div>
-                    </Command>
-                  </PopoverContent>
-                </Popover>
-              </div>
-              <div>
-                <Label className="text-[#13312A] arabic-text text-xs">نهاية الردن</Label>
-                <Popover open={isSleeveEndPopoverOpen} onOpenChange={setIsSleeveEndPopoverOpen}>
-                  <PopoverTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className={cn(
-                        'w-full justify-between bg-white border-[#C69A72] text-[#155446] arabic-text',
-                        !selectedSleeveEndOption && 'text-muted-foreground',
-                      )}
-                    >
-                      <span className="flex-1 text-right truncate">
-                        {selectedSleeveEndOption 
-                          ? sleeveEndOptions.find(o => o.id === selectedSleeveEndOption)?.label || ''
-                          : 'اختر نهاية الردن'}
-                      </span>
-                      <ChevronDown className="ml-2 h-4 w-4 shrink-0" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-72 p-0 bg-[#F6E9CA] border-[#C69A72]">
-                    <Command className="arabic-text text-right">
-                      <CommandInput placeholder="ابحث عن نهاية الردن..." className="text-right" />
-                      <CommandList className="text-right">
-                        <CommandEmpty>لا توجد أنماط مطابقة</CommandEmpty>
-                        <CommandItem
-                          value="add-new"
-                          onSelect={() => {
-                            setIsSleeveEndPopoverOpen(false);
-                            openSleeveEndQuickAdd(true);
-                          }}
-                          className="flex flex-row-reverse items-center justify-end gap-2 text-[#155446]"
-                        >
-                          <Plus className="h-4 w-4" />
-                          <span>إضافة نمط جديد</span>
-                        </CommandItem>
-                        <CommandSeparator className="bg-[#C69A72]/50" />
-                        {sleeveEndOptions.map((option) => {
-                          const isSelected = selectedSleeveEndOption === option.id;
-                          return (
-                            <CommandItem
-                              key={option.id}
-                              value={option.label}
-                              onSelect={() => {
-                                selectSleeveEndOption(option.id);
-                                setIsSleeveEndPopoverOpen(false);
-                              }}
-                              className="flex items-center justify-between gap-2"
-                            >
-                              <span className="flex-1 text-right">{option.label}</span>
-                              <Check
-                                className={cn(
-                                  'h-4 w-4 text-[#155446] transition-opacity',
-                                  isSelected ? 'opacity-100' : 'opacity-0',
-                                )}
-                              />
-                            </CommandItem>
-                          );
-                        })}
-                      </CommandList>
-                      <div className="border-t border-[#C69A72]/50 px-2 py-2">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          onClick={() => {
-                            setIsSleeveEndPopoverOpen(false);
-                            openSleeveEndManager(true);
-                          }}
-                          className="w-full flex-row-reverse justify-center text-[#155446]"
-                        >
-                          <Pencil className="h-4 w-4" />
-                          تعديل الأنماط
-                        </Button>
-                      </div>
-                    </Command>
-                  </PopoverContent>
-                </Popover>
-              </div>
-              <div>
-                <Label className="text-[#13312A] arabic-text text-xs">نوع البنيجة</Label>
-                <Popover open={isBunijaPopoverOpen} onOpenChange={setIsBunijaPopoverOpen}>
-                  <PopoverTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className={cn(
-                        'w-full justify-between bg-white border-[#C69A72] text-[#155446] arabic-text',
-                        !selectedBunijaOption && 'text-muted-foreground',
-                      )}
-                    >
-                      <span className="flex-1 text-right truncate">
-                        {selectedBunijaOption 
-                          ? bunijaOptions.find(o => o.id === selectedBunijaOption)?.label || ''
-                          : 'اختر نوع البنيجة'}
-                      </span>
-                      <ChevronDown className="ml-2 h-4 w-4 shrink-0" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-72 p-0 bg-[#F6E9CA] border-[#C69A72]">
-                    <Command className="arabic-text text-right">
-                      <CommandInput placeholder="ابحث عن نوع البنيجة..." className="text-right" />
-                      <CommandList className="text-right">
-                        <CommandEmpty>لا توجد أنواع مطابقة</CommandEmpty>
-                        <CommandItem
-                          value="add-new"
-                          onSelect={() => {
-                            setIsBunijaPopoverOpen(false);
-                            openBunijaQuickAdd(true);
-                          }}
-                          className="flex flex-row-reverse items-center justify-end gap-2 text-[#155446]"
-                        >
-                          <Plus className="h-4 w-4" />
-                          <span>إضافة نوع جديد</span>
-                        </CommandItem>
-                        <CommandSeparator className="bg-[#C69A72]/50" />
-                        {bunijaOptions.map((option) => {
-                          const isSelected = selectedBunijaOption === option.id;
-                          return (
-                            <CommandItem
-                              key={option.id}
-                              value={option.label}
-                              onSelect={() => {
-                                selectBunijaOption(option.id);
-                                setIsBunijaPopoverOpen(false);
-                              }}
-                              className="flex items-center justify-between gap-2"
-                            >
-                              <span className="flex-1 text-right">{option.label}</span>
-                              <Check
-                                className={cn(
-                                  'h-4 w-4 text-[#155446] transition-opacity',
-                                  isSelected ? 'opacity-100' : 'opacity-0',
-                                )}
-                              />
-                            </CommandItem>
-                          );
-                        })}
-                      </CommandList>
-                      <div className="border-t border-[#C69A72]/50 px-2 py-2">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          onClick={() => {
-                            setIsBunijaPopoverOpen(false);
-                            openBunijaManager(true);
-                          }}
-                          className="w-full flex-row-reverse justify-center text-[#155446]"
-                        >
-                          <Pencil className="h-4 w-4" />
-                          تعديل الأنواع
-                        </Button>
-                      </div>
-                    </Command>
-                  </PopoverContent>
-                </Popover>
-              </div>
-            </CardContent>
-            </Card>
-
-            {/* Fabric Image Upload Section */}
-            <Card className="bg-white border-[#E6D9C4] rounded-xl shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
-              <CardHeader className="py-1 border-b border-[#EEE1CD] min-h-[28px]">
-                <CardTitle className="text-[#1F4529] arabic-text text-sm font-bold">صورة القماش</CardTitle>
-              </CardHeader>
-            <CardContent className="py-2">
-              <div>
-                <Label className="text-[#13312A] arabic-text text-xs">صورة القماش</Label>
-                <p className="text-xs text-gray-500 mb-2">اختر صورة القماش المستخدم في الطلب</p>
-                <div className="max-h-[280px] overflow-hidden rounded-md border border-[#C69A72]/40">
-                  <ImageUpload
-                    onImageChange={(imageData, file) => {
-                      setFabricImage(imageData);
-                      if (file) {
-                        const renamed = new File([file], 'fabric.jpg', { type: file.type || 'image/jpeg' });
-                        setFabricImageFile(renamed);
-                      } else {
-                        setFabricImageFile(null);
-                      }
-                    }}
-                    currentImage={fabricImage}
-                    maxSize={2}
-                    maxWidth={800}
-                    maxHeight={600}
-                    quality={0.8}
-                  />
-                </div>
-                <div className="mt-3 flex items-center gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={cameraAvailable === false}
-                    onClick={async () => {
-                      setCameraError(null);
-                      setIsCameraOpen(true);
+            {/* Fabric Image Upload Section - Compact */}
+            <Card className="bg-white border-[#E6D9C4] rounded-xl shadow-[0_2px_8px_rgba(0,0,0,0.04)] min-w-0 flex flex-col">
+              <CardHeader className="py-0.5 border-b border-[#EEE1CD] min-h-[24px] flex justify-between items-center">
+                <CardTitle className="text-[#1F4529] arabic-text text-base font-bold">صورة القماش</CardTitle>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-6 text-xs border-[#C69A72] text-[#13312A] hover:bg-[#C69A72]"
+                  disabled={cameraAvailable === false}
+                  onClick={async () => {
+                    setCameraError(null);
+                    setIsCameraOpen(true);
+                    
+                    // First check if camera is available
+                    const availability = await checkCameraAvailability();
+                    if (!availability.available) {
+                      setCameraError(availability.message || 'لا يمكن الوصول للكاميرا.');
+                      return;
+                    }
+                    
+                    try {
+                      // Try to get camera stream with optimal constraints
+                      const constraints: MediaStreamConstraints = {
+                        video: { 
+                          facingMode: { ideal: 'environment' },
+                          width: { ideal: 1280, min: 640 },
+                          height: { ideal: 720, min: 480 },
+                          frameRate: { ideal: 30, min: 15 }
+                        },
+                        audio: false,
+                      };
                       
-                      // First check if camera is available
-                      const availability = await checkCameraAvailability();
-                      if (!availability.available) {
-                        setCameraError(availability.message || 'لا يمكن الوصول للكاميرا.');
-                        return;
+                      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                      if (videoRef.current) {
+                        videoRef.current.srcObject = stream as any;
+                        await videoRef.current.play();
                       }
-                      
-                      try {
-                        // Try to get camera stream with optimal constraints
-                        const constraints: MediaStreamConstraints = {
-                          video: { 
-                            facingMode: { ideal: 'environment' },
-                            width: { ideal: 1280, min: 640 },
-                            height: { ideal: 720, min: 480 },
-                            frameRate: { ideal: 30, min: 15 }
-                          },
-                          audio: false,
-                        };
-                        
-                        const stream = await navigator.mediaDevices.getUserMedia(constraints);
-                        if (videoRef.current) {
-                          videoRef.current.srcObject = stream as any;
-                          await videoRef.current.play();
-                        }
-                      } catch (err) {
-                        console.error('Camera access error:', err);
-                        
-                        // Try with more permissive constraints if the first attempt fails
-                        try {
-                          const fallbackConstraints: MediaStreamConstraints = {
-                            video: { 
-                              width: { min: 320 },
-                              height: { min: 240 }
-                            },
-                            audio: false,
-                          };
-                          const stream = await navigator.mediaDevices.getUserMedia(fallbackConstraints);
-                          if (videoRef.current) {
-                            videoRef.current.srcObject = stream as any;
-                            await videoRef.current.play();
-                          }
-                        } catch (fallbackErr) {
-                          console.error('Fallback camera access error:', fallbackErr);
-                          setCameraError(getCameraErrorMessage(fallbackErr));
-                        }
-                      }
-                    }}
-                    className={cn(
-                      "border-[#C69A72] text-[#13312A] hover:bg-[#C69A72]",
-                      cameraAvailable === false && "opacity-50 cursor-not-allowed"
-                    )}
-                  >
-                    <Camera className="h-4 w-4" />
-                    <span className="arabic-text">
-                      {cameraAvailable === false ? 'الكاميرا غير متاحة' : 'فتح الكاميرا'}
-                    </span>
-                  </Button>
-                  {cameraAvailable === false && (
-                    <div className="text-xs text-gray-500 arabic-text">
-                      استخدم زر "رفع صورة" كبديل
-                    </div>
-                  )}
-                  {cameraAvailable === null && (
-                    <div className="text-xs text-gray-500 arabic-text">
-                      جاري التحقق من توفر الكاميرا...
-                    </div>
-                  )}
-                </div>
-              </div>
-            </CardContent>
-            </Card>
-
-            {/* Additional Information */}
-            <Card className="bg-white border-[#E6D9C4] rounded-xl shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
-              <CardHeader className="py-1 border-b border-[#EEE1CD] min-h-[28px]">
-                <CardTitle className="text-[#1F4529] arabic-text text-sm font-bold">معلومات إضافية</CardTitle>
+                    } catch (err) {
+                      console.error('Camera access error:', err);
+                      setCameraError(getCameraErrorMessage(err));
+                    }
+                  }}
+                >
+                  <Camera className="h-3 w-3" />
+                  <span className="arabic-text text-xs">
+                    {cameraAvailable === false ? 'الكاميرا غير متاحة' : 'فتح الكاميرا'}
+                  </span>
+                </Button>
               </CardHeader>
-              <CardContent className="space-y-2 py-1">
-              <div>
-                <Label className="text-[#13312A] arabic-text text-xs">تاريخ التسليم</Label>
-                <Input 
-                  type="date"
-                  className="bg-white border-[#C69A72] text-right h-8 text-sm"
-                  value={formData.deliveryDate}
-                  onChange={(e) => setFormData(prev => ({ ...prev, deliveryDate: e.target.value }))}
-                />
-              </div>
-              <div>
-                <Label className="text-[#13312A] arabic-text text-xs">ملاحظات</Label>
-                <Textarea 
-                  placeholder="أي ملاحظات إضافية..."
-                  className="bg-white border-[#C69A72] text-right text-sm"
-                  value={formData.notes}
-                  onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
-                />
+              <CardContent className="py-2 flex-1 min-w-0">
+                <div>
+                  <Label className="text-[#13312A] arabic-text text-xs">صورة القماش</Label>
+                  <p className="text-xs text-gray-500 mb-2">اختر صورة القماش</p>
+                  <div className="max-h-[80px] overflow-hidden rounded-md border border-[#C69A72]/40">
+                    <ImageUpload
+                      onImageChange={(imageData, file) => {
+                        setFabricImage(imageData);
+                        if (file) {
+                          const renamed = new File([file], 'fabric.jpg', { type: file.type || 'image/jpeg' });
+                          setFabricImageFile(renamed);
+                        } else {
+                          setFabricImageFile(null);
+                        }
+                      }}
+                      currentImage={fabricImage}
+                      maxSize={2}
+                      maxWidth={300}
+                      maxHeight={200}
+                      quality={0.8}
+                    />
+                  </div>
               </div>
             </CardContent>
             </Card>
@@ -1657,7 +1755,7 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated,
               <p className="text-red-600 text-sm">{submitError}</p>
             </div>
           )}
-          </form>
+        </form>
         </div>
 
         {/* Dialog Footer - Fixed at bottom */}
@@ -1908,9 +2006,9 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated,
         <DialogOverlay className="fixed inset-0 z-[1000] bg-black/50 backdrop-blur-sm" />
         <DialogContent className="max-w-md bg-[#F6E9CA] border-[#C69A72] rounded-xl shadow-2xl">
           <DialogHeader className="pb-3">
-            <DialogTitle className="text-[#13312A] arabic-text text-lg">تعديل أنواع الياقة</DialogTitle>
+            <DialogTitle className="text-[#13312A] arabic-text text-lg">تعديل أنواع الياخة</DialogTitle>
             <DialogDescription className="text-[#155446] arabic-text text-sm">
-              قم بإضافة أو تعديل أو حذف أنواع الياقة
+              قم بإضافة أو تعديل أو حذف أنواع الياخة
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={submitCollarOptions} className="space-y-3">
@@ -1975,7 +2073,7 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated,
         <DialogOverlay className="fixed inset-0 z-[1000] bg-black/50 backdrop-blur-sm" />
         <DialogContent className="max-w-sm bg-[#F6E9CA] border-[#C69A72] rounded-xl shadow-2xl">
           <DialogHeader className="pb-3">
-            <DialogTitle className="text-[#13312A] arabic-text text-lg">إضافة نوع ياقة جديد</DialogTitle>
+            <DialogTitle className="text-[#13312A] arabic-text text-lg">إضافة نوع ياخة جديد</DialogTitle>
             <DialogDescription className="text-[#155446] arabic-text text-sm">
               أضف نوعاً جديداً للقائمة
             </DialogDescription>

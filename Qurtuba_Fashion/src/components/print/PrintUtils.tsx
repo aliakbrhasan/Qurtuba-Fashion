@@ -328,7 +328,7 @@ export const brandPrintStyles = `
 `;
 
 export const formatPrintDateTime = (date: Date) =>
-  new Intl.DateTimeFormat('ar-IQ', {
+  new Intl.DateTimeFormat('en-US', {
     dateStyle: 'long',
     timeStyle: 'short',
   }).format(date);
@@ -388,7 +388,7 @@ export const openPrintInvoiceWindow = (title: string, content: React.ReactElemen
     <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
     <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet" />
     <style>
-      @page { size: A5 landscape; margin: 10mm; }
+      @page { size: A5 landscape; margin: 6mm; }
       html, body { padding: 0; margin: 0; background: #ffffff; }
       * { box-sizing: border-box; }
     </style>

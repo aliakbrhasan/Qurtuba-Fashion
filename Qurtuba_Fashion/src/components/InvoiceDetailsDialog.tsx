@@ -211,7 +211,7 @@ export function InvoiceDetailsDialog({ isOpen, onOpenChange, invoice }: InvoiceD
                         )}
                         {invoice.measurements.waist && (
                           <div className="text-center p-3 bg-[#F6E9CA] rounded-lg border border-[#C69A72]/30">
-                            <div className="text-[#155446] arabic-text text-sm font-medium mb-1">الخصر</div>
+                            <div className="text-[#155446] arabic-text text-sm font-medium mb-1">الردن</div>
                             <div className="text-[#13312A] text-xl font-bold">{invoice.measurements.waist} سم</div>
                           </div>
                         )}

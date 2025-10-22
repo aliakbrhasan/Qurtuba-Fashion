@@ -3,6 +3,7 @@ export interface CustomerMeasurements {
   shoulder: number;
   waist: number;
   chest: number;
+  collar: number;
 }
 
 export interface CustomerOrder {

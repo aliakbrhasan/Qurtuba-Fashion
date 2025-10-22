@@ -5,7 +5,6 @@ import { Badge } from '../ui/badge';
 import { Calendar, Clock, Receipt, Handshake } from 'lucide-react';
 import type { Invoice } from '@/db/database.service';
 import { formatCurrency } from '../PrintableInvoice';
-import { formatArabicDate } from '@/utils/arabicNumbers';
 
 interface RecentActivitiesProps {
   recentInvoices: Invoice[];
@@ -36,7 +35,7 @@ export function RecentActivities({
     if (diffDays === 0) return 'اليوم';
     if (diffDays === 1) return 'أمس';
     if (diffDays < 7) return `منذ ${diffDays} أيام`;
-    return formatArabicDate(date);
+    return date.toLocaleDateString('en-US');
   };
 
   const getStatusColor = (status: string) => {
@@ -139,7 +138,7 @@ export function RecentActivities({
                       </p>
                       <p className="text-xs text-[#155446] flex items-center gap-1">
                         <Calendar className="w-3 h-3" />
-                        {formatArabicDate(dueDate)}
+                        {dueDate.toLocaleDateString('en-US')}
                       </p>
                     </div>
                     <div className="text-left flex items-center gap-2">

@@ -82,7 +82,7 @@ export function CustomerDetailsPage({ customer, onBack }: CustomerDetailsPagePro
   const measurementItems = [
     { label: 'الطول', value: `${customer.measurements.height} سم` },
     { label: 'الكتف', value: `${customer.measurements.shoulder} سم` },
-    { label: 'الخصر', value: `${customer.measurements.waist} سم` },
+    { label: 'الردن', value: `${customer.measurements.waist} سم` },
     { label: 'الصدر', value: `${customer.measurements.chest} سم` },
   ];
 
@@ -270,38 +270,52 @@ export function CustomerDetailsPage({ customer, onBack }: CustomerDetailsPagePro
               <CardHeader>
                 <CardTitle className="text-[#13312A] arabic-text text-lg">القياسات</CardTitle>
               </CardHeader>
-              <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div>
-                  <Label className="text-[#13312A] arabic-text">الطول</Label>
-                  <Input
-                    type="number"
-                    defaultValue={customer.measurements.height}
-                    className="bg-white border-[#C69A72] text-right"
-                  />
+              <CardContent className="space-y-4">
+                {/* الصف الأول: الطول، الكتف، الردن - 3 أعمدة */}
+                <div className="grid grid-cols-3 gap-4 min-w-0">
+                  <div className="min-w-[120px]">
+                    <Label className="text-[#13312A] arabic-text">الطول</Label>
+                    <Input
+                      type="number"
+                      defaultValue={customer.measurements.height}
+                      className="bg-white border-[#C69A72] text-right min-w-0"
+                    />
+                  </div>
+                  <div className="min-w-[120px]">
+                    <Label className="text-[#13312A] arabic-text">الكتف</Label>
+                    <Input
+                      type="number"
+                      defaultValue={customer.measurements.shoulder}
+                      className="bg-white border-[#C69A72] text-right min-w-0"
+                    />
+                  </div>
+                  <div className="min-w-[120px]">
+                    <Label className="text-[#13312A] arabic-text">الردن</Label>
+                    <Input
+                      type="number"
+                      defaultValue={customer.measurements.waist}
+                      className="bg-white border-[#C69A72] text-right min-w-0"
+                    />
+                  </div>
                 </div>
-                <div>
-                  <Label className="text-[#13312A] arabic-text">الكتف</Label>
-                  <Input
-                    type="number"
-                    defaultValue={customer.measurements.shoulder}
-                    className="bg-white border-[#C69A72] text-right"
-                  />
-                </div>
-                <div>
-                  <Label className="text-[#13312A] arabic-text">الخصر</Label>
-                  <Input
-                    type="number"
-                    defaultValue={customer.measurements.waist}
-                    className="bg-white border-[#C69A72] text-right"
-                  />
-                </div>
-                <div>
-                  <Label className="text-[#13312A] arabic-text">الصدر</Label>
-                  <Input
-                    type="number"
-                    defaultValue={customer.measurements.chest}
-                    className="bg-white border-[#C69A72] text-right"
-                  />
+                {/* الصف الثاني: الصدر، الياقة - 2 أعمدة */}
+                <div className="grid grid-cols-2 gap-4 min-w-0">
+                  <div className="min-w-[120px]">
+                    <Label className="text-[#13312A] arabic-text">الصدر</Label>
+                    <Input
+                      type="number"
+                      defaultValue={customer.measurements.chest}
+                      className="bg-white border-[#C69A72] text-right min-w-0"
+                    />
+                  </div>
+                  <div className="min-w-[120px]">
+                    <Label className="text-[#13312A] arabic-text">الياقة</Label>
+                    <Input
+                      type="number"
+                      defaultValue={customer.measurements.collar}
+                      className="bg-white border-[#C69A72] text-right min-w-0"
+                    />
+                  </div>
                 </div>
               </CardContent>
             </Card>

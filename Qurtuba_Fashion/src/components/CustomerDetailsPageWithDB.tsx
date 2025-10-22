@@ -165,8 +165,9 @@ export function CustomerDetailsPageWithDB({
   const measurementItems = [
     { label: 'الطول', value: `${(latestMeasurements?.height ?? customer.measurements?.height ?? 0)} سم` },
     { label: 'الكتف', value: `${(latestMeasurements?.shoulder ?? customer.measurements?.shoulder ?? 0)} سم` },
-    { label: 'الخصر', value: `${(latestMeasurements?.waist ?? customer.measurements?.waist ?? 0)} سم` },
+    { label: 'الردن', value: `${(latestMeasurements?.waist ?? customer.measurements?.waist ?? 0)} سم` },
     { label: 'الصدر', value: `${(latestMeasurements?.chest ?? customer.measurements?.chest ?? 0)} سم` },
+    { label: 'الياقة', value: `${((latestMeasurements as any)?.collar ?? (customer.measurements as any)?.collar ?? 0)} سم` },
   ];
 
   const totalSpent = invoices.reduce((sum, invoice) => sum + (invoice.paid_amount || 0), 0);
@@ -298,12 +299,12 @@ export function CustomerDetailsPageWithDB({
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-sm text-[#155446] arabic-text">
                       <div className="flex items-center gap-2">
                         <Calendar className="w-4 h-4" />
-                        <span>تاريخ الفاتورة: {new Date(invoice.invoice_date).toLocaleDateString('ar-IQ')}</span>
+                        <span>تاريخ الفاتورة: {new Date(invoice.invoice_date).toLocaleDateString('en-US')}</span>
                       </div>
                       {invoice.due_date && (
                         <div className="flex items-center gap-2">
                           <Calendar className="w-4 h-4" />
-                          <span>تاريخ الاستحقاق: {new Date(invoice.due_date).toLocaleDateString('ar-IQ')}</span>
+                          <span>تاريخ الاستحقاق: {new Date(invoice.due_date).toLocaleDateString('en-US')}</span>
                         </div>
                       )}
                       <div className="flex items-center gap-2">
@@ -345,7 +346,7 @@ export function CustomerDetailsPageWithDB({
       </Card>
 
       <Dialog open={isNewOrderOpen} onOpenChange={setIsNewOrderOpen}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto bg-[#F6E9CA] border-[#C69A72]">
+        <DialogContent className="max-w-6xl min-w-[800px] max-h-[90vh] overflow-y-auto bg-[#F6E9CA] border-[#C69A72]">
           <DialogHeader>
             <DialogTitle className="text-[#13312A] arabic-text">
               طلب جديد للزبون {customer.name}
@@ -392,39 +393,53 @@ export function CustomerDetailsPageWithDB({
               <CardHeader>
                 <CardTitle className="text-[#13312A] arabic-text text-lg">تفاصيل الطلب</CardTitle>
               </CardHeader>
-              <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <CardContent className="space-y-4">
                 {/* Measurements prefill from latestMeasurements */}
-                <div>
-                  <Label className="text-[#13312A] arabic-text">الطول (سم)</Label>
-                  <Input
-                    type="number"
-                    defaultValue={latestMeasurements?.height ?? customer.measurements?.height ?? 0}
-                    className="bg-white border-[#C69A72] text-right"
-                  />
+                {/* الصف الأول: الطول، الكتف، الردن - 3 أعمدة */}
+                <div className="grid grid-cols-3 gap-4 min-w-0">
+                  <div className="min-w-[120px]">
+                    <Label className="text-[#13312A] arabic-text">الطول (سم)</Label>
+                    <Input
+                      type="number"
+                      defaultValue={latestMeasurements?.height ?? customer.measurements?.height ?? 0}
+                      className="bg-white border-[#C69A72] text-right min-w-0"
+                    />
+                  </div>
+                  <div className="min-w-[120px]">
+                    <Label className="text-[#13312A] arabic-text">الكتف (سم)</Label>
+                    <Input
+                      type="number"
+                      defaultValue={latestMeasurements?.shoulder ?? customer.measurements?.shoulder ?? 0}
+                      className="bg-white border-[#C69A72] text-right min-w-0"
+                    />
+                  </div>
+                  <div className="min-w-[120px]">
+                    <Label className="text-[#13312A] arabic-text">الردن (سم)</Label>
+                    <Input
+                      type="number"
+                      defaultValue={latestMeasurements?.waist ?? customer.measurements?.waist ?? 0}
+                      className="bg-white border-[#C69A72] text-right min-w-0"
+                    />
+                  </div>
                 </div>
-                <div>
-                  <Label className="text-[#13312A] arabic-text">الكتف (سم)</Label>
-                  <Input
-                    type="number"
-                    defaultValue={latestMeasurements?.shoulder ?? customer.measurements?.shoulder ?? 0}
-                    className="bg-white border-[#C69A72] text-right"
-                  />
-                </div>
-                <div>
-                  <Label className="text-[#13312A] arabic-text">الخصر (سم)</Label>
-                  <Input
-                    type="number"
-                    defaultValue={latestMeasurements?.waist ?? customer.measurements?.waist ?? 0}
-                    className="bg-white border-[#C69A72] text-right"
-                  />
-                </div>
-                <div>
-                  <Label className="text-[#13312A] arabic-text">الصدر (سم)</Label>
-                  <Input
-                    type="number"
-                    defaultValue={latestMeasurements?.chest ?? customer.measurements?.chest ?? 0}
-                    className="bg-white border-[#C69A72] text-right"
-                  />
+                {/* الصف الثاني: الصدر، الياقة - 2 أعمدة */}
+                <div className="grid grid-cols-2 gap-4 min-w-0">
+                  <div className="min-w-[120px]">
+                    <Label className="text-[#13312A] arabic-text">الصدر (سم)</Label>
+                    <Input
+                      type="number"
+                      defaultValue={latestMeasurements?.chest ?? customer.measurements?.chest ?? 0}
+                      className="bg-white border-[#C69A72] text-right min-w-0"
+                    />
+                  </div>
+                  <div className="min-w-[120px]">
+                    <Label className="text-[#13312A] arabic-text">الياقة (سم)</Label>
+                    <Input
+                      type="number"
+                      defaultValue={customer.measurements?.collar ?? 0}
+                      className="bg-white border-[#C69A72] text-right min-w-0"
+                    />
+                  </div>
                 </div>
                 <div>
                   <Label className="text-[#13312A] arabic-text">نوع التصميم</Label>

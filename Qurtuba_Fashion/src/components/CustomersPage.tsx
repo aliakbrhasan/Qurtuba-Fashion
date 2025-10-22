@@ -169,7 +169,8 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false, on
           height: 0,
           shoulder: 0,
           waist: 0,
-          chest: 0
+          chest: 0,
+          collar: 0
         },
         notes: '',
         created_at: new Date().toISOString()
@@ -408,7 +409,7 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false, on
                       <span className="item-value">{customer.measurements.shoulder} سم</span>
                     </div>
                     <div className="detail-item">
-                      <span className="item-label">الخصر</span>
+                      <span className="item-label">الردن</span>
                       <span className="item-value">{customer.measurements.waist} سم</span>
                     </div>
                     <div className="detail-item">
@@ -1058,54 +1059,72 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false, on
                 <CardHeader>
                   <CardTitle className="text-[#13312A] arabic-text text-lg">القياسات</CardTitle>
                 </CardHeader>
-                <CardContent className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                  <div>
-                    <Label className="text-[#13312A] arabic-text">الطول (سم)</Label>
-                    <Input
-                      type="number"
-                      className="bg-white border-[#C69A72] text-right"
-                      value={editDraft.measurements?.height ?? 0}
-                      onChange={(e) => setEditDraft({
-                        ...(editDraft as Customer),
-                        measurements: { ...(editDraft.measurements || {}), height: Number(e.target.value) }
-                      })}
-                    />
+                <CardContent className="space-y-4">
+                  {/* الصف الأول: الطول، الكتف، الردن - 3 أعمدة */}
+                  <div className="grid grid-cols-3 gap-4 min-w-0">
+                    <div className="min-w-[120px]">
+                      <Label className="text-[#13312A] arabic-text">الطول (سم)</Label>
+                      <Input
+                        type="number"
+                        className="bg-white border-[#C69A72] text-right min-w-0"
+                        value={editDraft.measurements?.height ?? 0}
+                        onChange={(e) => setEditDraft({
+                          ...(editDraft as Customer),
+                          measurements: { ...(editDraft.measurements || {}), height: Number(e.target.value) }
+                        })}
+                      />
+                    </div>
+                    <div className="min-w-[120px]">
+                      <Label className="text-[#13312A] arabic-text">الكتف (سم)</Label>
+                      <Input
+                        type="number"
+                        className="bg-white border-[#C69A72] text-right min-w-0"
+                        value={editDraft.measurements?.shoulder ?? 0}
+                        onChange={(e) => setEditDraft({
+                          ...(editDraft as Customer),
+                          measurements: { ...(editDraft.measurements || {}), shoulder: Number(e.target.value) }
+                        })}
+                      />
+                    </div>
+                    <div className="min-w-[120px]">
+                      <Label className="text-[#13312A] arabic-text">الردن (سم)</Label>
+                      <Input
+                        type="number"
+                        className="bg-white border-[#C69A72] text-right min-w-0"
+                        value={editDraft.measurements?.waist ?? 0}
+                        onChange={(e) => setEditDraft({
+                          ...(editDraft as Customer),
+                          measurements: { ...(editDraft.measurements || {}), waist: Number(e.target.value) }
+                        })}
+                      />
+                    </div>
                   </div>
-                  <div>
-                    <Label className="text-[#13312A] arabic-text">الكتف (سم)</Label>
-                    <Input
-                      type="number"
-                      className="bg-white border-[#C69A72] text-right"
-                      value={editDraft.measurements?.shoulder ?? 0}
-                      onChange={(e) => setEditDraft({
-                        ...(editDraft as Customer),
-                        measurements: { ...(editDraft.measurements || {}), shoulder: Number(e.target.value) }
-                      })}
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-[#13312A] arabic-text">الخصر (سم)</Label>
-                    <Input
-                      type="number"
-                      className="bg-white border-[#C69A72] text-right"
-                      value={editDraft.measurements?.waist ?? 0}
-                      onChange={(e) => setEditDraft({
-                        ...(editDraft as Customer),
-                        measurements: { ...(editDraft.measurements || {}), waist: Number(e.target.value) }
-                      })}
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-[#13312A] arabic-text">الصدر (سم)</Label>
-                    <Input
-                      type="number"
-                      className="bg-white border-[#C69A72] text-right"
-                      value={editDraft.measurements?.chest ?? 0}
-                      onChange={(e) => setEditDraft({
-                        ...(editDraft as Customer),
-                        measurements: { ...(editDraft.measurements || {}), chest: Number(e.target.value) }
-                      })}
-                    />
+                  {/* الصف الثاني: الصدر، الياقة - 2 أعمدة */}
+                  <div className="grid grid-cols-2 gap-4 min-w-0">
+                    <div className="min-w-[120px]">
+                      <Label className="text-[#13312A] arabic-text">الصدر (سم)</Label>
+                      <Input
+                        type="number"
+                        className="bg-white border-[#C69A72] text-right min-w-0"
+                        value={editDraft.measurements?.chest ?? 0}
+                        onChange={(e) => setEditDraft({
+                          ...(editDraft as Customer),
+                          measurements: { ...(editDraft.measurements || {}), chest: Number(e.target.value) }
+                        })}
+                      />
+                    </div>
+                    <div className="min-w-[120px]">
+                      <Label className="text-[#13312A] arabic-text">الياقة (سم)</Label>
+                      <Input
+                        type="number"
+                        className="bg-white border-[#C69A72] text-right min-w-0"
+                        value={editDraft.measurements?.collar ?? 0}
+                        onChange={(e) => setEditDraft({
+                          ...(editDraft as Customer),
+                          measurements: { ...(editDraft.measurements || {}), collar: Number(e.target.value) }
+                        })}
+                      />
+                    </div>
                   </div>
                 </CardContent>
               </Card>

@@ -32,7 +32,7 @@ export function StatCard({
           <div className="flex-1">
             <p className="text-sm text-[#155446] arabic-text mb-1">{title}</p>
             <div className="text-2xl font-bold text-[#13312A] mb-1">
-              {typeof value === 'number' ? value.toLocaleString('ar-IQ') : value}
+              {typeof value === 'number' ? value.toLocaleString('en-US') : value}
             </div>
             {subtitle && (
               <p className="text-xs text-[#155446] arabic-text">{subtitle}</p>
