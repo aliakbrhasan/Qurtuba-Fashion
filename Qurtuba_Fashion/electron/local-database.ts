@@ -1351,12 +1351,41 @@ export class LocalDatabase {
     const dateStr = entry.action_date || new Date(createdAt).toISOString().slice(0, 10);
     const timeStr = entry.action_time || now.toTimeString().slice(0, 5);
 
+    const changedJson = entry.changed_fields ? JSON.stringify(entry.changed_fields) : null;
+
+    // De-duplicate: if identical action on same entity by same user with same fields within 45 seconds, skip
+    try {
+      const last = this.get<any | undefined>(
+        'SELECT * FROM admin_logs WHERE action_type = ? AND entity_type = ? AND entity_id = ? AND (user_name IS ? OR user_name = ?) ORDER BY created_at DESC LIMIT 1',
+        [entry.action_type, entry.entity_type, entry.entity_id, entry.user_name || null, entry.user_name || null]
+      );
+      if (last && (last.changed_fields || null) === (changedJson || null)) {
+        const lastTs = new Date(last.created_at).getTime();
+        if (!Number.isNaN(lastTs)) {
+          const diffSec = Math.abs(now.getTime() - lastTs) / 1000;
+          if (diffSec <= 45) {
+            return {
+              id: String(last.id),
+              action_type: last.action_type,
+              entity_type: last.entity_type,
+              entity_id: last.entity_id,
+              changed_fields: entry.changed_fields,
+              action_date: last.action_date,
+              action_time: last.action_time,
+              user_name: last.user_name,
+              created_at: last.created_at,
+            } as any;
+          }
+        }
+      }
+    } catch {}
+
     const payload = {
       id,
       action_type: entry.action_type,
       entity_type: entry.entity_type,
       entity_id: entry.entity_id,
-      changed_fields: entry.changed_fields ? JSON.stringify(entry.changed_fields) : null,
+      changed_fields: changedJson,
       action_date: dateStr,
       action_time: timeStr,
       user_name: entry.user_name || null,
