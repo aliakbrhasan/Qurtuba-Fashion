@@ -45,7 +45,7 @@ import {
   formatDate,
   PrintableInvoiceData,
 } from './PrintableInvoice';
-import { openPrintWindow, openPrintInvoiceWindow, formatPrintDateTime } from './print/PrintUtils';
+import { openPrintWindow, openPrintInvoiceWindow, openPdfPreviewWindow, formatPrintDateTime } from './print/PrintUtils.tsx';
 
 const RECEIPT_A5_STYLES = `
   @page { 
@@ -679,6 +679,11 @@ export function InvoicesPage({ onCreateInvoice, onViewInvoiceDetails, onMarkAsPa
     receiptWindow.focus();
   };
 
+  // Native PDF preview using Electron IPC (opens in system PDF viewer)
+  const handleExportPDF2 = (invoice: Invoice) => {
+    openPdfPreviewWindow(`فاتورة ${invoice.id}`, <PrintableInvoice invoice={invoice} />, { pageSize: 'A5', landscape: true });
+  };
+
   const handleShareWhatsApp = (invoice: Invoice) => {
     const remaining = Math.max(invoice.total - invoice.paid, 0);
     const message = [
@@ -1147,7 +1152,7 @@ export function InvoicesPage({ onCreateInvoice, onViewInvoiceDetails, onMarkAsPa
                                           تكرار الفاتورة
                                         </DropdownMenuItem>
                                       )}
-                                      <DropdownMenuItem onClick={() => handleExportPDF(invoice)} className="arabic-text">
+                                      <DropdownMenuItem onClick={() => handleExportPDF2(invoice)} className="arabic-text">
                                         <Download className="w-4 h-4 ml-2" />
                                         تصدير إلى PDF
                                       </DropdownMenuItem>
@@ -1295,7 +1300,7 @@ export function InvoicesPage({ onCreateInvoice, onViewInvoiceDetails, onMarkAsPa
                                       تكرار
                                     </DropdownMenuItem>
                                   )}
-                                  <DropdownMenuItem onClick={() => handleExportPDF(invoice)} className="arabic-text">
+                                  <DropdownMenuItem onClick={() => handleExportPDF2(invoice)} className="arabic-text">
                                     <Download className="w-4 h-4 ml-2" />
                                     تصدير PDF
                                   </DropdownMenuItem>
@@ -1538,3 +1543,5 @@ export function InvoicesPage({ onCreateInvoice, onViewInvoiceDetails, onMarkAsPa
     </>
   );
 }
+
+

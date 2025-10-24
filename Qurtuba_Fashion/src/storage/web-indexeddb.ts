@@ -8,6 +8,7 @@ const LS_KEYS = {
 	invoices: 'qf_web_invoices',
 	orders: 'qf_web_orders',
 	items: 'qf_web_invoice_items',
+	logs: 'qf_web_admin_logs',
 };
 
 // Attempt to read legacy keys from older builds and migrate to new keys transparently
@@ -91,12 +92,14 @@ export class WebIndexedDBStorage implements StoragePort {
 	private invoicesArr: Invoice[] = load<Invoice[]>(LS_KEYS.invoices, []);
 	private ordersArr: Order[] = load<Order[]>(LS_KEYS.orders, []);
 	private itemsArr: InvoiceItem[] = load<InvoiceItem[]>(LS_KEYS.items, []);
+	private logsArr: any[] = load<any[]>(LS_KEYS.logs, []);
 
 	private persistAll() {
 		save(LS_KEYS.customers, this.customersArr);
 		save(LS_KEYS.invoices, this.invoicesArr);
 		save(LS_KEYS.orders, this.ordersArr);
 		save(LS_KEYS.items, this.itemsArr);
+		save(LS_KEYS.logs, this.logsArr);
 	}
 
 	async getCustomers(): Promise<Customer[]> { return [...this.customersArr]; }
@@ -255,6 +258,27 @@ export class WebIndexedDBStorage implements StoragePort {
 		if (Array.isArray(data.orders)) this.ordersArr = [...data.orders];
 		if (Array.isArray(data.items)) this.itemsArr = [...data.items];
 		this.persistAll();
+	}
+
+	// Admin logs (web fallback in localStorage)
+	async getAdminLogs() {
+		return [...this.logsArr].sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)) || String(b.id).localeCompare(String(a.id)));
+	}
+
+	async createAdminLog(entry: { action_type: 'create' | 'update' | 'delete'; entity_type: 'invoice' | 'customer'; entity_id: string; changed_fields?: any; action_date?: string; action_time?: string; user_name?: string }) {
+		const now = new Date();
+		const id = generateId();
+		const created_at = now.toISOString();
+		const log = {
+			id,
+			...entry,
+			action_date: entry.action_date || created_at.slice(0, 10),
+			action_time: entry.action_time || now.toTimeString().slice(0, 5),
+			created_at,
+		};
+		this.logsArr.unshift(log);
+		this.persistAll();
+		return log;
 	}
 }
 

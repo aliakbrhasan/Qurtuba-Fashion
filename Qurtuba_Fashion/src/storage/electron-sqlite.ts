@@ -104,6 +104,15 @@ export class ElectronSQLiteStorage implements StoragePort {
 			for (const o of data.orders) { try { await this.createOrder(o as any); } catch {} }
 		}
 	}
+
+	// Admin logs via IPC
+	async getAdminLogs() {
+		return await this.call<any[]>('local.getAdminLogs');
+	}
+
+	async createAdminLog(entry: { action_type: 'create' | 'update' | 'delete'; entity_type: 'invoice' | 'customer'; entity_id: string; changed_fields?: any; action_date?: string; action_time?: string; user_name?: string }) {
+		return await this.call<any>('local.createAdminLog', entry);
+	}
 }
 
 // Helper to traverse object by dotted path like 'local.getCustomers'

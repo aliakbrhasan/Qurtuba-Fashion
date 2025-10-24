@@ -172,6 +172,22 @@ export class InvoiceService {
   static async deleteInvoice(id: string): Promise<void> {
     try {
       await invoicesAdapter.deleteInvoice(id);
+      // Invalidate caches so all pages update immediately
+      try {
+        const { queryClient } = await import('@/app/queryClient');
+        queryClient.invalidateQueries({ queryKey: ['invoices'] });
+        queryClient.invalidateQueries({ queryKey: ['customers'] });
+        queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+      } catch {}
+      // Emit app notification to allow pages without react-query to react (e.g., customer details)
+      try {
+        notifications.emit({
+          type: 'success',
+          title: 'تم حذف الفاتورة',
+          message: `تم حذف الفاتورة بنجاح (ID: ${id})`,
+          target: { page: 'invoices', id },
+        });
+      } catch {}
     } catch (error) {
       console.error('Error deleting invoice:', error);
       throw error;

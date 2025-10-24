@@ -97,13 +97,13 @@ export function NotificationCenter({ isOpen, onClose, onNavigate }: Notification
             </Button>
           </div>
         </CardHeader>
-        <CardContent className="p-0 max-h-[70vh] overflow-y-auto">
+        <CardContent className="p-0">
           {notifications.length === 0 ? (
             <div className="p-6 text-center text-[#155446] arabic-text">
               لا توجد إشعارات
             </div>
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-2 max-h-[70vh] overflow-y-auto">
               {notifications.map((notification) => {
                 const Icon = getIcon(notification.type);
                 return (

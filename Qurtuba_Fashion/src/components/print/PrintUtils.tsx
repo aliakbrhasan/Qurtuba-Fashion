@@ -7,6 +7,7 @@ declare global {
     electronAPI?: {
       print: (data: { title: string; content: string; styles?: string }) => Promise<any>;
       printPreview: (data: { title: string; content: string; styles?: string }) => Promise<any>;
+      pdfPreview: (data: { title: string; content: string; styles?: string; pageSize?: string; landscape?: boolean }) => Promise<any>;
     };
   }
 }
@@ -497,6 +498,33 @@ export const openPrintPreviewWindow = (title: string, content: React.ReactElemen
   } else {
     // Fallback to regular print
     openPrintWindow(title, content);
+  }
+};
+
+// OS-native PDF preview: renders to PDF then opens system viewer
+export const openPdfPreviewWindow = (title: string, content: React.ReactElement, opts?: { pageSize?: 'A4'|'A5'|'Letter'|'Legal'; landscape?: boolean }) => {
+  const markup = renderToStaticMarkup(content);
+
+  if (window.electronAPI && window.electronAPI.pdfPreview) {
+    window.electronAPI.pdfPreview({
+      title,
+      content: `
+        <div class="print-container">
+          <div class="print-inner">${markup}</div>
+          <div class="print-footer">تم توليد المعاينة كملف PDF</div>
+        </div>
+      `,
+      styles: brandPrintStyles,
+      pageSize: opts?.pageSize || 'A5',
+      landscape: opts?.landscape ?? true,
+    }).catch((error: any) => {
+      console.error('PDF preview failed:', error);
+      // Fallback to in-app preview if PDF preview fails
+      openPrintPreviewWindow(title, content);
+    });
+  } else {
+    // Fallback: in-app preview
+    openPrintPreviewWindow(title, content);
   }
 };
 

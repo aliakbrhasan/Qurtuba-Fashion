@@ -57,3 +57,8 @@ export function formatPrintDateTime(date: string | Date): string {
     minute: '2-digit'
   });
 }
+
+// Re-export preview helper from the TSX implementation so imports
+// from './print/PrintUtils' can access it during build
+export { openPrintPreviewWindow } from './PrintUtils.tsx';
+export { openPdfPreviewWindow } from './PrintUtils.tsx';

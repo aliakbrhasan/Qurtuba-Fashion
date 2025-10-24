@@ -79,9 +79,17 @@ const createWindow = () => {
         }
         return false;
     });
-    // Show window when ready to prevent visual flash
+    // Show window when ready: always start maximized to fill the screen
     mainWindow.once('ready-to-show', () => {
+        try {
+            mainWindow?.maximize();
+        }
+        catch { }
         mainWindow?.show();
+        try {
+            mainWindow?.focus();
+        }
+        catch { }
     });
     // Handle window closed
     mainWindow.on('closed', () => {
@@ -178,7 +186,27 @@ electron_1.app.on('window-all-closed', () => {
 });
 // Security: Prevent new window creation
 electron_1.app.on('web-contents-created', (_evt, contents) => {
-    contents.setWindowOpenHandler(() => {
+    contents.setWindowOpenHandler((details) => {
+        const { url } = details;
+        // Allow print windows
+        if (url === 'about:blank') {
+            return {
+                action: 'allow',
+                overrideBrowserWindowOptions: {
+                    show: true,
+                    width: 900,
+                    height: 700,
+                    webPreferences: {
+                        nodeIntegration: false,
+                        contextIsolation: true,
+                        sandbox: true,
+                        webSecurity: true,
+                        allowRunningInsecureContent: false,
+                    },
+                },
+            };
+        }
+        // Deny all other external windows
         return { action: 'deny' };
     });
     // Disable or restrict navigation/permissions
@@ -305,6 +333,9 @@ electron_1.ipcMain.handle('local:getOrders', async () => ok(() => localDB.getOrd
 electron_1.ipcMain.handle('local:createOrder', async (_, order) => ok(() => localDB.createOrder(order)));
 electron_1.ipcMain.handle('local:updateOrder', async (_, id, updates) => ok(() => localDB.updateOrder(id, updates)));
 electron_1.ipcMain.handle('local:deleteOrder', async (_, id) => ok(() => localDB.deleteOrder(id)));
+// Admin logs handlers
+electron_1.ipcMain.handle('local:getAdminLogs', async () => ok(() => localDB.getAdminLogs()));
+electron_1.ipcMain.handle('local:createAdminLog', async (_evt, entry) => ok(() => localDB.createAdminLog(entry)));
 // Local database self-test
 electron_1.ipcMain.handle('local:selfTest', async () => {
     console.log('IPC: selfTest called');
@@ -365,6 +396,11 @@ electron_1.ipcMain.handle('image:upload', async (_evt, args) => ok(async () => {
     const fileUrl = (0, url_1.pathToFileURL)(targetPath).toString();
     // If entity info provided, save to database
     if (args.entityType && args.entityId) {
+        console.log('Main process - Saving image to database:', {
+            entityType: args.entityType,
+            entityId: args.entityId,
+            fileName: args.fileName
+        });
         try {
             const imageRecord = await localDB.createImage({
                 filename: args.fileName,
@@ -377,12 +413,16 @@ electron_1.ipcMain.handle('image:upload', async (_evt, args) => ok(async () => {
                 entity_type: args.entityType,
                 entity_id: args.entityId
             });
+            console.log('Main process - Image saved to database with ID:', imageRecord.id);
             return { url: targetPath, path: args.fileName, publicUrl: fileUrl, imageId: imageRecord.id };
         }
         catch (dbError) {
-            console.warn('Failed to save image record to database:', dbError);
+            console.error('Main process - Failed to save image record to database:', dbError);
             // Continue with file upload even if DB save fails
         }
+    }
+    else {
+        console.log('Main process - No entity info provided, skipping database save');
     }
     return { url: targetPath, path: args.fileName, publicUrl: fileUrl };
 }));
@@ -405,7 +445,16 @@ electron_1.ipcMain.handle('image:getPublicUrl', async (_evt, path) => ok(async (
     return (0, url_1.pathToFileURL)(targetPath).toString();
 }));
 electron_1.ipcMain.handle('image:getByEntity', async (_evt, entityType, entityId) => ok(async () => {
-    return await localDB.getImagesByEntity(entityType, entityId);
+    console.log('Main process - image:getByEntity called with:', { entityType, entityId });
+    try {
+        const result = await localDB.getImagesByEntity(entityType, entityId);
+        console.log('Main process - getImagesByEntity result:', result);
+        return result;
+    }
+    catch (error) {
+        console.error('Main process - getImagesByEntity error:', error);
+        throw error;
+    }
 }));
 electron_1.ipcMain.handle('image:deleteById', async (_evt, imageId) => ok(async () => {
     // Get image record first to find the file path
@@ -432,17 +481,22 @@ electron_1.ipcMain.handle('print:document', async (_evt, args) => {
         if (!mainWindow) {
             throw new Error('Main window not available');
         }
-        // Create a new window for printing
+        // Create a new off-screen window for printing
         const printWindow = new electron_1.BrowserWindow({
             width: 900,
             height: 700,
-            show: false,
+            // Show on Windows to avoid blank preview with some drivers
+            show: process.platform === 'win32',
+            autoHideMenuBar: true,
+            backgroundColor: '#ffffff',
+            skipTaskbar: true,
             webPreferences: {
                 nodeIntegration: false,
                 contextIsolation: true,
                 sandbox: true,
                 webSecurity: true,
                 allowRunningInsecureContent: false,
+                backgroundThrottling: false,
             },
         });
         // Load the print content
@@ -451,33 +505,52 @@ electron_1.ipcMain.handle('print:document', async (_evt, args) => {
   <head>
     <meta charset="utf-8" />
     <title>${args.title}</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet" />
-    <style>${args.styles || ''}</style>
+    <style>
+      @page { size: A5 landscape; margin: 0; }
+      html, body { margin: 0; padding: 0; background: #ffffff; }
+      html, body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      body { font-family: 'Tajawal', system-ui, 'Segoe UI', Arial, sans-serif; direction: rtl; }
+      ${args.styles || ''}
+    </style>
   </head>
   <body>
     ${args.content}
   </body>
 </html>`;
-        await printWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(htmlContent)}`);
-        // Show the window and focus it
-        printWindow.show();
-        printWindow.focus();
-        // Wait for content to load, then trigger print
-        printWindow.webContents.once('did-finish-load', () => {
-            setTimeout(() => {
-                printWindow.webContents.print({}, (success, errorType) => {
-                    if (!success) {
-                        console.error('Print failed:', errorType);
-                    }
-                    // Close the print window after printing
-                    setTimeout(() => {
-                        printWindow.close();
-                    }, 1000);
+        // Wait for content to load and fully render, then trigger native print dialog
+        printWindow.webContents.once('did-finish-load', async () => {
+            try {
+                await printWindow.webContents.executeJavaScript(`
+          new Promise((resolve) => {
+            const done = () => requestAnimationFrame(() => requestAnimationFrame(resolve));
+            const imgs = Array.from(document.images || []);
+            const imgPromises = imgs.map(img => img.complete ? Promise.resolve() : new Promise(r => { img.onload = img.onerror = r; }));
+            const fontsReady = (document.fonts && document.fonts.ready) ? document.fonts.ready.catch(()=>{}) : Promise.resolve();
+            Promise.all([Promise.all(imgPromises), fontsReady]).then(done).catch(done);
+          });
+        `, true);
+                const printOptions = {
+                    silent: false,
+                    printBackground: true,
+                    landscape: true,
+                    pageSize: 'A5',
+                };
+                await new Promise((resolve) => {
+                    printWindow.webContents.print(printOptions, () => resolve());
                 });
-            }, 500);
+            }
+            catch (err) {
+                console.error('Print pipeline error:', err);
+            }
+            finally {
+                setTimeout(() => { try {
+                    printWindow.close();
+                }
+                catch { } }, 300);
+            }
         });
+        // Load the content (listener above will fire once it finishes)
+        await printWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(htmlContent)}`);
         return { ok: true };
     }
     catch (e) {
@@ -495,12 +568,15 @@ electron_1.ipcMain.handle('print:preview', async (_evt, args) => {
             width: 900,
             height: 700,
             show: true,
+            autoHideMenuBar: true,
+            backgroundColor: '#ffffff',
             webPreferences: {
                 nodeIntegration: false,
                 contextIsolation: true,
                 sandbox: true,
                 webSecurity: true,
                 allowRunningInsecureContent: false,
+                backgroundThrottling: false,
             },
             title: `معاينة الطباعة - ${args.title}`,
         });
@@ -510,14 +586,11 @@ electron_1.ipcMain.handle('print:preview', async (_evt, args) => {
   <head>
     <meta charset="utf-8" />
     <title>${args.title}</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet" />
     <style>
       body { 
         margin: 0; 
         padding: 20px; 
-        font-family: 'Tajawal', sans-serif; 
+        font-family: 'Tajawal', system-ui, 'Segoe UI', Arial, sans-serif; 
         direction: rtl; 
         background: #f5f5f5;
       }
@@ -551,6 +624,9 @@ electron_1.ipcMain.handle('print:preview', async (_evt, args) => {
       .print-btn:hover {
         background: #0056b3;
       }
+      @media print { .print-actions { display: none !important; } }
+      @page { size: A5 landscape; margin: 0; }
+      html, body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
       ${args.styles || ''}
     </style>
   </head>
@@ -565,10 +641,78 @@ electron_1.ipcMain.handle('print:preview', async (_evt, args) => {
   </body>
 </html>`;
         await previewWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(htmlContent)}`);
+        try {
+            await previewWindow.webContents.executeJavaScript(`
+        new Promise((resolve) => {
+          const done = () => requestAnimationFrame(() => requestAnimationFrame(resolve));
+          const imgs = Array.from(document.images || []);
+          const imgPromises = imgs.map(img => img.complete ? Promise.resolve() : new Promise(r => { img.onload = img.onerror = r; }));
+          const fontsReady = (document.fonts && document.fonts.ready) ? document.fonts.ready.catch(()=>{}) : Promise.resolve();
+          Promise.all([Promise.all(imgPromises), fontsReady]).then(done).catch(done);
+        });
+      `, true);
+        }
+        catch { }
         return { ok: true };
     }
     catch (e) {
         console.error('Print preview error:', e);
+        return { ok: false, error: String(e?.message || e) };
+    }
+});
+// OS-native PDF preview: render to PDF and open in default viewer
+electron_1.ipcMain.handle('print:pdfPreview', async (_evt, args) => {
+    try {
+        if (!mainWindow) {
+            throw new Error('Main window not available');
+        }
+        const pdfWindow = new electron_1.BrowserWindow({
+            width: 900,
+            height: 700,
+            show: false,
+            webPreferences: {
+                nodeIntegration: false,
+                contextIsolation: true,
+                sandbox: true,
+                webSecurity: true,
+                allowRunningInsecureContent: false,
+            },
+        });
+        const htmlContent = `<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="utf-8" />
+    <title>${args.title}</title>
+    <style>
+      @page { size: ${args.pageSize || 'A5'} ${args.landscape ?? true ? 'landscape' : 'portrait'}; margin: 0; }
+      html, body { margin: 0; padding: 0; background: #ffffff; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      body { font-family: 'Tajawal', system-ui, 'Segoe UI', Arial, sans-serif; direction: rtl; }
+      ${args.styles || ''}
+    </style>
+  </head>
+  <body>
+    ${args.content}
+  </body>
+</html>`;
+        await pdfWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(htmlContent)}`);
+        const pdfOptions = {
+            pageSize: args.pageSize || 'A5',
+            landscape: args.landscape ?? true,
+            printBackground: true,
+        };
+        const pdf = await pdfWindow.webContents.printToPDF(pdfOptions);
+        const tempDir = electron_1.app.getPath('temp');
+        const file = (0, path_1.join)(tempDir, `qurtuba-preview-${Date.now()}.pdf`);
+        (0, fs_1.writeFileSync)(file, pdf);
+        try {
+            pdfWindow.close();
+        }
+        catch { }
+        await electron_1.shell.openPath(file);
+        return { ok: true, path: file };
+    }
+    catch (e) {
+        console.error('PDF preview error:', e);
         return { ok: false, error: String(e?.message || e) };
     }
 });

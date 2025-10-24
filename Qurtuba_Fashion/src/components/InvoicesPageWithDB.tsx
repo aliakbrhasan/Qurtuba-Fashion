@@ -39,7 +39,7 @@ import {
   formatDate,
   PrintableInvoiceData,
 } from './PrintableInvoice';
-import { openPrintWindow, openPrintInvoiceWindow, formatPrintDateTime } from './print/PrintUtils';
+import { openPrintWindow, openPrintInvoiceWindow, formatPrintDateTime } from './print/PrintUtils.tsx';
 
 
 type DateParts = {
@@ -332,6 +332,12 @@ export function InvoicesPageWithDB({ onCreateInvoice, onViewInvoiceDetails, onMa
       try {
         const { InvoiceService } = await import('@/services/invoice.service');
         await InvoiceService.deleteInvoice(invoice.id);
+        // Optimistically remove from cache to reflect instantly
+        try {
+          queryClient.setQueryData(['invoices'], (oldData: any[] = []) =>
+            Array.isArray(oldData) ? oldData.filter((inv) => inv.id !== invoice.id) : oldData
+          );
+        } catch {}
         
         // Refresh data after deletion
         if (loadInvoices) {
@@ -1353,9 +1359,33 @@ export function InvoicesPageWithDB({ onCreateInvoice, onViewInvoiceDetails, onMa
             status: invoiceToEdit.status,
             deliveryDate: typeof invoiceToEdit.due_date === 'string' ? (invoiceToEdit.due_date || '') : new Date(invoiceToEdit.due_date).toISOString().split('T')[0],
             notes: invoiceToEdit.notes,
+            // Existing image (if any)
+            fabricImageUrl: (invoiceToEdit as any).fabric_image_url || undefined,
+            // Prefill design sections from saved invoice fields if present.
+            // Leave empty when not previously saved (per requirement).
+            designDetails: {
+              fabricType: typeof (invoiceToEdit as any).fabric_type === 'string' && (invoiceToEdit as any).fabric_type
+                ? String((invoiceToEdit as any).fabric_type).split(',').filter(Boolean)
+                : [],
+              fabricSource: typeof (invoiceToEdit as any).fabric_source === 'string' && (invoiceToEdit as any).fabric_source
+                ? String((invoiceToEdit as any).fabric_source).split(',').filter(Boolean)
+                : [],
+              collarType: typeof (invoiceToEdit as any).collar_type === 'string' && (invoiceToEdit as any).collar_type
+                ? String((invoiceToEdit as any).collar_type).split(',').filter(Boolean)
+                : [],
+              chestStyle: typeof (invoiceToEdit as any).chest_style === 'string' && (invoiceToEdit as any).chest_style
+                ? String((invoiceToEdit as any).chest_style).split(',').filter(Boolean)
+                : [],
+              sleeveEnd: typeof (invoiceToEdit as any).sleeve_end === 'string' && (invoiceToEdit as any).sleeve_end
+                ? String((invoiceToEdit as any).sleeve_end).split(',').filter(Boolean)
+                : [],
+              bunijaType: (invoiceToEdit as any).bunija_type || ''
+            },
+            // Keep items/measurements empty when not stored with the invoice
             items: [],
             measurements: undefined,
-            designDetails: undefined
+            // Map payment date when available so the UI shows it
+            paymentDate: (invoiceToEdit as any).paid_at ? String((invoiceToEdit as any).paid_at).split('T')[0] : undefined
           }}
         />
       )}
@@ -1394,5 +1424,7 @@ export function InvoicesPageWithDB({ onCreateInvoice, onViewInvoiceDetails, onMa
     </div>
   );
 }
+
+
 
 

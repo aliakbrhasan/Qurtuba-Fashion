@@ -299,11 +299,28 @@ export class LocalDatabase {
       )
     `);
 
+    // Admin logs table
+    this.run(`
+      CREATE TABLE IF NOT EXISTS admin_logs (
+        id TEXT PRIMARY KEY,
+        action_type TEXT NOT NULL, -- create | update | delete
+        entity_type TEXT NOT NULL, -- invoice | customer
+        entity_id TEXT NOT NULL,
+        changed_fields TEXT, -- JSON string of changed fields
+        action_date TEXT NOT NULL, -- YYYY-MM-DD
+        action_time TEXT NOT NULL, -- HH:mm
+        user_name TEXT,
+        created_at TEXT NOT NULL
+      )
+    `);
+
     // Indexes
     this.run(`CREATE INDEX IF NOT EXISTS idx_outbox_created ON outbox(created_at)`);
     this.run(`CREATE INDEX IF NOT EXISTS idx_outbox_table ON outbox(table_name, record_id)`);
     this.run(`CREATE INDEX IF NOT EXISTS idx_images_entity ON images(entity_type, entity_id)`);
     this.run(`CREATE INDEX IF NOT EXISTS idx_images_created_at ON images(created_at)`);
+    this.run(`CREATE INDEX IF NOT EXISTS idx_admin_logs_created_at ON admin_logs(created_at)`);
+    this.run(`CREATE INDEX IF NOT EXISTS idx_admin_logs_entity ON admin_logs(entity_type, entity_id)`);
   }
 
   private async seedInitialUsersIfEmpty(): Promise<void> {
@@ -1315,5 +1332,62 @@ export class LocalDatabase {
       lines.push(`❌ حدث خطأ: ${String(e?.message || e)}`);
       return { ok: false, report: lines.join('\n') };
     }
+  }
+
+  // Admin logs API
+  async createAdminLog(entry: {
+    action_type: 'create' | 'update' | 'delete';
+    entity_type: 'invoice' | 'customer';
+    entity_id: string;
+    changed_fields?: any;
+    action_date?: string;
+    action_time?: string;
+    user_name?: string;
+  }): Promise<{ id: string } & typeof entry & { created_at: string }> {
+    if (!this.db) throw new Error('Database not initialized');
+    const id = this.generateId();
+    const now = new Date();
+    const createdAt = now.toISOString();
+    const dateStr = entry.action_date || new Date(createdAt).toISOString().slice(0, 10);
+    const timeStr = entry.action_time || now.toTimeString().slice(0, 5);
+
+    const payload = {
+      id,
+      action_type: entry.action_type,
+      entity_type: entry.entity_type,
+      entity_id: entry.entity_id,
+      changed_fields: entry.changed_fields ? JSON.stringify(entry.changed_fields) : null,
+      action_date: dateStr,
+      action_time: timeStr,
+      user_name: entry.user_name || null,
+      created_at: createdAt,
+    } as const;
+
+    await this.run(
+      `INSERT INTO admin_logs (id, action_type, entity_type, entity_id, changed_fields, action_date, action_time, user_name, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        payload.id,
+        payload.action_type,
+        payload.entity_type,
+        payload.entity_id,
+        payload.changed_fields,
+        payload.action_date,
+        payload.action_time,
+        payload.user_name,
+        payload.created_at,
+      ]
+    );
+
+    return payload as any;
+  }
+
+  async getAdminLogs(): Promise<any[]> {
+    if (!this.db) throw new Error('Database not initialized');
+    const rows = await this.all<any>('SELECT * FROM admin_logs ORDER BY created_at DESC, id DESC');
+    return rows.map(r => ({
+      ...r,
+      changed_fields: r.changed_fields ? JSON.parse(r.changed_fields) : null,
+    }));
   }
 }

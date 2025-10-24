@@ -10,6 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Customer } from '../types/customer';
 import { formatCurrency } from './PrintableInvoice';
 import { databaseService, Invoice } from '../db/database.service';
+import { notifications } from '@/services/notifications.service';
+import { NewInvoiceDialogWithDB } from './NewInvoiceDialogWithDB';
 import {
   Phone,
   MapPin,
@@ -21,6 +23,7 @@ import {
   Star,
   Eye,
   FileText,
+  Pencil,
   Loader2,
 } from 'lucide-react';
 
@@ -80,17 +83,32 @@ export function CustomerDetailsPageWithDB({
   onBack, 
   onViewInvoiceDetails 
 }: CustomerDetailsPageWithDBProps) {
-  const [isNewOrderOpen, setIsNewOrderOpen] = useState(false);
+  const [isInvoiceDialogOpen, setIsInvoiceDialogOpen] = useState(false);
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [editDraft, setEditDraft] = useState<Customer | null>(null);
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
   const [isCreatingOrder, setIsCreatingOrder] = useState(false);
+  const [isNewOrderOpen, setIsNewOrderOpen] = useState(false);
   const [latestMeasurements, setLatestMeasurements] = useState<{ height?: number; shoulder?: number; waist?: number; chest?: number } | null>(null);
+  // Fresh snapshot of customer to reflect edits
+  const [freshCustomer, setFreshCustomer] = useState<Customer | null>(null);
 
   // Load customer orders and invoices
   useEffect(() => {
     const loadCustomerData = async () => {
       try {
         setLoading(true);
+        // Fetch latest customer snapshot
+        try {
+          const allCustomers = await databaseService.getCustomers();
+          const found = allCustomers.find((c: any) => String((c as any).id) === String(customer.id));
+          setFreshCustomer((found as any) || null);
+        } catch (e) {
+          console.warn("Failed to refresh customer snapshot:", e);
+          setFreshCustomer(null);
+        }
         
         // Load orders for this customer (for future use)
         await databaseService.getOrdersByCustomer(customer.id.toString());
@@ -105,7 +123,7 @@ export function CustomerDetailsPageWithDB({
         // Capture latest measurements from the newest invoice, fallback to saved customer
         try {
           const newest = [...customerInvoices].sort((a, b) => new Date(b.invoice_date).getTime() - new Date(a.invoice_date).getTime())[0];
-          const m: any = (newest as any)?.measurements || (customer as any)?.measurements || {};
+          const m: any = (newest as any)?.measurements || (freshCustomer as any)?.measurements || (customer as any)?.measurements || {};
           setLatestMeasurements({
             height: Number(m.length || m.height || 0),
             shoulder: Number(m.shoulder || 0),
@@ -123,6 +141,36 @@ export function CustomerDetailsPageWithDB({
 
     loadCustomerData();
   }, [customer.id, customer.name]);
+
+  // Refresh dynamically when invoices change anywhere in the app
+  useEffect(() => {
+    const listener = async (n: any) => {
+      try {
+        if (n?.target?.page === 'invoices') {
+          try {
+            const allCustomers = await databaseService.getCustomers();
+            const found = allCustomers.find((c: any) => String((c as any).id) === String(customer.id));
+            setFreshCustomer((found as any) || null);
+          } catch {}
+          const allInvoices = await databaseService.getInvoices();
+          const customerInvoices = allInvoices.filter(inv => inv.customer_id === String(customer.id) || inv.customer_name === customer.name);
+          setInvoices(customerInvoices);
+          try {
+            const newest = [...customerInvoices].sort((a, b) => new Date(b.invoice_date).getTime() - new Date(a.invoice_date).getTime())[0];
+            const m: any = (newest as any)?.measurements || (freshCustomer as any)?.measurements || (customer as any)?.measurements || {};
+            setLatestMeasurements({
+              height: Number(m.length || m.height || 0),
+              shoulder: Number(m.shoulder || 0),
+              waist: Number(m.waist || 0),
+              chest: Number(m.chest || 0),
+            });
+          } catch {}
+        }
+      } catch {}
+    };
+    notifications.on(listener);
+    return () => notifications.off(listener);
+  }, [customer.id, customer.name, freshCustomer]);
 
   const sortedInvoices = useMemo(
     () =>
@@ -185,7 +233,7 @@ export function CustomerDetailsPageWithDB({
   }
 
   return (
-    <div className="container mx-auto p-4 space-y-6">
+    <div className="mx-auto p-3 space-y-4 max-w-6xl">
       <div className="flex flex-col gap-4">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
@@ -200,7 +248,7 @@ export function CustomerDetailsPageWithDB({
             <h1 className="text-2xl text-[#13312A] arabic-text">تفاصيل الزبون</h1>
           </div>
           <Button
-            onClick={() => setIsNewOrderOpen(true)}
+            onClick={() => setIsInvoiceDialogOpen(true)}
             className="bg-[#155446] hover:bg-[#13312A] text-[#F6E9CA] touch-target"
           >
             <Plus className="w-4 h-4 ml-2" />
@@ -209,31 +257,37 @@ export function CustomerDetailsPageWithDB({
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          <span className="text-lg text-[#13312A] arabic-text">{customer.name}</span>
-          <Badge className={`${getLabelColor(customer.label || '')} flex items-center gap-1`}>
-            {getLabelIcon(customer.label || '')}
-            {customer.label || 'غير محدد'}
+          <span className="text-lg text-[#13312A] arabic-text">{freshCustomer?.name ?? customer.name}</span>
+          <Badge className={`${getLabelColor((freshCustomer?.label || customer.label || ""))} flex items-center gap-1` }>
+            {getLabelIcon((freshCustomer?.label || customer.label || ""))}
+            {freshCustomer?.label ?? (customer.label || 'O?USO? U.O-O_O_')}
           </Badge>
+          <Button size="sm" variant="outline" className="border-[#C69A72] text-[#13312A]" onClick={() => { setEditDraft(freshCustomer || customer); setIsEditOpen(true); }}>
+            <Pencil className="w-3 h-3 ml-1" />
+            <span className="arabic-text">تعديل</span>
+          </Button>
         </div>
       </div>
 
-      <Card className="bg-white border-[#C69A72]">
-        <CardHeader>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 items-start">
+
+      <Card className="bg-white border-[#C69A72] lg:col-span-2">
+        <CardHeader className="py-2">
           <CardTitle className="text-[#13312A] arabic-text text-lg">البيانات الأساسية</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-[#155446]">
+        <CardContent className="space-y-3 py-2">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs md:text-sm text-[#155446]">
             <div className="flex items-center gap-2">
               <Phone className="w-4 h-4" />
-              <span>{customer.phone || 'غير محدد'}</span>
+              <span>{freshCustomer?.phone ?? (customer.phone || 'O?USO? U.O-O_O_')}</span>
             </div>
             <div className="flex items-center gap-2">
               <Calendar className="w-4 h-4" />
               <span className="arabic-text">آخر طلب: {lastOrderDate || 'لا يوجد'}</span>
             </div>
-            <div className="flex items-center gap-2 md:col-span-2">
+            <div className="flex items-center gap-2">
               <MapPin className="w-4 h-4" />
-              <span className="arabic-text">{customer.address || 'غير محدد'}</span>
+              <span className="arabic-text">{freshCustomer?.address ?? (customer.address || 'O?USO? U.O-O_O_')}</span>
             </div>
             <div className="flex items-center gap-2">
               <CreditCard className="w-4 h-4" />
@@ -245,7 +299,7 @@ export function CustomerDetailsPageWithDB({
             </div>
           </div>
           {customer.notes && (
-            <div className="bg-[#FDF9F1] border border-dashed border-[#C69A72] rounded-lg p-4 text-sm text-[#13312A] arabic-text">
+            <div className="bg-[#FDF9F1] border border-dashed border-[#C69A72] rounded-lg p-2 text-xs md:text-sm text-[#13312A] arabic-text">
               <p className="font-medium mb-2">ملاحظات خاصة</p>
               <p>{customer.notes}</p>
             </div>
@@ -259,13 +313,13 @@ export function CustomerDetailsPageWithDB({
             <CardTitle className="text-[#13312A] arabic-text text-lg">قياسات الزبون</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-3 gap-4">
               {measurementItems.map((item) => (
                 <div
                   key={item.label}
                   className="bg-[#FDF9F1] border border-[#C69A72] rounded-lg p-4 text-center"
                 >
-                  <p className="text-sm text-[#155446] arabic-text">{item.label}</p>
+                  <p className="text-sm text-[#155446] arabic-text">{item.label === 'O\u0015U,USO\u0015U,Oc' ? 'الياخة' : item.label}</p>
                   <p className="text-xl text-[#13312A]">{item.value}</p>
                 </div>
               ))}
@@ -373,7 +427,7 @@ export function CustomerDetailsPageWithDB({
                 <div>
                   <Label className="text-[#13312A] arabic-text">رقم الهاتف</Label>
                   <Input
-                    defaultValue={customer.phone || ''}
+                    defaultValue={freshCustomer?.phone ?? (customer.phone || '')}
                     disabled
                     className="bg-gray-100 border-[#C69A72] text-right"
                   />
@@ -381,7 +435,7 @@ export function CustomerDetailsPageWithDB({
                 <div className="md:col-span-2">
                   <Label className="text-[#13312A] arabic-text">العنوان</Label>
                   <Input
-                    defaultValue={customer.address || ''}
+                    defaultValue={freshCustomer?.address ?? (customer.address || '')}
                     disabled
                     className="bg-gray-100 border-[#C69A72] text-right"
                   />
@@ -518,6 +572,83 @@ export function CustomerDetailsPageWithDB({
           </form>
         </DialogContent>
       </Dialog>
+      <NewInvoiceDialogWithDB
+        isOpen={isInvoiceDialogOpen}
+        onOpenChange={setIsInvoiceDialogOpen}
+        lockCustomerFields
+        prefillCustomer={{
+          name: (freshCustomer?.name || customer.name) as any,
+          phone: (freshCustomer?.phone || customer.phone) as any,
+          address: (freshCustomer?.address || customer.address) as any,
+          measurements: {
+            length: Number((latestMeasurements?.height ?? customer.measurements?.height ?? 0) as any),
+            shoulder: Number((latestMeasurements?.shoulder ?? customer.measurements?.shoulder ?? 0) as any),
+            waist: Number((latestMeasurements?.waist ?? customer.measurements?.waist ?? 0) as any),
+            chest: Number((latestMeasurements?.chest ?? customer.measurements?.chest ?? 0) as any),
+            collar: Number(((freshCustomer as any)?.measurements?.collar ?? (customer as any)?.measurements?.collar ?? 0) as any)
+          }
+        }}
+      />
+
+      {/* Simple Edit Customer Dialog */}
+      <Dialog open={isEditOpen} onOpenChange={(open) => { setIsEditOpen(open); if (!open) setEditDraft(null); }}>
+        <DialogContent className="max-w-lg bg-[#F6E9CA] border-[#C69A72]">
+          <DialogHeader>
+            <DialogTitle className="text-[#13312A] arabic-text">تعديل بيانات الزبون</DialogTitle>
+            <DialogDescription className="text-[#155446] arabic-text">قم بتحديث الاسم والهاتف والعنوان</DialogDescription>
+          </DialogHeader>
+          {editDraft && (
+            <form
+              className="space-y-4"
+              onSubmit={async (e) => {
+                e.preventDefault();
+                try {
+                  setIsSavingEdit(true);
+                  const updated = await databaseService.updateCustomer(String(editDraft.id), {
+                    name: editDraft.name,
+                    phone: editDraft.phone,
+                    address: editDraft.address,
+                  });
+                  try {
+                    const { queryClient } = await import('@/app/queryClient');
+                    queryClient.invalidateQueries({ queryKey: ['customers'] });
+                    queryClient.invalidateQueries({ queryKey: ['invoices'] });
+                    queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+                  } catch {}
+                  setFreshCustomer(updated as any);
+                  setIsEditOpen(false);
+                } catch (err) {
+                  console.error('Error updating customer:', err);
+                } finally {
+                  setIsSavingEdit(false);
+                }
+              }}
+            >
+              <div>
+                <Label className="text-[#13312A] arabic-text">اسم الزبون</Label>
+                <Input className="bg-white border-[#C69A72] text-right" value={editDraft.name} onChange={(e) => setEditDraft({ ...(editDraft as Customer), name: e.target.value })} required />
+              </div>
+              <div>
+                <Label className="text-[#13312A] arabic-text">رقم الهاتف</Label>
+                <Input className="bg-white border-[#C69A72] text-right" value={editDraft.phone} onChange={(e) => setEditDraft({ ...(editDraft as Customer), phone: e.target.value })} required />
+              </div>
+              <div>
+                <Label className="text-[#13312A] arabic-text">العنوان</Label>
+                <Input className="bg-white border-[#C69A72] text-right" value={editDraft.address} onChange={(e) => setEditDraft({ ...(editDraft as Customer), address: e.target.value })} />
+              </div>
+              <div className="flex gap-3 justify-end pt-2">
+                <Button type="button" variant="outline" className="border-[#C69A72] text-[#13312A]" onClick={() => setIsEditOpen(false)} disabled={isSavingEdit}>إلغاء</Button>
+                <Button type="submit" className="bg-[#155446] hover:bg-[#13312A] text-[#F6E9CA]" disabled={isSavingEdit}>{isSavingEdit ? 'جاري الحفظ...' : 'حفظ'}</Button>
+              </div>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
+
+
+
+
+

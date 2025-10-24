@@ -33,6 +33,10 @@ const electronAPI = {
     printPreview: (data) => {
         return electron_1.ipcRenderer.invoke('print:preview', data);
     },
+    // PDF preview via OS default viewer
+    pdfPreview: (data) => {
+        return electron_1.ipcRenderer.invoke('print:pdfPreview', data);
+    },
     // Local database functions
     local: {
         // Customers
@@ -50,6 +54,9 @@ const electronAPI = {
         createOrder: (order) => electron_1.ipcRenderer.invoke('local:createOrder', order),
         updateOrder: (id, updates) => electron_1.ipcRenderer.invoke('local:updateOrder', id, updates),
         deleteOrder: (id) => electron_1.ipcRenderer.invoke('local:deleteOrder', id),
+        // Admin logs
+        getAdminLogs: () => electron_1.ipcRenderer.invoke('local:getAdminLogs'),
+        createAdminLog: (entry) => electron_1.ipcRenderer.invoke('local:createAdminLog', entry),
         // Self-test
         selfTest: () => electron_1.ipcRenderer.invoke('local:selfTest'),
         // Roles

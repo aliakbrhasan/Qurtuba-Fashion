@@ -55,6 +55,10 @@ export interface StoragePort {
 	// Backup/restore helpers
 	exportAll?(): Promise<{ customers: Customer[]; invoices: Invoice[]; orders: Order[]; items?: InvoiceItem[]; meta?: any }>;
 	importAll?(data: { customers?: Customer[]; invoices?: Invoice[]; orders?: Order[]; items?: InvoiceItem[] }): Promise<void>;
+
+	// Admin logs (optional)
+	getAdminLogs?(): Promise<Array<{ id: string; action_type: string; entity_type: string; entity_id: string; changed_fields?: any; action_date: string; action_time: string; user_name?: string; created_at: string }>>;
+	createAdminLog?(entry: { action_type: 'create' | 'update' | 'delete'; entity_type: 'invoice' | 'customer'; entity_id: string; changed_fields?: any; action_date?: string; action_time?: string; user_name?: string }): Promise<any>;
 }
 
 export function isElectronRuntime(): boolean {

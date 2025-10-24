@@ -10,6 +10,7 @@ import { InvoiceService, InvoiceFormData } from '@/services/invoice.service';
 import { useInvoices } from '@/hooks/useInvoices';
 import { ImageUpload } from './ui/ImageUpload';
 import { ImageService } from '@/services/image.service';
+import { DesignSettingsService } from '@/services/design-settings.service';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { Command, CommandEmpty, CommandInput, CommandItem, CommandList, CommandSeparator } from './ui/command';
 import { cn } from './ui/utils';
@@ -18,6 +19,7 @@ interface NewInvoiceDialogProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   onInvoiceCreated?: () => void;
+  lockCustomerFields?: boolean;
   prefillCustomer?: { 
     id?: string; // Invoice ID for editing existing invoices
     name?: string; 
@@ -28,6 +30,8 @@ interface NewInvoiceDialogProps {
     status?: string;
     deliveryDate?: string;
     notes?: string;
+    fabricImageUrl?: string;
+    paymentDate?: string;
     items?: any[];
     measurements?: {
       length?: number;
@@ -53,8 +57,9 @@ interface FabricOption {
 }
 
 
-export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated, prefillCustomer }: NewInvoiceDialogProps) {
+export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated, prefillCustomer, lockCustomerFields }: NewInvoiceDialogProps) {
   const { createInvoice } = useInvoices();
+  const designSettings = DesignSettingsService.getInstance();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   
@@ -142,6 +147,43 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated,
           bunijaType: ''
         }),
       }));
+      // Prefill fabric image preview (show existing image without forcing re-upload)
+      if (prefillCustomer.fabricImageUrl) {
+        setFabricImage(prefillCustomer.fabricImageUrl);
+        setFabricImageFile(null);
+      }
+      // Prefill payment date if provided
+      if (prefillCustomer.paymentDate) {
+        setPaymentDate(prefillCustomer.paymentDate);
+      }
+      // Prefill design selections by matching labels to available options (leave empty if not found)
+      try {
+        const dd = prefillCustomer.designDetails || {};
+        if (Array.isArray(dd.fabricType) && dd.fabricType[0]) {
+          const match = fabricOptions.find(o => o.label === dd.fabricType![0]);
+          if (match) setSelectedFabricOption(match.id);
+        }
+        if (Array.isArray(dd.fabricSource) && dd.fabricSource[0]) {
+          const match = fabricSourceOptions.find(o => o.label === dd.fabricSource![0]);
+          if (match) setSelectedFabricSource(match.id);
+        }
+        if (Array.isArray(dd.collarType) && dd.collarType[0]) {
+          const match = collarOptions.find(o => o.label === dd.collarType![0]);
+          if (match) setSelectedCollarOption(match.id);
+        }
+        if (Array.isArray(dd.chestStyle) && dd.chestStyle[0]) {
+          const match = chestStyleOptions.find(o => o.label === dd.chestStyle![0]);
+          if (match) setSelectedChestStyleOption(match.id);
+        }
+        if (Array.isArray(dd.sleeveEnd) && dd.sleeveEnd[0]) {
+          const match = sleeveEndOptions.find(o => o.label === dd.sleeveEnd![0]);
+          if (match) setSelectedSleeveEndOption(match.id);
+        }
+        if (dd.bunijaType) {
+          const match = bunijaOptions.find(o => o.label === dd.bunijaType);
+          if (match) setSelectedBunijaOption(match.id);
+        }
+      } catch {}
     }
   }, [isOpen, prefillCustomer]);
 
@@ -374,6 +416,51 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated,
   const [bunijaQuickAddValue, setBunijaQuickAddValue] = useState('');
   const [bunijaQuickAddError, setBunijaQuickAddError] = useState('');
 
+  // Load persisted design option lists and last selections when opening a new dialog
+  useEffect(() => {
+    if (!isOpen || prefillCustomer) return;
+    try {
+      const savedFabricOptions = designSettings.getOptions('fabricType');
+      if (savedFabricOptions?.length) setFabricOptions(savedFabricOptions);
+      const savedSourceOptions = designSettings.getOptions('fabricSource');
+      if (savedSourceOptions?.length) setFabricSourceOptions(savedSourceOptions);
+      const savedCollarOptions = designSettings.getOptions('collarType');
+      if (savedCollarOptions?.length) setCollarOptions(savedCollarOptions);
+      const savedChestStyleOptions = designSettings.getOptions('chestStyle');
+      if (savedChestStyleOptions?.length) setChestStyleOptions(savedChestStyleOptions);
+      const savedSleeveEndOptions = designSettings.getOptions('sleeveEnd');
+      if (savedSleeveEndOptions?.length) setSleeveEndOptions(savedSleeveEndOptions);
+      const savedBunijaOptions = designSettings.getOptions('bunijaType');
+      if (savedBunijaOptions?.length) setBunijaOptions(savedBunijaOptions);
+
+      const selFabricId = designSettings.getSelectedId('fabricType');
+      if (selFabricId) setSelectedFabricOption(selFabricId);
+      const selSourceId = designSettings.getSelectedId('fabricSource');
+      if (selSourceId) setSelectedFabricSource(selSourceId);
+      const selCollarId = designSettings.getSelectedId('collarType');
+      if (selCollarId) setSelectedCollarOption(selCollarId);
+      const selChestId = designSettings.getSelectedId('chestStyle');
+      if (selChestId) setSelectedChestStyleOption(selChestId);
+      const selSleeveId = designSettings.getSelectedId('sleeveEnd');
+      if (selSleeveId) setSelectedSleeveEndOption(selSleeveId);
+      const selBunijaId = designSettings.getSelectedId('bunijaType');
+      if (selBunijaId) setSelectedBunijaOption(selBunijaId);
+
+      // Reflect selections into formData.designDetails for a fresh form
+      setFormData(prev => ({
+        ...prev,
+        designDetails: {
+          fabricType: selFabricId ? [ (savedFabricOptions || []).find(o => o.id === selFabricId)?.label || '' ] : [],
+          fabricSource: selSourceId ? [ (savedSourceOptions || []).find(o => o.id === selSourceId)?.label || '' ] : [],
+          collarType: selCollarId ? [ (savedCollarOptions || []).find(o => o.id === selCollarId)?.label || '' ] : [],
+          chestStyle: selChestId ? [ (savedChestStyleOptions || []).find(o => o.id === selChestId)?.label || '' ] : [],
+          sleeveEnd: selSleeveId ? [ (savedSleeveEndOptions || []).find(o => o.id === selSleeveId)?.label || '' ] : [],
+          bunijaType: selBunijaId ? (savedBunijaOptions || []).find(o => o.id === selBunijaId)?.label || '' : ''
+        }
+      }));
+    } catch {}
+  }, [isOpen, prefillCustomer]);
+
   // Reset form when dialog opens/closes
   useEffect(() => {
     if (!isOpen) {
@@ -536,26 +623,32 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated,
 
   const selectFabricOption = (optionId: string) => {
     setSelectedFabricOption(optionId);
+    try { designSettings.setSelectedId('fabricType', optionId); } catch {}
   };
 
   const selectFabricSource = (sourceId: string) => {
     setSelectedFabricSource(sourceId);
+    try { designSettings.setSelectedId('fabricSource', sourceId); } catch {}
   };
 
   const selectCollarOption = (optionId: string) => {
     setSelectedCollarOption(optionId);
+    try { designSettings.setSelectedId('collarType', optionId); } catch {}
   };
 
   const selectChestStyleOption = (optionId: string) => {
     setSelectedChestStyleOption(optionId);
+    try { designSettings.setSelectedId('chestStyle', optionId); } catch {}
   };
 
   const selectSleeveEndOption = (optionId: string) => {
     setSelectedSleeveEndOption(optionId);
+    try { designSettings.setSelectedId('sleeveEnd', optionId); } catch {}
   };
 
   const selectBunijaOption = (optionId: string) => {
     setSelectedBunijaOption(optionId);
+    try { designSettings.setSelectedId('bunijaType', optionId); } catch {}
   };
 
   // Manager functions for fabric options
@@ -579,6 +672,7 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated,
       return;
     }
     setFabricOptions(cleanedOptions);
+    try { designSettings.setOptions('fabricType', cleanedOptions as any); } catch {}
     // Clear selection if the selected option was removed
     if (selectedFabricOption && !cleanedOptions.some(option => option.id === selectedFabricOption)) {
       setSelectedFabricOption('');
@@ -624,8 +718,13 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated,
       id: `fabric-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       label: trimmedValue,
     };
-    setFabricOptions((previous) => [...previous, newOption]);
+    setFabricOptions((previous) => {
+      const next = [...previous, newOption];
+      try { designSettings.setOptions('fabricType', next as any); } catch {}
+      return next;
+    });
     setSelectedFabricOption(newOption.id);
+    try { designSettings.setSelectedId('fabricType', newOption.id); } catch {}
     handleQuickAddDialogOpenChange(false);
   };
 
@@ -647,6 +746,7 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated,
       return;
     }
     setCollarOptions(cleaned);
+    try { designSettings.setOptions('collarType', cleaned as any); } catch {}
     // Clear selection if the selected option was removed
     if (selectedCollarOption && !cleaned.some(o => o.id === selectedCollarOption)) {
       setSelectedCollarOption('');
@@ -773,6 +873,7 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated,
       return;
     }
     setSleeveEndOptions(cleaned);
+    try { designSettings.setOptions('sleeveEnd', cleaned as any); } catch {}
     // Clear selection if the selected option was removed
     if (selectedSleeveEndOption && !cleaned.some(o => o.id === selectedSleeveEndOption)) {
       setSelectedSleeveEndOption('');
@@ -813,7 +914,11 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated,
       return;
     }
     const option = { id: `sleeve-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, label: value };
-    setSleeveEndOptions((prev) => [...prev, option]);
+    setSleeveEndOptions((prev) => {
+      const next = [...prev, option];
+      try { designSettings.setOptions('sleeveEnd', next as any); } catch {}
+      return next;
+    });
     setSelectedSleeveEndOption(option.id);
     openSleeveEndQuickAdd(false);
   };
@@ -836,6 +941,7 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated,
       return;
     }
     setFabricSourceOptions(cleaned);
+    try { designSettings.setOptions('fabricSource', cleaned as any); } catch {}
     // Clear selection if the selected option was removed
     if (selectedFabricSource && !cleaned.some(o => o.id === selectedFabricSource)) {
       setSelectedFabricSource('');
@@ -876,8 +982,13 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated,
       return;
     }
     const option = { id: `source-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, label: value };
-    setFabricSourceOptions((prev) => [...prev, option]);
+    setFabricSourceOptions((prev) => {
+      const next = [...prev, option];
+      try { designSettings.setOptions('fabricSource', next as any); } catch {}
+      return next;
+    });
     setSelectedFabricSource(option.id);
+    try { designSettings.setSelectedId('fabricSource', option.id); } catch {}
     openSourceQuickAdd(false);
   };
 
@@ -899,6 +1010,7 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated,
       return;
     }
     setBunijaOptions(cleaned);
+    try { designSettings.setOptions('bunijaType', cleaned as any); } catch {}
     // Clear selection if the selected option was removed
     if (selectedBunijaOption && !cleaned.some(o => o.id === selectedBunijaOption)) {
       setSelectedBunijaOption('');
@@ -983,6 +1095,8 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated,
                       placeholder="أدخل اسم الزبون" 
                       className="bg-white border-[#C69A72] text-right h-7 text-xs w-full min-w-0"
                       value={formData.customerName}
+                      readOnly={!!lockCustomerFields}
+                      disabled={!!lockCustomerFields}
                       onChange={(e) => setFormData(prev => ({ ...prev, customerName: e.target.value }))}
                       required
                     />
@@ -993,6 +1107,8 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated,
                       placeholder="077xxxxxxxx" 
                       className="bg-white border-[#C69A72] text-right h-7 text-xs w-full min-w-0"
                       value={formData.customerPhone}
+                      readOnly={!!lockCustomerFields}
+                      disabled={!!lockCustomerFields}
                       onChange={(e) => setFormData(prev => ({ ...prev, customerPhone: e.target.value }))}
                       required
                     />
@@ -1004,6 +1120,8 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated,
                     placeholder="أدخل العنوان" 
                     className="bg-white border-[#C69A72] text-right h-7 text-xs w-full min-w-0"
                     value={formData.customerAddress}
+                    readOnly={!!lockCustomerFields}
+                    disabled={!!lockCustomerFields}
                     onChange={(e) => setFormData(prev => ({ ...prev, customerAddress: e.target.value }))}
                   />
                 </div>
@@ -2601,5 +2719,3 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated,
     </Dialog>
   );
 }
-
-

@@ -10,6 +10,7 @@ import { CustomerDetailsPageWithDB } from './components/CustomerDetailsPageWithD
 import { InvoiceDetailsPage } from './components/InvoiceDetailsPage';
 import { NewInvoiceDialogWithDB } from './components/NewInvoiceDialogWithDB';
 import { UsersManagementPage } from './components/UsersManagementPage';
+import { AdminLogPage } from './components/AdminLogPage';
 import { RolesManagementPage } from './components/RolesManagementPage';
 import { Toaster } from './components/ui/sonner';
 import { AppProviders } from './app/AppProviders';
@@ -155,6 +156,8 @@ export default function App() {
         );
       case 'financial':
         return <FinancialPage />;
+      case 'adminLog':
+        return <AdminLogPage />;
       case 'users':
         return <UsersManagementPage onNavigate={handleNavigate} />;
       case 'roles':

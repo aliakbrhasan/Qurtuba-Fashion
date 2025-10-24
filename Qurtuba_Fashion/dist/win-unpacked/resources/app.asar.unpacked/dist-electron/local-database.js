@@ -206,11 +206,27 @@ class LocalDatabase {
         updated_at TEXT NOT NULL
       )
     `);
+        // Admin logs table
+        this.run(`
+      CREATE TABLE IF NOT EXISTS admin_logs (
+        id TEXT PRIMARY KEY,
+        action_type TEXT NOT NULL, -- create | update | delete
+        entity_type TEXT NOT NULL, -- invoice | customer
+        entity_id TEXT NOT NULL,
+        changed_fields TEXT, -- JSON string of changed fields
+        action_date TEXT NOT NULL, -- YYYY-MM-DD
+        action_time TEXT NOT NULL, -- HH:mm
+        user_name TEXT,
+        created_at TEXT NOT NULL
+      )
+    `);
         // Indexes
         this.run(`CREATE INDEX IF NOT EXISTS idx_outbox_created ON outbox(created_at)`);
         this.run(`CREATE INDEX IF NOT EXISTS idx_outbox_table ON outbox(table_name, record_id)`);
         this.run(`CREATE INDEX IF NOT EXISTS idx_images_entity ON images(entity_type, entity_id)`);
         this.run(`CREATE INDEX IF NOT EXISTS idx_images_created_at ON images(created_at)`);
+        this.run(`CREATE INDEX IF NOT EXISTS idx_admin_logs_created_at ON admin_logs(created_at)`);
+        this.run(`CREATE INDEX IF NOT EXISTS idx_admin_logs_entity ON admin_logs(entity_type, entity_id)`);
     }
     async seedInitialUsersIfEmpty() {
         if (!this.db)
@@ -933,35 +949,52 @@ class LocalDatabase {
     async createImage(image) {
         if (!this.db)
             throw new Error('Database not initialized');
+        console.log('LocalDatabase.createImage called with:', image);
         const id = this.generateId();
         const now = new Date().toISOString();
-        await this.run(`
-      INSERT INTO images (id, filename, original_name, mime_type, size, width, height, data_url, thumbnail_url, entity_type, entity_id, created_by, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `, [
-            id,
-            image.filename,
-            image.original_name,
-            image.mime_type,
-            image.size,
-            image.width || null,
-            image.height || null,
-            image.data_url,
-            image.thumbnail_url || null,
-            image.entity_type,
-            image.entity_id,
-            image.created_by || null,
-            now,
-            now
-        ]);
-        const row = await this.get('SELECT * FROM images WHERE id = ?', [id]);
-        await this.enqueueOutbox('images', id, 'insert', row);
-        return row;
+        try {
+            await this.run(`
+        INSERT INTO images (id, filename, original_name, mime_type, size, width, height, data_url, thumbnail_url, entity_type, entity_id, created_by, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [
+                id,
+                image.filename,
+                image.original_name,
+                image.mime_type,
+                image.size,
+                image.width || null,
+                image.height || null,
+                image.data_url,
+                image.thumbnail_url || null,
+                image.entity_type,
+                image.entity_id,
+                image.created_by || null,
+                now,
+                now
+            ]);
+            const row = await this.get('SELECT * FROM images WHERE id = ?', [id]);
+            await this.enqueueOutbox('images', id, 'insert', row);
+            console.log('LocalDatabase.createImage success:', row);
+            return row;
+        }
+        catch (error) {
+            console.error('LocalDatabase.createImage error:', error);
+            throw error;
+        }
     }
     async getImagesByEntity(entityType, entityId) {
         if (!this.db)
             throw new Error('Database not initialized');
-        return await this.all('SELECT * FROM images WHERE entity_type = ? AND entity_id = ? ORDER BY created_at DESC', [entityType, entityId]);
+        console.log('LocalDatabase.getImagesByEntity called with:', { entityType, entityId });
+        try {
+            const result = await this.all('SELECT * FROM images WHERE entity_type = ? AND entity_id = ? ORDER BY created_at DESC', [entityType, entityId]);
+            console.log('LocalDatabase.getImagesByEntity result:', result);
+            return result;
+        }
+        catch (error) {
+            console.error('LocalDatabase.getImagesByEntity error:', error);
+            throw error;
+        }
     }
     async getImage(id) {
         if (!this.db)
@@ -1083,6 +1116,49 @@ class LocalDatabase {
             lines.push(`❌ حدث خطأ: ${String(e?.message || e)}`);
             return { ok: false, report: lines.join('\n') };
         }
+    }
+    // Admin logs API
+    async createAdminLog(entry) {
+        if (!this.db)
+            throw new Error('Database not initialized');
+        const id = this.generateId();
+        const now = new Date();
+        const createdAt = now.toISOString();
+        const dateStr = entry.action_date || new Date(createdAt).toISOString().slice(0, 10);
+        const timeStr = entry.action_time || now.toTimeString().slice(0, 5);
+        const payload = {
+            id,
+            action_type: entry.action_type,
+            entity_type: entry.entity_type,
+            entity_id: entry.entity_id,
+            changed_fields: entry.changed_fields ? JSON.stringify(entry.changed_fields) : null,
+            action_date: dateStr,
+            action_time: timeStr,
+            user_name: entry.user_name || null,
+            created_at: createdAt,
+        };
+        await this.run(`INSERT INTO admin_logs (id, action_type, entity_type, entity_id, changed_fields, action_date, action_time, user_name, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
+            payload.id,
+            payload.action_type,
+            payload.entity_type,
+            payload.entity_id,
+            payload.changed_fields,
+            payload.action_date,
+            payload.action_time,
+            payload.user_name,
+            payload.created_at,
+        ]);
+        return payload;
+    }
+    async getAdminLogs() {
+        if (!this.db)
+            throw new Error('Database not initialized');
+        const rows = await this.all('SELECT * FROM admin_logs ORDER BY created_at DESC, id DESC');
+        return rows.map(r => ({
+            ...r,
+            changed_fields: r.changed_fields ? JSON.parse(r.changed_fields) : null,
+        }));
     }
 }
 exports.LocalDatabase = LocalDatabase;

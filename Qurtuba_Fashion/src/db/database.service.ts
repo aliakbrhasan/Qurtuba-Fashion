@@ -3,6 +3,7 @@ import { storage } from '@/storage';
 import { syncEngine } from '@/sync';
 import type { User, Role } from '../types/user';
 import type { Order, NewOrder } from '../ports/orders';
+import { authService } from '@/services/auth.service';
 
 // Customer interface
 export interface Customer {
@@ -97,6 +98,22 @@ export class DatabaseService {
   private constructor() {
     this.initializeLocalData();
     this.loadAllFromStorage();
+  }
+
+  // Build a reliable executor display name even for admin/remembered sessions
+  private getExecutorName(): string | undefined {
+    try {
+      const user = authService.getCurrentUser();
+      const name = (user?.name || '').trim();
+      if (name) return name;
+      const role = (user?.role || '').trim();
+      if (role) return role;
+      const status = (user?.status || '').trim();
+      if (status) return status as any;
+      const code = (user?.code || '').trim();
+      if (code) return code;
+    } catch {}
+    return 'مسؤول النظام';
   }
 
   // Helper function to ensure proper UTF-8 encoding for Arabic text
@@ -398,6 +415,17 @@ export class DatabaseService {
       this.persistAllToStorage();
       (syncEngine as any).schedule?.();
       try { await (syncEngine as any).sync?.(); } catch {}
+      // Admin log: create customer
+      try {
+        const execName = this.getExecutorName();
+        await (storage as any).createAdminLog?.({
+          action_type: 'create',
+          entity_type: 'customer',
+          entity_id: String((created as any).id),
+          changed_fields: Object.keys(customer || {}),
+          user_name: execName,
+        });
+      } catch {}
       return created;
     } catch (error) {
       console.warn('Local storage error:', error);
@@ -444,6 +472,17 @@ export class DatabaseService {
       this.persistAllToStorage();
       (syncEngine as any).schedule?.();
       try { await (syncEngine as any).sync?.(); } catch {}
+      // Admin log: update customer
+      try {
+        const execName = this.getExecutorName();
+        await (storage as any).createAdminLog?.({
+          action_type: 'update',
+          entity_type: 'customer',
+          entity_id: String(id),
+          changed_fields: Object.keys(updates || {}),
+          user_name: execName,
+        });
+      } catch {}
       return updated;
     } catch (error) {
       console.warn('Local storage error:', error);
@@ -470,7 +509,51 @@ export class DatabaseService {
     }
   }
 
-  async deleteCustomer(id: string): Promise<void> { await (storage as any).deleteCustomer?.(id); this.localData.customers = this.localData.customers.filter(c => c.id !== id); this.persistAllToStorage(); (syncEngine as any).schedule?.(); try { await (syncEngine as any).sync?.(); } catch {} }
+  async deleteCustomer(id: string): Promise<void> {
+    await (storage as any).deleteCustomer?.(id);
+    this.localData.customers = this.localData.customers.filter(c => c.id !== id);
+    this.persistAllToStorage();
+    (syncEngine as any).schedule?.();
+    try { await (syncEngine as any).sync?.(); } catch {}
+    // Admin log: delete customer
+    try {
+      const execName = this.getExecutorName();
+      await (storage as any).createAdminLog?.({
+        action_type: 'delete',
+        entity_type: 'customer',
+        entity_id: String(id),
+        changed_fields: ['deleted'],
+        user_name: execName,
+      });
+    } catch {}
+  }
+
+  // Delete customer and all related invoices/items (local-first cascade)
+  async deleteCustomerCascade(id: string): Promise<void> {
+    try {
+      // Snapshot relevant invoices by id or alias
+      const invoices = await this.getInvoices();
+      const customer = this.localData.customers.find(c => String((c as any).id) === String(id));
+      const name = (customer as any)?.name?.trim?.() || '';
+      const phone = (customer as any)?.phone?.trim?.() || '';
+      const alias = `${name}|${phone}`;
+
+      const related = invoices.filter(inv =>
+        String((inv as any).customer_id || '') === String(id)
+        || `${(inv.customer_name || '').trim()}|${(inv.customer_phone || '').trim()}` === alias
+      );
+
+      for (const inv of related) {
+        try { await this.deleteInvoice(String(inv.id)); } catch {}
+      }
+
+      await this.deleteCustomer(id);
+    } catch (e) {
+      // Fallback: at least delete the customer
+      try { await this.deleteCustomer(id); } catch {}
+      console.warn('deleteCustomerCascade fallback:', e);
+    }
+  }
 
   // Orders operations (local-first)
   async getOrders(): Promise<Order[]> { try { const rows = await storage.getOrders(); this.localData.orders = rows; this.persistAllToStorage(); return rows; } catch { return this.localData.orders; } }
@@ -564,6 +647,17 @@ export class DatabaseService {
       (syncEngine as any).schedule?.();
       try { (syncEngine as any).sync?.().catch?.(() => {}); } catch {}
     }
+    // Admin log: create invoice
+    try {
+      const execName = this.getExecutorName();
+      await (storage as any).createAdminLog?.({
+        action_type: 'create',
+        entity_type: 'invoice',
+        entity_id: String((created as any).id),
+        changed_fields: Object.keys(invoice || {}),
+        user_name: execName,
+      });
+    } catch {}
     // Notification emit handled at InvoiceService layer to avoid duplicates
     return created;
   }
@@ -577,6 +671,17 @@ export class DatabaseService {
       (syncEngine as any).schedule?.();
       try { await (syncEngine as any).sync?.(); } catch {}
     }
+    // Admin log: update invoice
+    try {
+      const execName = this.getExecutorName();
+      await (storage as any).createAdminLog?.({
+        action_type: 'update',
+        entity_type: 'invoice',
+        entity_id: String(id),
+        changed_fields: Object.keys(updates || {}),
+        user_name: execName,
+      });
+    } catch {}
     // Notification emit handled at InvoiceService layer to avoid duplicates
     return updated;
   }
@@ -589,6 +694,17 @@ export class DatabaseService {
       (syncEngine as any).schedule?.();
       try { await (syncEngine as any).sync?.(); } catch {}
     }
+    // Admin log: delete invoice
+    try {
+      const execName = this.getExecutorName();
+      await (storage as any).createAdminLog?.({
+        action_type: 'delete',
+        entity_type: 'invoice',
+        entity_id: String(id),
+        changed_fields: ['deleted'],
+        user_name: execName,
+      });
+    } catch {}
   }
 
   // Invoice items operations
@@ -648,6 +764,14 @@ export class DatabaseService {
         const phone = (inv.customer_phone || '').trim();
         const address = (inv.customer_address || '').trim();
         const alias = `${name}|${phone}`;
+
+        // Skip self-test/demo records to avoid noisy duplicates and notifications
+        // Electron local DB self-test uses a customer named "Test Customer (LocalDB SelfTest)"
+        // which is intentionally hidden from the UI. Since getCustomers() excludes it,
+        // reconciliation would recreate it on every load and emit notifications.
+        if (name && name.toLowerCase().includes('test customer')) {
+          continue;
+        }
 
         let target: Customer | undefined = undefined;
         if (customerId && byId.has(customerId)) target = byId.get(customerId);
