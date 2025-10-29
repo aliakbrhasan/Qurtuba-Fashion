@@ -13,6 +13,15 @@ let localDB: LocalDatabase;
 // Sync and remote DB disabled in local-only mode
 let supabaseMain: any = null;
 
+type PrintDocumentArgs = {
+  title: string;
+  content: string;
+  styles?: string;
+  pageSize?: Electron.WebContentsPrintOptions['pageSize'];
+  landscape?: boolean;
+  printBackground?: boolean;
+};
+
 const createWindow = (): void => {
   // Create the browser window
   mainWindow = new BrowserWindow({
@@ -495,11 +504,18 @@ ipcMain.handle('image:deleteById', async (_evt, imageId: string) => ok(async () 
 }));
 
 // Print handlers
-ipcMain.handle('print:document', async (_evt, args: { title: string; content: string; styles?: string }) => {
+ipcMain.handle('print:document', async (_evt, args: PrintDocumentArgs) => {
   try {
     if (!mainWindow) {
       throw new Error('Main window not available');
     }
+
+    const pageSize = args.pageSize ?? 'A5';
+    const landscape = args.landscape ?? true;
+    const printBackground = args.printBackground ?? true;
+    const pageDirective = typeof pageSize === 'string'
+      ? `@page { size: ${pageSize}${landscape ? ' landscape' : ' portrait'}; margin: 0; }`
+      : '@page { margin: 0; }';
 
     // Create a new off-screen window for printing
     const printWindow = new BrowserWindow({
@@ -524,15 +540,15 @@ ipcMain.handle('print:document', async (_evt, args: { title: string; content: st
     const htmlContent = `<!DOCTYPE html>
 <html lang="ar" dir="rtl">
   <head>
-    <meta charset="utf-8" />
-    <title>${args.title}</title>
-    <style>
-      @page { size: A5 landscape; margin: 0; }
-      html, body { margin: 0; padding: 0; background: #ffffff; }
-      html, body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-      body { font-family: 'Tajawal', system-ui, 'Segoe UI', Arial, sans-serif; direction: rtl; }
-      ${args.styles || ''}
-    </style>
+      <meta charset="utf-8" />
+      <title>${args.title}</title>
+      <style>
+        ${pageDirective}
+        html, body { margin: 0; padding: 0; background: #ffffff; }
+        html, body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        body { font-family: 'Tajawal', system-ui, 'Segoe UI', Arial, sans-serif; direction: rtl; }
+        ${args.styles || ''}
+      </style>
   </head>
   <body>
     ${args.content}
@@ -551,12 +567,15 @@ ipcMain.handle('print:document', async (_evt, args: { title: string; content: st
           });
         `, true);
 
-        const printOptions: any = {
+        const printOptions: Electron.WebContentsPrintOptions = {
           silent: false,
-          printBackground: true,
-          landscape: true,
-          pageSize: 'A5',
+          printBackground,
+          landscape,
         };
+
+        if (pageSize) {
+          printOptions.pageSize = pageSize;
+        }
 
         await new Promise<void>((resolve) => {
           printWindow.webContents.print(printOptions, () => resolve());

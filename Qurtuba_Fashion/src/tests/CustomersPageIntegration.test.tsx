@@ -424,7 +424,8 @@ describe('CustomersPage Integration Tests', () => {
       // Verify print function was called
       expect(openPrintWindow).toHaveBeenCalledWith(
         'قائمة الزبائن',
-        expect.any(Object)
+        expect.any(Object),
+        expect.objectContaining({ pageSize: 'A4', landscape: true, printBackground: true })
       );
     });
   });

@@ -11,6 +11,7 @@ export interface InvoiceFormData {
   paidAmount: number;
   status: string;
   deliveryDate: string;
+  paymentDate?: string;
   notes: string;
   items: {
     itemName: string;
@@ -20,11 +21,11 @@ export interface InvoiceFormData {
     totalPrice: number;
   }[];
   measurements?: {
-    length: number;
-    shoulder: number;
-    waist: number;
-    chest: number;
-    collar: number;
+    length?: string | number;
+    shoulder?: string | number;
+    waist?: string | number;
+    chest?: string | number;
+    collar?: string | number;
   };
   designDetails?: {
     fabricType: string[];
@@ -68,7 +69,18 @@ export class InvoiceService {
           unit_price: toIQD(item.unitPrice),
           total_price: toIQD(item.totalPrice)
         })),
-        fabric_image_url: formData.fabricImageUrl
+        fabric_image_url: formData.fabricImageUrl,
+        // Persist payment date when provided
+        ...(formData.paymentDate ? { paid_at: formData.paymentDate } as any : {}),
+        // Snapshot customer measurements to avoid changing past invoices when customer profile changes later
+        ...(formData.measurements ? { customer_measurements: formData.measurements } as any : {}),
+        // Persist design details as comma-separated strings for portability across storages
+        fabric_type: formData.designDetails?.fabricType?.length ? formData.designDetails!.fabricType.join(',') : undefined,
+        fabric_source: formData.designDetails?.fabricSource?.length ? formData.designDetails!.fabricSource.join(',') : undefined,
+        collar_type: formData.designDetails?.collarType?.length ? formData.designDetails!.collarType.join(',') : undefined,
+        chest_style: formData.designDetails?.chestStyle?.length ? formData.designDetails!.chestStyle.join(',') : undefined,
+        sleeve_end: formData.designDetails?.sleeveEnd?.length ? formData.designDetails!.sleeveEnd.join(',') : undefined,
+        bunija_type: formData.designDetails?.bunijaType || undefined
       };
 
       const created = await invoicesAdapter.createInvoice(newInvoice);
@@ -85,12 +97,7 @@ export class InvoiceService {
           const hasMeasurements = typeof m === 'object' && (m.length || m.shoulder || m.waist || m.chest);
           if (target && hasMeasurements) {
             await databaseService.updateCustomer(String((target as any).id), {
-              measurements: {
-                height: Number(m.length || 0),
-                shoulder: Number(m.shoulder || 0),
-                waist: Number(m.waist || 0),
-                chest: Number(m.chest || 0),
-              }
+              measurements: m
             } as any, { silent: true });
           }
         } catch {}
@@ -153,6 +160,15 @@ export class InvoiceService {
       }
 
       const updated = await databaseService.updateInvoice(id, updates);
+      // Ensure all dependent views refresh immediately (lists, customers aggregates, and dashboard stats)
+      try {
+        const { queryClient } = await import('@/app/queryClient');
+        queryClient.invalidateQueries({ queryKey: ['invoices'] });
+        queryClient.invalidateQueries({ queryKey: ['customers'] });
+        queryClient.invalidateQueries({
+          predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === 'dashboard-stats',
+        });
+      } catch {}
       try {
         notifications.emit({
           type: 'info',

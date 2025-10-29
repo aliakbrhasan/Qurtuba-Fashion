@@ -5,8 +5,8 @@ import { renderToStaticMarkup } from 'react-dom/server';
 declare global {
   interface Window {
     electronAPI?: {
-      print: (data: { title: string; content: string; styles?: string }) => Promise<any>;
-      printPreview: (data: { title: string; content: string; styles?: string }) => Promise<any>;
+      print: (data: { title: string; content: string; styles?: string; pageSize?: string | { width: number; height: number }; landscape?: boolean; printBackground?: boolean }) => Promise<any>;
+      printPreview: (data: { title: string; content: string; styles?: string; pageSize?: string | { width: number; height: number }; landscape?: boolean; printBackground?: boolean }) => Promise<any>;
       pdfPreview: (data: { title: string; content: string; styles?: string; pageSize?: string; landscape?: boolean }) => Promise<any>;
     };
   }
@@ -345,8 +345,19 @@ export const formatPrintDateTime = (date: Date) => {
   }).format(date);
 };
 
-export const openPrintWindow = (title: string, content: React.ReactElement) => {
+export type PrintWindowOptions = {
+  pageSize?: string | { width: number; height: number };
+  landscape?: boolean;
+  printBackground?: boolean;
+};
+
+export const openPrintWindow = (title: string, content: React.ReactElement, options?: PrintWindowOptions) => {
+  console.log('openPrintWindow called with title:', title);
+  console.log('content type:', typeof content);
+  console.log('window.electronAPI available:', !!window.electronAPI);
+  
   const markup = renderToStaticMarkup(content);
+  console.log('markup generated, length:', markup.length);
   
   // Check if we're in Electron environment
   if (window.electronAPI) {
@@ -359,8 +370,11 @@ export const openPrintWindow = (title: string, content: React.ReactElement) => {
           <div class="print-footer">تم إنشاء هذا المستند من خلال نظام إدارة أزياء قرطبة</div>
         </div>
       `,
-      styles: brandPrintStyles
-    }).catch((error: any) => {
+        styles: brandPrintStyles,
+        pageSize: options?.pageSize ?? 'A4',
+        landscape: options?.landscape ?? false,
+        printBackground: options?.printBackground ?? true
+      }).catch((error: any) => {
       console.error('Print failed:', error);
       // Fallback to browser print
       fallbackPrint(title, markup);
@@ -424,7 +438,10 @@ export const openPrintInvoiceWindow = (title: string, content: React.ReactElemen
         @page { size: A5 landscape; margin: 6mm; }
         html, body { padding: 0; margin: 0; background: #ffffff; }
         * { box-sizing: border-box; }
-      `
+      `,
+      pageSize: 'A5',
+      landscape: true,
+      printBackground: true
     }).then((result: any) => {
       console.log('Print API result:', result);
     }).catch((error: any) => {
@@ -527,4 +544,3 @@ export const openPdfPreviewWindow = (title: string, content: React.ReactElement,
     openPrintPreviewWindow(title, content);
   }
 };
-

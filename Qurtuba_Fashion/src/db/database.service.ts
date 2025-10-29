@@ -39,6 +39,8 @@ export interface Invoice {
   invoice_date: string;
   due_date?: string;
   notes?: string;
+  // Snapshot of customer's measurements at time of invoice creation
+  customer_measurements?: any;
   fabric_image_url?: string;
   paid_at?: string;
   created_at: string;
@@ -68,6 +70,13 @@ export interface NewInvoice {
   notes?: string;
   items: Omit<InvoiceItem, 'id' | 'invoice_id' | 'created_at'>[];
   fabric_image_url?: string;
+  // Optional design details saved with the invoice (comma-separated lists)
+  fabric_type?: string;   // e.g. "صيفي، شتوي"
+  fabric_source?: string; // e.g. "داخل المحل، خارج المحل"
+  collar_type?: string;
+  chest_style?: string;
+  sleeve_end?: string;
+  bunija_type?: string;
 }
 
 // Database service that handles both local and Supabase operations
@@ -472,16 +481,18 @@ export class DatabaseService {
       this.persistAllToStorage();
       (syncEngine as any).schedule?.();
       try { await (syncEngine as any).sync?.(); } catch {}
-      // Admin log: update customer
+      // Admin log: update customer (skip if silent)
       try {
-        const execName = this.getExecutorName();
-        await (storage as any).createAdminLog?.({
-          action_type: 'update',
-          entity_type: 'customer',
-          entity_id: String(id),
-          changed_fields: Object.keys(updates || {}),
-          user_name: execName,
-        });
+        if (!options?.silent) {
+          const execName = this.getExecutorName();
+          await (storage as any).createAdminLog?.({
+            action_type: 'update',
+            entity_type: 'customer',
+            entity_id: String(id),
+            changed_fields: Object.keys(updates || {}),
+            user_name: execName,
+          });
+        }
       } catch {}
       return updated;
     } catch (error) {

@@ -278,25 +278,31 @@ export function InvoiceDetailsDialogWithImages({
                   {invoice.measurements.length && (
                     <div className="text-center">
                       <p className="text-sm text-gray-600 arabic-text">الطول</p>
-                      <p className="text-lg font-medium text-[#13312A]">{invoice.measurements.length} سم</p>
+                      <p className="text-lg font-medium text-[#13312A]">{invoice.measurements.length}</p>
                     </div>
                   )}
                   {invoice.measurements.shoulder && (
                     <div className="text-center">
                       <p className="text-sm text-gray-600 arabic-text">العرض</p>
-                      <p className="text-lg font-medium text-[#13312A]">{invoice.measurements.shoulder} سم</p>
+                      <p className="text-lg font-medium text-[#13312A]">{invoice.measurements.shoulder}</p>
                     </div>
                   )}
                   {invoice.measurements.waist && (
                     <div className="text-center">
                       <p className="text-sm text-gray-600 arabic-text">الردن</p>
-                      <p className="text-lg font-medium text-[#13312A]">{invoice.measurements.waist} سم</p>
+                      <p className="text-lg font-medium text-[#13312A]">{invoice.measurements.waist}</p>
                     </div>
                   )}
                   {invoice.measurements.chest && (
                     <div className="text-center">
                       <p className="text-sm text-gray-600 arabic-text">الصدر</p>
-                      <p className="text-lg font-medium text-[#13312A]">{invoice.measurements.chest} سم</p>
+                      <p className="text-lg font-medium text-[#13312A]">{invoice.measurements.chest}</p>
+                    </div>
+                  )}
+                  {(invoice.measurements as any)?.collar && (
+                    <div className="text-center">
+                      <p className="text-sm text-gray-600 arabic-text">الياخة</p>
+                      <p className="text-lg font-medium text-[#13312A]">{(invoice.measurements as any).collar}</p>
                     </div>
                   )}
                 </div>

@@ -36,6 +36,7 @@ import {
   FilterX,
   RefreshCw,
   Trash2,
+  CreditCard,
 } from 'lucide-react';
 import { ArrowUp, ArrowDown } from 'lucide-react';
 import { ImageWithFallback } from './figma/ImageWithFallback';
@@ -619,7 +620,7 @@ export function InvoicesPage({ onCreateInvoice, onViewInvoiceDetails, onMarkAsPa
           </div>
         </section>
       </>
-    ));
+    ), { pageSize: 'A4', landscape: false });
   };
 
   const handleConfirmPrintRange = () => {
@@ -775,137 +776,116 @@ export function InvoicesPage({ onCreateInvoice, onViewInvoiceDetails, onMarkAsPa
     <>
     <div className="min-h-screen bg-gradient-to-br from-[#F6E9CA] to-[#FDFBF7]">
       <div className="container mx-auto p-4 space-y-6">
-        {/* Enhanced Header with Statistics */}
+        {/* Header Section with inline Search and Controls */}
         <div className="bg-white rounded-xl shadow-lg border border-[#C69A72]/20 p-6">
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-            <div className="flex-1">
-              <h1 className="text-3xl font-bold text-[#13312A] arabic-text mb-2">إدارة الفواتير</h1>
+          <div className="flex flex-row-reverse items-center justify-between gap-4 overflow-x-auto whitespace-nowrap md:flex-nowrap">
+            {/* Title and description (right) */}
+            <div className="flex-shrink-0 text-right">
+              <h1 className="text-3xl font-bold text-[#13312A] arabic-text mb-1">إدارة الفواتير</h1>
               <p className="text-[#155446] arabic-text">إدارة شاملة لفواتير العملاء والطلبات</p>
             </div>
-            
-            {/* Statistics Cards */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="bg-gradient-to-r from-[#155446] to-[#13312A] text-white p-4 rounded-lg text-center">
-                <div className="text-2xl font-bold">{formatArabicNumber(stats.total)}</div>
-                <div className="text-sm opacity-90 arabic-text">إجمالي الفواتير</div>
+
+            {/* Center controls: search + sort + view + clear */}
+            <div className="flex-1 flex items-center justify-center gap-3 min-w-[320px]">
+              {/* Search */}
+              <div className="relative w-[360px] md:w-[480px]">
+                <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 text-[#155446] w-5 h-5 pointer-events-none" />
+                <Input
+                  placeholder="بحث عن الفواتير، الزبائن، أو أرقام الهاتف..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pr-16 pl-4 py-3 bg-white border-2 border-[#C69A72]/30 rounded-xl text-right text-base focus:border-[#155446] focus:ring-2 focus:ring-[#155446]/20 transition-all duration-300"
+                />
               </div>
-              <div className="bg-gradient-to-r from-green-500 to-green-600 text-white p-4 rounded-lg text-center">
-                <div className="text-2xl font-bold">{formatArabicNumber(stats.paid)}</div>
-                <div className="text-sm opacity-90 arabic-text">مدفوعة</div>
+
+              {/* Sort */}
+              <Select value={sortField} onValueChange={(val: string) => { setSortField(val); setSortDirection(defaultDescFields.has(val) ? 'desc' : 'asc'); }}>
+                <SelectTrigger className="w-40 border-2 border-[#C69A72]/30 rounded-xl" aria-label="ترتيب حسب" title="ترتيب حسب">
+                  <SelectValue placeholder="ترتيب حسب" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="receivedDate">التاريخ</SelectItem>
+                  <SelectItem value="customerName">اسم الزبون</SelectItem>
+                  <SelectItem value="total">المبلغ</SelectItem>
+                  <SelectItem value="status">الحالة</SelectItem>
+                </SelectContent>
+              </Select>
+
+              {/* View toggle */}
+              <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+                <Button
+                  variant={viewMode === 'table' ? 'default' : 'ghost'}
+                  size="sm"
+                  onClick={() => setViewMode('table')}
+                  className="flex items-center gap-2"
+                  aria-label="عرض بشكل جدول"
+                  title="عرض بشكل جدول"
+                >
+                  <List className="w-4 h-4" />
+                  <span className="hidden sm:inline arabic-text">جدول</span>
+                </Button>
+                <Button
+                  variant={viewMode === 'grid' ? 'default' : 'ghost'}
+                  size="sm"
+                  onClick={() => setViewMode('grid')}
+                  className="flex items-center gap-2"
+                  aria-label="عرض بشكل شبكة"
+                  title="عرض بشكل شبكة"
+                >
+                  <Grid3X3 className="w-4 h-4" />
+                  <span className="hidden sm:inline arabic-text">شبكة</span>
+                </Button>
               </div>
-              <div className="bg-gradient-to-r from-yellow-500 to-orange-500 text-white p-4 rounded-lg text-center">
-                <div className="text-2xl font-bold">{formatArabicNumber(stats.pending)}</div>
-                <div className="text-sm opacity-90 arabic-text">معلقة</div>
-              </div>
-              <div className="bg-gradient-to-r from-[#C69A72] to-[#B8860B] text-white p-4 rounded-lg text-center">
-                <div className="text-2xl font-bold">{formatCurrency(stats.totalAmount)}</div>
-                <div className="text-sm opacity-90 arabic-text">إجمالي المبلغ</div>
-              </div>
-            </div>
-          </div>
-          
-          {/* Action Buttons */}
-          <div className="flex flex-wrap gap-3 mt-6">
-            <Button
-              onClick={onCreateInvoice}
-              className="bg-[#155446] hover:bg-[#13312A] text-[#F6E9CA] flex items-center gap-2 px-6 py-3 text-lg font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
-            >
-              <Plus className="w-5 h-5" />
-              <span className="arabic-text">فاتورة جديدة</span>
-            </Button>
-            
-            <Button
-              variant="outline"
-              onClick={openPrintDialog}
-              className="border-2 border-[#C69A72] text-[#13312A] hover:bg-[#C69A72] hover:text-white flex items-center gap-2 px-6 py-3 text-lg font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
-            >
-              <Printer className="w-5 h-5" />
-              <span className="arabic-text">طباعة القائمة</span>
-            </Button>
-            
-            <Button
-              variant="outline"
-              onClick={() => setShowFilters(!showFilters)}
-              className="border-2 border-[#155446] text-[#155446] hover:bg-[#155446] hover:text-white flex items-center gap-2 px-6 py-3 text-lg font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
-            >
-              <Filter className="w-5 h-5" />
-              <span className="arabic-text">تصفية متقدمة</span>
-            </Button>
-            
-            <div className="flex items-center gap-2 bg-white rounded-xl p-2 border border-[#C69A72]/30">
+
+              {/* Clear */}
               <Button
-                variant={viewMode === 'table' ? 'default' : 'ghost'}
-                size="sm"
-                onClick={() => setViewMode('table')}
-                className="flex items-center gap-2"
-                aria-label="عرض بشكل جدول"
-                title="عرض بشكل جدول"
+                variant="outline"
+                onClick={() => {
+                  setSearchTerm('');
+                  setStatusFilter('all');
+                  setDateFilter('all');
+                  setSortField('receivedDate');
+                  setSortDirection('desc');
+                }}
+                className="border-2 border-red-300 text-red-600 hover:bg-red-50 flex items-center gap-2 px-4 py-3 rounded-xl"
               >
-                <List className="w-4 h-4" />
-                <span className="hidden sm:inline arabic-text">جدول</span>
+                <FilterX className="w-4 h-4" />
+                <span className="arabic-text">مسح</span>
               </Button>
+            </div>
+
+            {/* Action buttons (left) */}
+            <div className="flex items-center gap-3 flex-shrink-0">
               <Button
-                variant={viewMode === 'grid' ? 'default' : 'ghost'}
-                size="sm"
-                onClick={() => setViewMode('grid')}
-                className="flex items-center gap-2"
-                aria-label="عرض بشكل شبكة"
-                title="عرض بشكل شبكة"
+                onClick={onCreateInvoice}
+                className="bg-[#155446] hover:bg-[#13312A] text-[#F6E9CA] flex items-center gap-2 px-6 py-3 text-lg font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
               >
-                <Grid3X3 className="w-4 h-4" />
-                <span className="hidden sm:inline arabic-text">شبكة</span>
+                <Plus className="w-5 h-5" />
+                <span className="arabic-text">فاتورة جديدة</span>
+              </Button>
+
+              <Button
+                variant="outline"
+                onClick={openPrintDialog}
+                className="border-2 border-[#C69A72] text-[#13312A] hover:bg-[#C69A72] hover:text-white flex items-center gap-2 px-6 py-3 text-lg font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
+              >
+                <Printer className="w-5 h-5" />
+                <span className="arabic-text">طباعة القائمة</span>
+              </Button>
+
+              <Button
+                variant="outline"
+                onClick={() => setShowFilters(!showFilters)}
+                className="border-2 border-[#155446] text-[#155446] hover:bg-[#155446] hover:text-white flex items-center gap-2 px-6 py-3 text-lg font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
+              >
+                <Filter className="w-5 h-5" />
+                <span className="arabic-text">تصفية متقدمة</span>
               </Button>
             </div>
           </div>
         </div>
 
-        {/* Search and Basic Filters */}
-        <Card className="bg-white rounded-xl shadow-lg border border-[#C69A72]/20">
-          <CardContent className="p-6">
-            <div className="flex flex-col lg:flex-row gap-4">
-              <div className="flex-1 relative">
-                <Search className="absolute right-4 top-1/2 transform -translate-y-1/2 text-[#155446] w-5 h-5" />
-                <Input
-                  placeholder="بحث عن الفواتير، الزبائن، أو أرقام الهاتف..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pr-12 pl-4 py-3 bg-white border-2 border-[#C69A72]/30 rounded-xl text-right text-lg focus:border-[#155446] focus:ring-2 focus:ring-[#155446]/20 transition-all duration-300"
-                />
-              </div>
-              <div className="flex flex-wrap gap-3">
-                <Select value={sortField} onValueChange={(val: string) => {
-                  setSortField(val);
-                  setSortDirection(defaultDescFields.has(val) ? 'desc' : 'asc');
-                }}>
-                <SelectTrigger className="w-48 border-2 border-[#C69A72]/30 rounded-xl" aria-label="ترتيب حسب" title="ترتيب حسب">
-                    <SelectValue placeholder="ترتيب حسب" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="receivedDate">التاريخ</SelectItem>
-                    <SelectItem value="customer">اسم الزبون</SelectItem>
-                    <SelectItem value="total">المبلغ</SelectItem>
-                    <SelectItem value="status">الحالة</SelectItem>
-                  </SelectContent>
-                </Select>
-                
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setSearchTerm('');
-                    setStatusFilter('all');
-                    setDateFilter('all');
-                    setSortField('receivedDate');
-                    setSortDirection('desc');
-                  }}
-                  className="border-2 border-red-300 text-red-600 hover:bg-red-50 flex items-center gap-2 px-4 py-3 rounded-xl"
-                >
-                  <FilterX className="w-4 h-4" />
-                  <span className="arabic-text">مسح الفلاتر</span>
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        {/* Search card removed; controls moved into header */}
 
         {/* Advanced Filters */}
         {showFilters && (
@@ -980,6 +960,57 @@ export function InvoicesPage({ onCreateInvoice, onViewInvoiceDetails, onMarkAsPa
           </div>
         )}
 
+        {/* Statistics Cards - compact layout */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <Card className="bg-gradient-to-br from-[#155446] to-[#13312A] border-0 shadow-md hover:shadow-lg transition-all duration-300">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-semibold arabic-text text-black">إجمالي الفواتير</span>
+                <div className="w-8 h-8 bg-white rounded-md flex items-center justify-center">
+                  <List className="w-5 h-5 text-[#13312A]" />
+                </div>
+              </div>
+              <div className="mt-2 text-2xl font-bold text-black">{formatArabicNumber(stats.total)}</div>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-gradient-to-br from-green-500 to-green-600 border-0 shadow-md hover:shadow-lg transition-all duration-300">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-semibold arabic-text text-black">مدفوعة</span>
+                <div className="w-8 h-8 bg-white rounded-md flex items-center justify-center">
+                  <CheckCircle className="w-5 h-5 text-[#13312A]" />
+                </div>
+              </div>
+              <div className="mt-2 text-2xl font-bold text-black">{formatArabicNumber(stats.paid)}</div>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-gradient-to-br from-yellow-500 to-orange-500 border-0 shadow-md hover:shadow-lg transition-all duration-300">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-semibold arabic-text text-black">معلقة</span>
+                <div className="w-8 h-8 bg-white rounded-md flex items-center justify-center">
+                  <Clock className="w-5 h-5 text-[#13312A]" />
+                </div>
+              </div>
+              <div className="mt-2 text-2xl font-bold text-black">{formatArabicNumber(stats.pending)}</div>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-gradient-to-br from-[#C69A72] to-[#B8860B] border-0 shadow-md hover:shadow-lg transition-all duration-300">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-semibold arabic-text text-black">إجمالي المبلغ</span>
+                <div className="w-8 h-8 bg-white rounded-md flex items-center justify-center">
+                  <CreditCard className="w-5 h-5 text-[#13312A]" />
+                </div>
+              </div>
+              <div className="mt-2 text-2xl font-bold text-black">{formatCurrency(stats.totalAmount)}</div>
+            </CardContent>
+          </Card>
+        </div>
+
         {/* Invoices Display */}
         {!loading && !error && (
           <>
@@ -1006,7 +1037,7 @@ export function InvoicesPage({ onCreateInvoice, onViewInvoiceDetails, onMarkAsPa
                     <div className="overflow-x-auto">
                       <Table>
                         <TableHeader>
-                          <TableRow className="bg-gradient-to-r from-[#13312A] to-[#155446] hover:bg-gradient-to-r hover:from-[#13312A] hover:to-[#155446]">
+                          <TableRow className="bg-[#155446] hover:bg-[#13312A]">
                             <TableHead className="text-[#F6E9CA] arabic-text text-right font-bold text-base select-none">
                               <div className="flex items-center justify-between cursor-pointer" onClick={() => handleHeaderSort('id')}>
                                 <span>رقم الفاتورة</span>

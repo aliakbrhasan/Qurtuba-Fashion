@@ -42,6 +42,9 @@ class RolesService {
     actions: []
   };
 
+  // Simple roles change listeners to allow UI to refresh permissions dynamically
+  private rolesListeners: Set<() => void> = new Set();
+
   // Simple persistent cache to keep UI consistent when DB is unreachable
   private readonly ROLES_CACHE_KEY = 'qurtuba_roles_cache';
   private readonly PAGES_CACHE_KEY = 'qurtuba_pages_cache';
@@ -70,6 +73,18 @@ class RolesService {
     return RolesService.instance;
   }
 
+  public onRolesChanged(listener: () => void): void {
+    this.rolesListeners.add(listener);
+  }
+
+  public offRolesChanged(listener: () => void): void {
+    this.rolesListeners.delete(listener);
+  }
+
+  private emitRolesChanged(): void {
+    try { this.rolesListeners.forEach((l) => { try { l(); } catch {} }); } catch {}
+  }
+
   private isUuid(id: string): boolean {
     return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
   }
@@ -81,7 +96,8 @@ class RolesService {
       { id: 'invoices', name: 'الفواتير', description: 'إدارة الفواتير', category: 'المبيعات', isActive: true },
       { id: 'customers', name: 'الزبائن', description: 'إدارة العملاء', category: 'المبيعات', isActive: true },
       { id: 'financial', name: 'المالية', description: 'الإدارة المالية', category: 'المالية', isActive: true },
-      { id: 'users', name: 'إدارة المستخدمين', description: 'إدارة المستخدمين والأدوار', category: 'الإدارة', isActive: true }
+      { id: 'users', name: 'إدارة المستخدمين', description: 'إدارة المستخدمين والأدوار', category: 'الإدارة', isActive: true },
+      { id: 'adminLog', name: 'سجل الإدارة', description: 'سجل عمليات الإدارة للنظام', category: 'الإدارة', isActive: true }
     ];
 
     // Default actions
@@ -125,7 +141,7 @@ class RolesService {
         name: 'مدير النظام',
         description: 'صلاحيات كاملة في النظام',
         permissions: ['إدارة المستخدمين', 'إدارة الفواتير', 'إدارة العملاء', 'التقارير', 'الإعدادات'],
-        allowedPages: ['dashboard', 'invoices', 'customers', 'financial', 'users'],
+        allowedPages: ['dashboard', 'invoices', 'customers', 'financial', 'users', 'adminLog'],
         allowedActions: ['create_invoice', 'edit_invoice', 'delete_invoice', 'change_invoice_status', 'mark_invoice_paid', 'print_invoice', 'print_invoices_list', 'create_customer', 'edit_customer', 'delete_customer', 'view_customer_details', 'print_customers_list', 'view_financial_reports', 'manage_payments', 'view_income_statement', 'generate_sales_report', 'generate_customer_report', 'generate_financial_report', 'manage_users', 'manage_roles', 'system_settings'],
         isActive: true,
         created_at: new Date().toISOString()
@@ -249,6 +265,8 @@ class RolesService {
       const createdMapped = this.mapSupabaseRoleToRole(res.data);
       const current = this.readCache<Role[]>(this.ROLES_CACHE_KEY, []);
       this.writeCache(this.ROLES_CACHE_KEY, [createdMapped, ...current]);
+      // Broadcast changes to refresh permissions in UI
+      this.emitRolesChanged();
       return createdMapped;
     } catch (error) {
       console.warn('Supabase createRole error, persisting to cache:', error);
@@ -260,6 +278,7 @@ class RolesService {
       } as Role);
       const current = this.readCache<Role[]>(this.ROLES_CACHE_KEY, []);
       this.writeCache(this.ROLES_CACHE_KEY, [newRole, ...current]);
+      this.emitRolesChanged();
       return newRole;
     }
   }
@@ -331,6 +350,7 @@ class RolesService {
           const cached = this.readCache<Role[]>(this.ROLES_CACHE_KEY, []);
           const next = cached.map(r => (r.id === resolvedId ? updated! : r));
           this.writeCache(this.ROLES_CACHE_KEY, next);
+          this.emitRolesChanged();
           // Mirror into local default for consistency
           if (currentLocal) {
             this.localData.roles[localIdx] = sanitizeRole({ ...currentLocal, ...updated! });
@@ -369,6 +389,7 @@ class RolesService {
           }
           const cached = this.readCache<Role[]>(this.ROLES_CACHE_KEY, []);
           this.writeCache(this.ROLES_CACHE_KEY, [created!, ...cached]);
+          this.emitRolesChanged();
           // Update local copy
           this.localData.roles[localIdx] = sanitizeRole({ ...currentLocal, ...created! });
           return created!;
@@ -426,6 +447,7 @@ class RolesService {
       const cached = this.readCache<Role[]>(this.ROLES_CACHE_KEY, []);
       const next = cached.map(r => (r.id === id ? updated! : r));
       this.writeCache(this.ROLES_CACHE_KEY, next);
+      this.emitRolesChanged();
       return updated!;
     } catch (error) {
       console.warn('Supabase updateRole error, updating cached role:', error);
@@ -441,6 +463,7 @@ class RolesService {
         } as Role);
         cached[idx] = nextRole;
         this.writeCache(this.ROLES_CACHE_KEY, [...cached]);
+        this.emitRolesChanged();
         return nextRole;
       }
       // If not found, treat as create into cache
@@ -456,6 +479,7 @@ class RolesService {
         updated_at: new Date().toISOString()
       } as Role);
       this.writeCache(this.ROLES_CACHE_KEY, [synthesized, ...cached]);
+      this.emitRolesChanged();
       return synthesized;
     }
   }
@@ -467,11 +491,13 @@ class RolesService {
       if (api?.local?.deleteRole) {
         const res = await api.local.deleteRole(id);
         if (!res?.ok) throw new Error(res?.error || 'Failed to delete role');
+        this.emitRolesChanged();
       } else {
         // Web fallback: remove from cached roles only
         const cached = this.readCache<Role[]>(this.ROLES_CACHE_KEY, []);
         const next = cached.filter(r => r.id !== id);
         this.writeCache(this.ROLES_CACHE_KEY, next);
+        this.emitRolesChanged();
         return;
       }
     } catch (error) {
@@ -479,6 +505,7 @@ class RolesService {
       const cached = this.readCache<Role[]>(this.ROLES_CACHE_KEY, []);
       const next = cached.filter(r => r.id !== id);
       this.writeCache(this.ROLES_CACHE_KEY, next);
+      this.emitRolesChanged();
     }
   }
 

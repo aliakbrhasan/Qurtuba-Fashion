@@ -37,6 +37,13 @@ export interface StoragePort {
 		notes?: string;
 		items?: Omit<InvoiceItem, 'id' | 'invoice_id' | 'created_at'>[];
 		fabric_image_url?: string;
+		// Optional design details saved with the invoice (comma-separated lists)
+		fabric_type?: string;
+		fabric_source?: string;
+		collar_type?: string;
+		chest_style?: string;
+		sleeve_end?: string;
+		bunija_type?: string;
 	}): Promise<Invoice>;
 	updateInvoice(id: string, updates: Partial<Invoice>): Promise<Invoice>;
 	deleteInvoice(id: string): Promise<void>;

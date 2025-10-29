@@ -111,20 +111,21 @@ export function Layout({ children, currentPage, onNavigate, isLoggedIn, onLogout
             </Button>
           );
         })}
-        {/* Admin Log (always visible for admins via permission check fallback) */}
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => onNavigate('adminLog')}
-          className={`flex flex-col items-center gap-1 p-2 touch-target ${
-            (currentPage === 'adminLog')
-              ? 'text-[#F6E9CA] bg-[#155446]'
-              : 'text-[#C69A72] hover:text-[#F6E9CA] hover:bg-[#155446]'
-          }`}
-        >
-          <HardDrive size={20} />
-          <span className="text-xs arabic-text">سجل الإدارة</span>
-        </Button>
+        {hasPagePermission('adminLog') && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => onNavigate('adminLog')}
+            className={`flex flex-col items-center gap-1 p-2 touch-target ${
+              (currentPage === 'adminLog')
+                ? 'text-[#F6E9CA] bg-[#155446]'
+                : 'text-[#C69A72] hover:text-[#F6E9CA] hover:bg-[#155446]'
+            }`}
+          >
+            <HardDrive size={20} />
+            <span className="text-xs arabic-text">سجل الإدارة</span>
+          </Button>
+        )}
         
         <Sheet>
           <SheetTrigger className="inline-flex flex-col items-center gap-1 p-2 touch-target text-[#C69A72] hover:text-[#F6E9CA] hover:bg-[#155446] rounded-md transition-colors">
@@ -225,18 +226,20 @@ export function Layout({ children, currentPage, onNavigate, isLoggedIn, onLogout
                   </Button>
                 );
               })}
-              <Button
-                variant="ghost"
-                onClick={() => onNavigate('adminLog')}
-                className={`flex items-center gap-2 px-4 py-2 touch-target ${
-                  (activePage === 'adminLog')
-                    ? 'text-[#F6E9CA] bg-[#155446]'
-                    : 'text-[#C69A72] hover:text-[#F6E9CA] hover:bg-[#155446]'
-                }`}
-              >
-                <HardDrive size={18} />
-                <span className="arabic-text">سجل الإدارة</span>
-              </Button>
+              {hasPagePermission('adminLog') && (
+                <Button
+                  variant="ghost"
+                  onClick={() => onNavigate('adminLog')}
+                  className={`flex items-center gap-2 px-4 py-2 touch-target ${
+                    (activePage === 'adminLog')
+                      ? 'text-[#F6E9CA] bg-[#155446]'
+                      : 'text-[#C69A72] hover:text-[#F6E9CA] hover:bg-[#155446]'
+                  }`}
+                >
+                  <HardDrive size={18} />
+                  <span className="arabic-text">سجل الإدارة</span>
+                </Button>
+              )}
               
             </nav>
           </div>

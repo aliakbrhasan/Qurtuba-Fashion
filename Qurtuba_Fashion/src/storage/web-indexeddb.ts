@@ -164,6 +164,15 @@ export class WebIndexedDBStorage implements StoragePort {
 			due_date: invoice.due_date,
 			notes: invoice.notes,
 			fabric_image_url: invoice.fabric_image_url,
+			// measurements snapshot
+			...(invoice.customer_measurements ? { customer_measurements: invoice.customer_measurements } : {}),
+			// design details (optional)
+			...(invoice.fabric_type ? { fabric_type: String(invoice.fabric_type) } : {}),
+			...(invoice.fabric_source ? { fabric_source: String(invoice.fabric_source) } : {}),
+			...(invoice.collar_type ? { collar_type: String(invoice.collar_type) } : {}),
+			...(invoice.chest_style ? { chest_style: String(invoice.chest_style) } : {}),
+			...(invoice.sleeve_end ? { sleeve_end: String(invoice.sleeve_end) } : {}),
+			...(invoice.bunija_type ? { bunija_type: String(invoice.bunija_type) } : {}),
 			paid_at: invoice.paid_at,
 			created_at: now,
 			updated_at: now,
@@ -269,13 +278,19 @@ export class WebIndexedDBStorage implements StoragePort {
 		const now = new Date();
 		const id = generateId();
 		const created_at = now.toISOString();
-		const log = {
-			id,
-			...entry,
-			action_date: entry.action_date || created_at.slice(0, 10),
-			action_time: entry.action_time || now.toTimeString().slice(0, 5),
-			created_at,
-		};
+		const action_date = entry.action_date || created_at.slice(0, 10);
+		const action_time = entry.action_time || now.toTimeString().slice(0, 5);
+		const changed = entry.changed_fields ? JSON.stringify(entry.changed_fields) : null;
+		// De-duplicate last similar log within ~45s
+		const last = this.logsArr.find(l => l.action_type === entry.action_type && l.entity_type === entry.entity_type && String(l.entity_id) === String(entry.entity_id) && (l.user_name || null) === (entry.user_name || null));
+		if (last && ((last.changed_fields ? JSON.stringify(last.changed_fields) : null) === changed)) {
+			const lastTs = new Date(last.created_at).getTime();
+			if (!Number.isNaN(lastTs)) {
+				const diffSec = Math.abs(now.getTime() - lastTs) / 1000;
+				if (diffSec <= 45) return last;
+			}
+		}
+		const log = { id, ...entry, action_date, action_time, created_at } as any;
 		this.logsArr.unshift(log);
 		this.persistAll();
 		return log;

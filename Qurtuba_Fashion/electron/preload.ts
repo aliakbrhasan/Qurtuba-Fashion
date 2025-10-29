@@ -10,6 +10,15 @@ const wrap = async <T>(fn: () => Promise<T>): Promise<{ ok: boolean; data?: T; e
   }
 };
 
+type RendererPrintPayload = {
+  title: string;
+  content: string;
+  styles?: string;
+  pageSize?: string | { width: number; height: number };
+  landscape?: boolean;
+  printBackground?: boolean;
+};
+
 const electronAPI = {
   // App information
   getVersion: () => ipcRenderer.invoke('app:getVersion'),
@@ -30,11 +39,11 @@ const electronAPI = {
   },
   
   // Print functionality
-  print: (data: { title: string; content: string; styles?: string }) => {
+  print: (data: RendererPrintPayload) => {
     return ipcRenderer.invoke('print:document', data);
   },
   
-  printPreview: (data: { title: string; content: string; styles?: string }) => {
+  printPreview: (data: RendererPrintPayload) => {
     return ipcRenderer.invoke('print:preview', data);
   },
   

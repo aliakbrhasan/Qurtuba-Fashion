@@ -34,11 +34,11 @@ interface NewInvoiceDialogProps {
     paymentDate?: string;
     items?: any[];
     measurements?: {
-      length?: number;
-      shoulder?: number;
-      waist?: number;
-      chest?: number;
-      collar?: number;
+      length?: string | number;
+      shoulder?: string | number;
+      waist?: string | number;
+      chest?: string | number;
+      collar?: string | number;
     };
     designDetails?: {
       fabricType?: string[];
@@ -75,17 +75,17 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated,
     notes: prefillCustomer?.notes || '',
     items: prefillCustomer?.items || [],
     measurements: prefillCustomer?.measurements ? {
-      length: prefillCustomer.measurements.length || 0,
-      shoulder: prefillCustomer.measurements.shoulder || 0,
-      waist: prefillCustomer.measurements.waist || 0,
-      chest: prefillCustomer.measurements.chest || 0,
-      collar: (prefillCustomer.measurements as any)?.collar || 0
+      length: prefillCustomer.measurements.length || '',
+      shoulder: prefillCustomer.measurements.shoulder || '',
+      waist: prefillCustomer.measurements.waist || '',
+      chest: prefillCustomer.measurements.chest || '',
+      collar: (prefillCustomer.measurements as any)?.collar || ''
     } : {
-      length: 0,
-      shoulder: 0,
-      waist: 0,
-      chest: 0,
-      collar: 0
+      length: '',
+      shoulder: '',
+      waist: '',
+      chest: '',
+      collar: ''
     },
     designDetails: prefillCustomer?.designDetails ? {
       fabricType: prefillCustomer.designDetails.fabricType || [],
@@ -119,17 +119,17 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated,
         notes: prefillCustomer.notes || prev.notes,
         items: prefillCustomer.items || prev.items,
                 measurements: prefillCustomer.measurements ? {
-                  length: prefillCustomer.measurements.length || (prev.measurements?.length || 0),
-                  shoulder: prefillCustomer.measurements.shoulder || (prev.measurements?.shoulder || 0),
-                  waist: prefillCustomer.measurements.waist || (prev.measurements?.waist || 0),
-                  chest: prefillCustomer.measurements.chest || (prev.measurements?.chest || 0),
-                  collar: prefillCustomer.measurements.collar || (prev.measurements?.collar || 0)
+                  length: String(prefillCustomer.measurements.length || ''),
+                  shoulder: String(prefillCustomer.measurements.shoulder || ''),
+                  waist: String(prefillCustomer.measurements.waist || ''),
+                  chest: String(prefillCustomer.measurements.chest || ''),
+                  collar: String(prefillCustomer.measurements.collar || '')
                 } : (prev.measurements || {
-                  length: 0,
-                  shoulder: 0,
-                  waist: 0,
-                  chest: 0,
-                  collar: 0
+                  length: '',
+                  shoulder: '',
+                  waist: '',
+                  chest: '',
+                  collar: ''
                 }),
         designDetails: prefillCustomer.designDetails ? {
           fabricType: prefillCustomer.designDetails.fabricType || (prev.designDetails?.fabricType || []),
@@ -156,36 +156,212 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated,
       if (prefillCustomer.paymentDate) {
         setPaymentDate(prefillCustomer.paymentDate);
       }
-      // Prefill design selections by matching labels to available options (leave empty if not found)
+      // Prefill design selections by matching labels to available options
+      // If an old invoice contains legacy options not present in current lists,
+      // temporarily inject them into local state (DO NOT persist) and select them
       try {
         const dd = prefillCustomer.designDetails || {};
         if (Array.isArray(dd.fabricType) && dd.fabricType[0]) {
-          const match = fabricOptions.find(o => o.label === dd.fabricType![0]);
+          const label = dd.fabricType![0];
+          let match = fabricOptions.find(o => o.label === label);
+          if (!match) {
+            match = { id: `legacy-fabric-${Date.now()}`, label } as any;
+            setFabricOptions(prev => [...prev, match!]);
+          }
           if (match) setSelectedFabricOption(match.id);
         }
         if (Array.isArray(dd.fabricSource) && dd.fabricSource[0]) {
-          const match = fabricSourceOptions.find(o => o.label === dd.fabricSource![0]);
+          const label = dd.fabricSource![0];
+          let match = fabricSourceOptions.find(o => o.label === label);
+          if (!match) {
+            match = { id: `legacy-source-${Date.now()}`, label } as any;
+            setFabricSourceOptions(prev => [...prev, match!]);
+          }
           if (match) setSelectedFabricSource(match.id);
         }
         if (Array.isArray(dd.collarType) && dd.collarType[0]) {
-          const match = collarOptions.find(o => o.label === dd.collarType![0]);
+          const label = dd.collarType![0];
+          let match = collarOptions.find(o => o.label === label);
+          if (!match) {
+            match = { id: `legacy-collar-${Date.now()}`, label } as any;
+            setCollarOptions(prev => [...prev, match!]);
+          }
           if (match) setSelectedCollarOption(match.id);
         }
         if (Array.isArray(dd.chestStyle) && dd.chestStyle[0]) {
-          const match = chestStyleOptions.find(o => o.label === dd.chestStyle![0]);
+          const label = dd.chestStyle![0];
+          let match = chestStyleOptions.find(o => o.label === label);
+          if (!match) {
+            match = { id: `legacy-chest-${Date.now()}`, label } as any;
+            setChestStyleOptions(prev => [...prev, match!]);
+          }
           if (match) setSelectedChestStyleOption(match.id);
         }
         if (Array.isArray(dd.sleeveEnd) && dd.sleeveEnd[0]) {
-          const match = sleeveEndOptions.find(o => o.label === dd.sleeveEnd![0]);
+          const label = dd.sleeveEnd![0];
+          let match = sleeveEndOptions.find(o => o.label === label);
+          if (!match) {
+            match = { id: `legacy-sleeve-${Date.now()}`, label } as any;
+            setSleeveEndOptions(prev => [...prev, match!]);
+          }
           if (match) setSelectedSleeveEndOption(match.id);
         }
         if (dd.bunijaType) {
-          const match = bunijaOptions.find(o => o.label === dd.bunijaType);
+          const label = dd.bunijaType;
+          let match = bunijaOptions.find(o => o.label === label);
+          if (!match) {
+            match = { id: `legacy-bunija-${Date.now()}`, label } as any;
+            setBunijaOptions(prev => [...prev, match!]);
+          }
           if (match) setSelectedBunijaOption(match.id);
         }
       } catch {}
     }
   }, [isOpen, prefillCustomer]);
+
+  // When editing an existing invoice, fetch missing measurements/design details from DB
+  useEffect(() => {
+    const loadEditExtras = async () => {
+      if (!isOpen || !prefillCustomer?.id) return;
+
+      // Determine if measurements are missing or all zeros
+      const m = formData.measurements || { length: 0, shoulder: 0, waist: 0, chest: 0, collar: 0 } as any;
+      const hasAnyMeasurement = Boolean((m.length || m.shoulder || m.waist || m.chest || (m as any).collar));
+      const needMeasurements = !hasAnyMeasurement;
+
+      // Determine if design details are missing
+      const dd = formData.designDetails || { fabricType: [], fabricSource: [], collarType: [], chestStyle: [], sleeveEnd: [], bunijaType: '' } as any;
+      const hasAnyDesign = Boolean(
+        (dd.fabricType && dd.fabricType.length) ||
+        (dd.fabricSource && dd.fabricSource.length) ||
+        (dd.collarType && dd.collarType.length) ||
+        (dd.chestStyle && dd.chestStyle.length) ||
+        (dd.sleeveEnd && dd.sleeveEnd.length) ||
+        dd.bunijaType
+      );
+
+      if (!needMeasurements && hasAnyDesign) return;
+
+      try {
+        const { databaseService } = await import('@/db/database.service');
+        const inv = await databaseService.getInvoiceById(String(prefillCustomer.id));
+        if (!inv) return;
+
+        // Resolve measurements from invoice or related customer
+        if (needMeasurements) {
+          try {
+            let cm: any = (inv as any).measurements || (inv as any).customer_measurements;
+            if (!cm) {
+              const customers = await databaseService.getCustomers();
+              const cid: any = (inv as any).customer_id;
+              const byId = customers.find((c: any) => String(c.id) === String(cid));
+              const byAlias = customers.find((c: any) => (c.name || '').trim() === (inv as any).customer_name?.trim() && (c.phone || '').trim() === ((inv as any).customer_phone || '').trim());
+              const customer: any = byId || byAlias;
+              cm = customer?.measurements;
+            }
+            if (typeof cm === 'string') { try { cm = JSON.parse(cm); } catch { cm = null; } }
+            if (cm && typeof cm === 'object') {
+              setFormData(prev => ({
+                ...prev,
+                measurements: {
+                  length: String(cm.height ?? cm.length ?? ''),
+                  shoulder: String(cm.shoulder ?? ''),
+                  waist: String(cm.waist ?? ''),
+                  chest: String(cm.chest ?? ''),
+                  collar: String((cm as any).collar ?? ''),
+                }
+              }));
+            }
+          } catch {}
+        }
+
+        // Resolve design details from invoice fields if missing
+        if (!hasAnyDesign) {
+          try {
+            const nextDD = {
+              fabricType: typeof (inv as any).fabric_type === 'string' && (inv as any).fabric_type
+                ? String((inv as any).fabric_type).split(',').filter(Boolean)
+                : [],
+              fabricSource: typeof (inv as any).fabric_source === 'string' && (inv as any).fabric_source
+                ? String((inv as any).fabric_source).split(',').filter(Boolean)
+                : [],
+              collarType: typeof (inv as any).collar_type === 'string' && (inv as any).collar_type
+                ? String((inv as any).collar_type).split(',').filter(Boolean)
+                : [],
+              chestStyle: typeof (inv as any).chest_style === 'string' && (inv as any).chest_style
+                ? String((inv as any).chest_style).split(',').filter(Boolean)
+                : [],
+              sleeveEnd: typeof (inv as any).sleeve_end === 'string' && (inv as any).sleeve_end
+                ? String((inv as any).sleeve_end).split(',').filter(Boolean)
+                : [],
+              bunijaType: (inv as any).bunija_type || ''
+            } as any;
+            setFormData(prev => ({ ...prev, designDetails: nextDD }));
+
+            // Also reflect into selection states so UI shows selected tags
+            try {
+              if (Array.isArray(nextDD.fabricType) && nextDD.fabricType[0]) {
+                const label = nextDD.fabricType[0];
+                let match = fabricOptions.find(o => o.label === label);
+                if (!match) {
+                  match = { id: `legacy-fabric-${Date.now()}`, label } as any;
+                  setFabricOptions(prev => [...prev, match!]);
+                }
+                if (match) setSelectedFabricOption(match.id);
+              }
+              if (Array.isArray(nextDD.fabricSource) && nextDD.fabricSource[0]) {
+                const label = nextDD.fabricSource[0];
+                let match = fabricSourceOptions.find(o => o.label === label);
+                if (!match) {
+                  match = { id: `legacy-source-${Date.now()}`, label } as any;
+                  setFabricSourceOptions(prev => [...prev, match!]);
+                }
+                if (match) setSelectedFabricSource(match.id);
+              }
+              if (Array.isArray(nextDD.collarType) && nextDD.collarType[0]) {
+                const label = nextDD.collarType[0];
+                let match = collarOptions.find(o => o.label === label);
+                if (!match) {
+                  match = { id: `legacy-collar-${Date.now()}`, label } as any;
+                  setCollarOptions(prev => [...prev, match!]);
+                }
+                if (match) setSelectedCollarOption(match.id);
+              }
+              if (Array.isArray(nextDD.chestStyle) && nextDD.chestStyle[0]) {
+                const label = nextDD.chestStyle[0];
+                let match = chestStyleOptions.find(o => o.label === label);
+                if (!match) {
+                  match = { id: `legacy-chest-${Date.now()}`, label } as any;
+                  setChestStyleOptions(prev => [...prev, match!]);
+                }
+                if (match) setSelectedChestStyleOption(match.id);
+              }
+              if (Array.isArray(nextDD.sleeveEnd) && nextDD.sleeveEnd[0]) {
+                const label = nextDD.sleeveEnd[0];
+                let match = sleeveEndOptions.find(o => o.label === label);
+                if (!match) {
+                  match = { id: `legacy-sleeve-${Date.now()}`, label } as any;
+                  setSleeveEndOptions(prev => [...prev, match!]);
+                }
+                if (match) setSelectedSleeveEndOption(match.id);
+              }
+              if (nextDD.bunijaType) {
+                const label = nextDD.bunijaType;
+                let match = bunijaOptions.find(o => o.label === label);
+                if (!match) {
+                  match = { id: `legacy-bunija-${Date.now()}`, label } as any;
+                  setBunijaOptions(prev => [...prev, match!]);
+                }
+                if (match) setSelectedBunijaOption(match.id);
+              }
+            } catch {}
+          } catch {}
+        }
+      } catch {}
+    };
+
+    loadEditExtras();
+  }, [isOpen, prefillCustomer?.id]);
 
   // Payment calculation states
   const [remainingAmount, setRemainingAmount] = useState(0);
@@ -527,9 +703,22 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated,
       setSubmitError(null);
 
       // Validate form data
-      const validationErrors = InvoiceService.validateInvoiceData(formData);
+      // Prepare a consistent payload snapshot (avoid racing with setState)
+      let payload = { ...formData } as typeof formData;
+      try {
+        if (Array.isArray(formData.items) && formData.items.length > 0) {
+          const computed = InvoiceService.calculateTotal(formData.items);
+          if (computed !== formData.total) {
+            payload = { ...payload, total: computed };
+            setFormData(prev => ({ ...prev, total: computed }));
+          }
+        }
+      } catch {}
+
+      const validationErrors = InvoiceService.validateInvoiceData(payload);
       if (validationErrors.length > 0) {
         setSubmitError(validationErrors.join('\n'));
+        setIsSubmitting(false);
         return;
       }
 
@@ -537,25 +726,71 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated,
       // نبدأ بحفظ الفاتورة محلياً أولاً ثم نرفع الصورة بالخلفية إن وُجدت
       // Check if this is an edit operation (has invoice ID) or create operation
       const isEdit = prefillCustomer?.id;
-      let result;
+      let result: any;
 
       if (isEdit && prefillCustomer?.id) {
         // Update existing invoice
         const updates: Partial<any> = {
-          customer_name: formData.customerName,
-          customer_phone: formData.customerPhone,
-          customer_address: formData.customerAddress,
-          total: formData.total,
-          paid_amount: formData.paidAmount,
-          status: formData.status,
-          due_date: formData.deliveryDate,
-          notes: formData.notes
+          customer_name: payload.customerName,
+          customer_phone: payload.customerPhone,
+          customer_address: payload.customerAddress,
+          total: payload.total,
+          paid_amount: payload.paidAmount,
+          status: payload.status,
+          due_date: payload.deliveryDate,
+          notes: payload.notes,
+          // Persist payment date
+          ...(paymentDate ? { paid_at: paymentDate } : {}),
+          // Persist design selections as comma-separated strings on invoice
+          fabric_type: Array.isArray(payload.designDetails?.fabricType) && payload.designDetails!.fabricType.length
+            ? payload.designDetails!.fabricType.join(',')
+            : undefined,
+          fabric_source: Array.isArray(payload.designDetails?.fabricSource) && payload.designDetails!.fabricSource.length
+            ? payload.designDetails!.fabricSource.join(',')
+            : undefined,
+          collar_type: Array.isArray(payload.designDetails?.collarType) && payload.designDetails!.collarType.length
+            ? payload.designDetails!.collarType.join(',')
+            : undefined,
+          chest_style: Array.isArray(payload.designDetails?.chestStyle) && payload.designDetails!.chestStyle.length
+            ? payload.designDetails!.chestStyle.join(',')
+            : undefined,
+          sleeve_end: Array.isArray(payload.designDetails?.sleeveEnd) && payload.designDetails!.sleeveEnd.length
+            ? payload.designDetails!.sleeveEnd.join(',')
+            : undefined,
+          bunija_type: payload.designDetails?.bunijaType || undefined,
         };
 
         result = await InvoiceService.updateInvoice(prefillCustomer.id, updates);
+        // Ensure invoice details re-fetches so updated design fields appear
+        try {
+          const { queryClient } = await import('@/app/queryClient');
+          queryClient.invalidateQueries({ queryKey: ['invoice-details', String(prefillCustomer.id)] });
+          queryClient.invalidateQueries({ queryKey: ['invoices'] });
+        } catch {}
+        // Also update customer's saved measurements if provided
+        try {
+          const m: any = payload.measurements || {};
+          const hasMeasurements = typeof m === 'object' && (m.length || m.shoulder || m.waist || m.chest);
+          if (hasMeasurements) {
+            const { databaseService } = await import('@/db/database.service');
+            const customers = await databaseService.getCustomers();
+            const target = customers.find(c => String((c as any).id) === String((result as any).customer_id))
+              || customers.find(c => (c.name || '').trim() === (payload.customerName || '').trim() && (c.phone || '').trim() === (payload.customerPhone || '').trim());
+            if (target) {
+              await databaseService.updateCustomer(String((target as any).id), {
+                measurements: {
+                  height: Number(m.length || 0),
+                  shoulder: Number(m.shoulder || 0),
+                  waist: Number(m.waist || 0),
+                  chest: Number(m.chest || 0),
+                }
+              } as any, { silent: true } as any);
+            }
+          }
+        } catch {}
       } else {
         // Create new invoice
-        result = await createInvoice(formData);
+        result = await createInvoice({ ...payload, paymentDate });
       }
 
       // 2) Upload image and persist URL to invoice so it appears in details page
@@ -615,6 +850,30 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated,
       setIsSubmitting(false);
     }
   };
+
+  // Keep designDetails in formData synced with current selections
+  useEffect(() => {
+    try {
+      const fabricLabel = selectedFabricOption ? (fabricOptions.find(o => o.id === selectedFabricOption)?.label || '') : '';
+      const sourceLabel = selectedFabricSource ? (fabricSourceOptions.find(o => o.id === selectedFabricSource)?.label || '') : '';
+      const collarLabel = selectedCollarOption ? (collarOptions.find(o => o.id === selectedCollarOption)?.label || '') : '';
+      const chestLabel = selectedChestStyleOption ? (chestStyleOptions.find(o => o.id === selectedChestStyleOption)?.label || '') : '';
+      const sleeveLabel = selectedSleeveEndOption ? (sleeveEndOptions.find(o => o.id === selectedSleeveEndOption)?.label || '') : '';
+      const bunijaLabel = selectedBunijaOption ? (bunijaOptions.find(o => o.id === selectedBunijaOption)?.label || '') : '';
+
+      setFormData(prev => ({
+        ...prev,
+        designDetails: {
+          fabricType: fabricLabel ? [fabricLabel] : [],
+          fabricSource: sourceLabel ? [sourceLabel] : [],
+          collarType: collarLabel ? [collarLabel] : [],
+          chestStyle: chestLabel ? [chestLabel] : [],
+          sleeveEnd: sleeveLabel ? [sleeveLabel] : [],
+          bunijaType: bunijaLabel || ''
+        }
+      }));
+    } catch {}
+  }, [selectedFabricOption, selectedFabricSource, selectedCollarOption, selectedChestStyleOption, selectedSleeveEndOption, selectedBunijaOption, fabricOptions, fabricSourceOptions, collarOptions, chestStyleOptions, sleeveEndOptions, bunijaOptions]);
 
   // Helper functions for fabric options
   const selectedFabricLabel = selectedFabricOption 
@@ -787,8 +1046,13 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated,
       return;
     }
     const option = { id: `collar-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, label: value };
-    setCollarOptions((prev) => [...prev, option]);
+    setCollarOptions((prev) => {
+      const next = [...prev, option];
+      try { designSettings.setOptions('collarType', next as any); } catch {}
+      return next;
+    });
     setSelectedCollarOption(option.id);
+    try { designSettings.setSelectedId('collarType', option.id); } catch {}
     openCollarQuickAdd(false);
   };
 
@@ -850,7 +1114,11 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated,
       return;
     }
     const option = { id: `chest-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, label: value };
-    setChestStyleOptions((prev) => [...prev, option]);
+    setChestStyleOptions((prev) => {
+      const next = [...prev, option];
+      try { designSettings.setOptions('chestStyle', next as any); } catch {}
+      return next;
+    });
     setSelectedChestStyleOption(option.id);
     openChestStyleQuickAdd(false);
   };
@@ -1051,8 +1319,13 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated,
       return;
     }
     const option = { id: `bunija-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, label: value };
-    setBunijaOptions((prev) => [...prev, option]);
+    setBunijaOptions((prev) => {
+      const next = [...prev, option];
+      try { designSettings.setOptions('bunijaType', next as any); } catch {}
+      return next;
+    });
     setSelectedBunijaOption(option.id);
+    try { designSettings.setSelectedId('bunijaType', option.id); } catch {}
     openBunijaQuickAdd(false);
   };
 
@@ -1139,46 +1412,43 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated,
                   <div className="space-y-1 min-w-0 flex-shrink-0">
                     <Label className="text-[#13312A] arabic-text text-xs">الطول (سم)</Label>
                     <Input 
-                      type="number"
+                      type="text"
                       placeholder="0"
                       className="bg-white border-[#C69A72] text-right h-7 text-xs w-full min-w-0"
                       value={formData.measurements?.length || ''}
                       onChange={(e) => setFormData(prev => ({
                         ...prev,
-                        measurements: { ...prev.measurements!, length: Number(e.target.value) }
+                        measurements: { ...prev.measurements!, length: e.target.value }
                       }))}
                       onFocus={handleFocus}
-                      onWheel={handleWheel}
                     />
                   </div>
                   <div className="space-y-1 min-w-0 flex-shrink-0">
                     <Label className="text-[#13312A] arabic-text text-xs">الكتف (سم)</Label>
                     <Input 
-                      type="number"
+                      type="text"
                       placeholder="0"
                       className="bg-white border-[#C69A72] text-right h-7 text-xs w-full min-w-0"
                       value={formData.measurements?.shoulder || ''}
                       onChange={(e) => setFormData(prev => ({
                         ...prev,
-                        measurements: { ...prev.measurements!, shoulder: Number(e.target.value) }
+                        measurements: { ...prev.measurements!, shoulder: e.target.value }
                       }))}
                       onFocus={handleFocus}
-                      onWheel={handleWheel}
                     />
                   </div>
                   <div className="space-y-1 min-w-0 flex-shrink-0">
                     <Label className="text-[#13312A] arabic-text text-xs">الردن (سم)</Label>
                     <Input 
-                      type="number"
+                      type="text"
                       placeholder="0"
                       className="bg-white border-[#C69A72] text-right h-7 text-xs w-full min-w-0"
                       value={formData.measurements?.waist || ''}
                       onChange={(e) => setFormData(prev => ({
                         ...prev,
-                        measurements: { ...prev.measurements!, waist: Number(e.target.value) }
+                        measurements: { ...prev.measurements!, waist: e.target.value }
                       }))}
                       onFocus={handleFocus}
-                      onWheel={handleWheel}
                     />
                   </div>
                 </div>
@@ -1187,31 +1457,29 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated,
                   <div className="space-y-1 min-w-0 flex-shrink-0">
                     <Label className="text-[#13312A] arabic-text text-xs">الصدر (سم)</Label>
                     <Input 
-                      type="number"
+                      type="text"
                       placeholder="0"
                       className="bg-white border-[#C69A72] text-right h-7 text-xs w-full min-w-0"
                       value={formData.measurements?.chest || ''}
                       onChange={(e) => setFormData(prev => ({
                         ...prev,
-                        measurements: { ...prev.measurements!, chest: Number(e.target.value) }
+                        measurements: { ...prev.measurements!, chest: e.target.value }
                       }))}
                       onFocus={handleFocus}
-                      onWheel={handleWheel}
                     />
                   </div>
                   <div className="space-y-1 min-w-0 flex-shrink-0">
                     <Label className="text-[#13312A] arabic-text text-xs">الياخة (سم)</Label>
                     <Input 
-                      type="number"
+                      type="text"
                       placeholder="0"
                       className="bg-white border-[#C69A72] text-right h-7 text-xs w-full min-w-0"
                       value={formData.measurements?.collar || ''}
                       onChange={(e) => setFormData(prev => ({
                         ...prev,
-                        measurements: { ...prev.measurements!, collar: Number(e.target.value) }
+                        measurements: { ...prev.measurements!, collar: e.target.value }
                       }))}
                       onFocus={handleFocus}
-                      onWheel={handleWheel}
                     />
                   </div>
                 </div>

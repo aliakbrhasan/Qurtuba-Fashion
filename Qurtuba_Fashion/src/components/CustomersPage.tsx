@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -26,16 +26,18 @@ import {
   FilterX,
   RefreshCw,
   User,
-  CheckCircle
+  CheckCircle,
+  Trash2
 } from 'lucide-react';
 import { ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
 import { Customer } from '../types/customer';
-import { openPrintWindow, formatPrintDateTime } from './print/PrintUtils';
+import { openPrintWindow, formatPrintDateTime } from './print/PrintUtils.tsx';
 import { formatCurrency, formatDate } from './PrintableInvoice';
 import { databaseService } from '../db/database.service';
 import { usePermissions } from '../hooks/usePermissions';
 import { authService } from '../services/auth.service';
 import { formatArabicNumber, formatStringNumber } from '../utils/arabicNumbers';
+import { CustomerEditDialog } from './CustomerEditDialog';
 
 interface CustomersPageProps {
   customers: Customer[];
@@ -64,15 +66,23 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false, on
   });
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editCustomer, setEditCustomer] = useState<Customer | null>(null);
-  const [editDraft, setEditDraft] = useState<Customer | null>(null);
-  const [isSavingEdit, setIsSavingEdit] = useState(false);
 
-  useEffect(() => {
-    if (isEditOpen && editCustomer) {
-      // Initialize draft once per open to avoid re-mounts while typing
-      setEditDraft(JSON.parse(JSON.stringify(editCustomer)) as Customer);
+  const handleDeleteCustomer = async (customer: Customer) => {
+    if (!hasActionPermission('delete_customer')) return;
+    const ok = window.confirm(`هل أنت متأكد من حذف الزبون: ${customer.name}؟ سيتم حذف فواتيره المرتبطة أيضاً.`);
+    if (!ok) return;
+    try {
+      await databaseService.deleteCustomerCascade(String(customer.id));
+      try {
+        const { queryClient } = await import('@/app/queryClient');
+        queryClient.invalidateQueries({ queryKey: ['customers'] });
+        queryClient.invalidateQueries({ queryKey: ['invoices'] });
+        queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+      } catch {}
+    } catch (e) {
+      console.error('Failed to delete customer:', e);
     }
-  }, [isEditOpen, editCustomer]);
+  };
 
   // Lightweight date formatter for human-readable dates
   const formatHumanDate = (dateString: string | null) => {
@@ -177,7 +187,7 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false, on
         created_at: new Date().toISOString()
       };
 
-      const created = await databaseService.createCustomer(customerData);
+      await databaseService.createCustomer(customerData);
       
       // Import queryClient and invalidate caches
       const { queryClient } = await import('@/app/queryClient');
@@ -284,6 +294,9 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false, on
   }, [filteredAndSortedCustomers]);
 
   const handlePrintCustomers = () => {
+    console.log('handlePrintCustomers called');
+    console.log('filteredAndSortedCustomers length:', filteredAndSortedCustomers.length);
+    
     const totalCustomers = filteredAndSortedCustomers.length;
     const totalOrders = filteredAndSortedCustomers.reduce((sum, customer) => sum + customer.orders.length, 0);
     const totalSpent = filteredAndSortedCustomers.reduce((sum, customer) => sum + customer.totalSpent, 0);
@@ -294,166 +307,26 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false, on
     }, {});
     const now = new Date();
 
+    console.log('About to call openPrintWindow with:', {
+      title: 'قائمة الزبائن',
+      totalCustomers,
+      totalOrders,
+      totalSpent,
+      averageOrders,
+      labelCounts
+    });
+
     openPrintWindow('قائمة الزبائن', (
-      <>
-        <header className="print-header">
-          <h1 className="print-title">سجل الزبائن</h1>
-          <p className="print-subtitle">قائمة ببيانات الزبائن وتفاصيل التعامل معهم داخل مركز أزياء قرطبة</p>
-          <div className="print-meta">
-            <span>تاريخ الطباعة: {formatPrintDateTime(now)}</span>
-            <span>عدد الزبائن: {totalCustomers}</span>
-          </div>
-        </header>
-
-        <section className="print-section">
-          <h2 className="section-title">ملخص سريع</h2>
-          <div className="metrics-grid">
-            <div className="metric-card accent">
-              <span className="metric-label">عدد الزبائن الحالي</span>
-              <span className="metric-value">{totalCustomers}</span>
-            </div>
-            <div className="metric-card">
-              <span className="metric-label">إجمالي الإنفاق</span>
-              <span className="metric-value">{formatCurrency(totalSpent)}</span>
-            </div>
-            <div className="metric-card">
-              <span className="metric-label">عدد الطلبات المسجلة</span>
-              <span className="metric-value">{totalOrders}</span>
-            </div>
-            <div className="metric-card">
-              <span className="metric-label">متوسط الطلبات لكل زبون</span>
-              <span className="metric-value">{averageOrders}</span>
-            </div>
-            {Object.entries(labelCounts).map(([label, count]) => (
-              <div className="metric-card" key={label}>
-                <span className="metric-label">زبائن {label}</span>
-                <span className="metric-value">{count}</span>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <section className="print-section">
-          <h2 className="section-title">جدول الزبائن</h2>
-          <p className="section-description">يسرد الجدول التفاصيل الأساسية عن كل زبون بما في ذلك معلومات التواصل والتصنيف.</p>
-          <div className="print-table-wrapper">
-            <table className="print-table">
-              <thead>
-                <tr>
-                  <th>اسم الزبون</th>
-                  <th>الهاتف</th>
-                  <th>العنوان</th>
-                  <th>التصنيف</th>
-                  <th>آخر طلب</th>
-                  <th>إجمالي الإنفاق</th>
-                  <th>عدد الطلبات</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredAndSortedCustomers.map((customer) => (
-                  <tr key={customer.id}>
-                    <td>{customer.name}</td>
-                    <td>{formatStringNumber(customer.phone)}</td>
-                    <td>{customer.address}</td>
-                    <td>
-                      <span className="status-pill" style={getLabelPrintStyle(customer.label)}>
-                        {customer.label}
-                      </span>
-                    </td>
-                    <td>{formatDate(customer.lastOrder)}</td>
-                    <td>{formatCurrency(customer.totalSpent)}</td>
-                    <td>{customer.orders.length}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
-
-        <section className="print-section">
-          <h2 className="section-title">تفاصيل الزبائن</h2>
-          <p className="section-description">يقدم هذا القسم عرضاً تفصيلياً لتاريخ كل زبون وقياساته والطلبات التي تمت متابعتها.</p>
-          <div className="detail-cards">
-            {filteredAndSortedCustomers.map((customer) => (
-              <article className="detail-card" key={`customer-${customer.id}`}>
-                <div className="detail-card-header">
-                  <h3 className="detail-title">{customer.name}</h3>
-                  <span className="status-pill" style={getLabelPrintStyle(customer.label)}>
-                    {customer.label}
-                  </span>
-                </div>
-                <div className="detail-grid two-column">
-                  <div className="detail-item">
-                    <span className="item-label">الهاتف</span>
-                    <span className="item-value">{formatStringNumber(customer.phone)}</span>
-                  </div>
-                  <div className="detail-item">
-                    <span className="item-label">العنوان</span>
-                    <span className="item-value">{customer.address}</span>
-                  </div>
-                  <div className="detail-item">
-                    <span className="item-label">آخر طلب</span>
-                    <span className="item-value">{formatDate(customer.lastOrder)}</span>
-                  </div>
-                  <div className="detail-item">
-                    <span className="item-label">إجمالي الإنفاق</span>
-                    <span className="item-value">{formatCurrency(customer.totalSpent)}</span>
-                  </div>
-                </div>
-
-                <div className="detail-subsection">
-                  <h4 className="subsection-title">القياسات الأساسية</h4>
-                  <div className="detail-grid two-column">
-                    <div className="detail-item">
-                      <span className="item-label">الطول</span>
-                      <span className="item-value">{customer.measurements.height} سم</span>
-                    </div>
-                    <div className="detail-item">
-                      <span className="item-label">الأكتاف</span>
-                      <span className="item-value">{customer.measurements.shoulder} سم</span>
-                    </div>
-                    <div className="detail-item">
-                      <span className="item-label">الردن</span>
-                      <span className="item-value">{customer.measurements.waist} سم</span>
-                    </div>
-                    <div className="detail-item">
-                      <span className="item-label">الصدر</span>
-                      <span className="item-value">{customer.measurements.chest} سم</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="detail-subsection">
-                  <h4 className="subsection-title">سجل الطلبات</h4>
-                  <ul className="list">
-                    {customer.orders.length > 0 ? (
-                      customer.orders.map((order) => (
-                        <li className="list-item" key={order.id}>
-                          <div className="item-label">#{order.id} — {order.type}</div>
-                          <div className="item-value">الحالة: {order.status}</div>
-                          <div className="item-value">الفترة: {formatDate(order.orderDate)} إلى {formatDate(order.deliveryDate)}</div>
-                          <div className="item-value">قيمة الطلب: {formatCurrency(order.total)} | المدفوع: {formatCurrency(order.paid)}</div>
-                        </li>
-                      ))
-                    ) : (
-                      <li className="list-item">لا توجد طلبات مسجلة لهذا الزبون.</li>
-                    )}
-                  </ul>
-                </div>
-
-                {customer.notes && (
-                  <div className="detail-grid">
-                    <div className="detail-item">
-                      <span className="item-label">ملاحظات إضافية</span>
-                      <span className="item-value">{customer.notes}</span>
-                    </div>
-                  </div>
-                )}
-              </article>
-            ))}
-          </div>
-        </section>
-      </>
+      <CustomersPrintDocument
+        now={now}
+        totalCustomers={totalCustomers}
+        totalOrders={totalOrders}
+        totalSpent={totalSpent}
+        averageOrders={averageOrders}
+        labelCounts={labelCounts}
+        customers={filteredAndSortedCustomers}
+        labelStyleGetter={getLabelPrintStyle}
+      />
     ));
   };
 
@@ -462,16 +335,86 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false, on
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#F6E9CA] to-[#FDFBF7]">
       <div className="container mx-auto p-4 space-y-6">
-        {/* Header Section */}
+        {/* Header Section with inline Search and Filters */}
         <div className="bg-white rounded-xl shadow-lg border border-[#C69A72]/20 p-6">
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-            <div className="flex-1">
+          <div className="flex flex-row-reverse items-center justify-between gap-4 overflow-x-auto whitespace-nowrap md:flex-nowrap">
+            {/* Title and description (right side) */}
+            <div className="flex-shrink-0 text-right">
               <h1 className="text-3xl font-bold text-[#13312A] arabic-text mb-1">إدارة الزبائن</h1>
               <p className="text-[#155446] arabic-text">إدارة شاملة لبيانات العملاء والزبائن</p>
             </div>
-            
-            {/* Action Buttons - Same order as Invoices Page */}
-            <div className="flex flex-wrap gap-3">
+
+            {/* Center controls: search + basic filters */}
+            <div className="flex-1 flex items-center justify-center gap-3 min-w-[320px]">
+              {/* Search */}
+              <div className="relative w-[360px] md:w-[480px]">
+                <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 text-[#155446] w-5 h-5 pointer-events-none" />
+                <Input
+                  placeholder="بحث عن الزبائن، الأسماء، أو أرقام الهاتف..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pr-16 pl-4 py-3 bg-white border-2 border-[#C69A72]/30 rounded-xl text-right text-base focus:border-[#155446] focus:ring-2 focus:ring-[#155446]/20 transition-all duration-300"
+                />
+              </div>
+
+              {/* Sort */}
+              <Select value={sortField} onValueChange={(val: string) => { setSortField(val); setSortDirection(defaultDescFields.has(val) ? 'desc' : 'asc'); }}>
+                <SelectTrigger className="w-40 border-2 border-[#C69A72]/30 rounded-xl" aria-label="ترتيب حسب" title="ترتيب حسب">
+                  <SelectValue placeholder="ترتيب حسب" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="name">الاسم</SelectItem>
+                  <SelectItem value="totalSpent">إجمالي الإنفاق</SelectItem>
+                  <SelectItem value="ordersCount">عدد الطلبات</SelectItem>
+                  <SelectItem value="lastOrder">آخر طلب</SelectItem>
+                  <SelectItem value="label">التصنيف</SelectItem>
+                </SelectContent>
+              </Select>
+
+              {/* View mode toggle */}
+              <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+                <Button
+                  variant={viewMode === 'table' ? 'default' : 'ghost'}
+                  size="sm"
+                  onClick={() => setViewMode('table')}
+                  className="flex items-center gap-2"
+                  aria-label="عرض بشكل جدول"
+                  title="عرض بشكل جدول"
+                >
+                  <List className="w-4 h-4" />
+                  <span className="hidden sm:inline arabic-text">جدول</span>
+                </Button>
+                <Button
+                  variant={viewMode === 'grid' ? 'default' : 'ghost'}
+                  size="sm"
+                  onClick={() => setViewMode('grid')}
+                  className="flex items-center gap-2"
+                  aria-label="عرض بشكل شبكة"
+                  title="عرض بشكل شبكة"
+                >
+                  <Grid3X3 className="w-4 h-4" />
+                  <span className="hidden sm:inline arabic-text">شبكة</span>
+                </Button>
+              </div>
+
+              {/* Clear filters */}
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setSearchTerm('');
+                  setFilterLabel('all');
+                  setSortField('name');
+                  setSortDirection('asc');
+                }}
+                className="border-2 border-red-300 text-red-600 hover:bg-red-50 flex items-center gap-2 px-4 py-3 rounded-xl"
+              >
+                <FilterX className="w-4 h-4" />
+                <span className="arabic-text">مسح</span>
+              </Button>
+            </div>
+
+            {/* Action Buttons (left side) */}
+            <div className="flex items-center gap-3 flex-shrink-0">
               <Button
                 variant="outline"
                 onClick={() => setShowFilters(!showFilters)}
@@ -480,7 +423,7 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false, on
                 <Filter className="w-5 h-5" />
                 <span className="arabic-text">تصفية متقدمة</span>
               </Button>
-              
+
               {hasActionPermission('print_customers_list') && (
                 <Button
                   variant="outline"
@@ -491,7 +434,7 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false, on
                   <span className="arabic-text">طباعة القائمة</span>
                 </Button>
               )}
-              
+
               {hasActionPermission('create_customer') && (
                 <Button
                   onClick={() => setIsNewCustomerOpen(true)}
@@ -505,128 +448,68 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false, on
           </div>
         </div>
 
-        {/* Statistics Cards - Only show if user has permission */}
+        {/* Statistics Cards - compact layout */}
         {hasActionPermission('view_financial_reports') && (
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
-            <Card className="bg-gradient-to-br from-[#155446] to-[#13312A] border-0 shadow-xl hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1">
-              <CardContent className="p-6 text-center">
-                <div className="flex items-center justify-center mb-3">
-                  <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center">
-                    <User className="w-6 h-6 text-[#13312A]" />
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <Card className="bg-gradient-to-br from-[#155446] to-[#13312A] border-0 shadow-md hover:shadow-lg transition-all duration-300">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold arabic-text text-black">إجمالي الزبائن</span>
+                  </div>
+                  <div className="w-8 h-8 bg-white rounded-md flex items-center justify-center">
+                    <User className="w-5 h-5 text-[#13312A]" />
                   </div>
                 </div>
-                <div className="text-3xl font-bold mb-2 text-black">{formatArabicNumber(stats.total)}</div>
-                <div className="text-sm opacity-90 arabic-text text-black">إجمالي الزبائن</div>
+                <div className="mt-2 text-2xl font-bold text-black">{formatArabicNumber(stats.total)}</div>
               </CardContent>
             </Card>
-            
-            <Card className="bg-gradient-to-br from-green-500 to-green-600 border-0 shadow-xl hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1">
-              <CardContent className="p-6 text-center">
-                <div className="flex items-center justify-center mb-3">
-                  <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center">
-                    <CheckCircle className="w-6 h-6 text-[#13312A]" />
+
+            <Card className="bg-gradient-to-br from-green-500 to-green-600 border-0 shadow-md hover:shadow-lg transition-all duration-300">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold arabic-text text-black">منتظمون</span>
+                  </div>
+                  <div className="w-8 h-8 bg-white rounded-md flex items-center justify-center">
+                    <CheckCircle className="w-5 h-5 text-[#13312A]" />
                   </div>
                 </div>
-                <div className="text-3xl font-bold mb-2 text-black">{formatArabicNumber(stats.regularCustomers)}</div>
-                <div className="text-sm opacity-90 arabic-text text-black">منتظمون</div>
+                <div className="mt-2 text-2xl font-bold text-black">{formatArabicNumber(stats.regularCustomers)}</div>
               </CardContent>
             </Card>
-            
-            <Card className="bg-gradient-to-br from-yellow-500 to-orange-500 border-0 shadow-xl hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1">
-              <CardContent className="p-6 text-center">
-                <div className="flex items-center justify-center mb-3">
-                  <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center">
-                    <Star className="w-6 h-6 text-[#13312A]" />
+
+            <Card className="bg-gradient-to-br from-yellow-500 to-orange-500 border-0 shadow-md hover:shadow-lg transition-all duration-300">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold arabic-text text-black">زبائن ذهبيون</span>
+                  </div>
+                  <div className="w-8 h-8 bg-white rounded-md flex items-center justify-center">
+                    <Star className="w-5 h-5 text-[#13312A]" />
                   </div>
                 </div>
-                <div className="text-3xl font-bold mb-2 text-black">{formatArabicNumber(stats.goldenCustomers)}</div>
-                <div className="text-sm opacity-90 arabic-text text-black">زبائن ذهبيون</div>
+                <div className="mt-2 text-2xl font-bold text-black">{formatArabicNumber(stats.goldenCustomers)}</div>
               </CardContent>
             </Card>
-            
-            <Card className="bg-gradient-to-br from-[#C69A72] to-[#B8860B] border-0 shadow-xl hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1">
-              <CardContent className="p-6 text-center">
-                <div className="flex items-center justify-center mb-3">
-                  <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center">
-                    <CreditCard className="w-6 h-6 text-[#13312A]" />
+
+            <Card className="bg-gradient-to-br from-[#C69A72] to-[#B8860B] border-0 shadow-md hover:shadow-lg transition-all duration-300">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold arabic-text text-black">إجمالي الإنفاق</span>
+                  </div>
+                  <div className="w-8 h-8 bg-white rounded-md flex items-center justify-center">
+                    <CreditCard className="w-5 h-5 text-[#13312A]" />
                   </div>
                 </div>
-                <div className="text-3xl font-bold mb-2 text-black">{formatCurrency(stats.totalSpent)}</div>
-                <div className="text-sm opacity-90 arabic-text text-black">إجمالي الإنفاق</div>
+                <div className="mt-2 text-2xl font-bold text-black">{formatCurrency(stats.totalSpent)}</div>
               </CardContent>
             </Card>
           </div>
         )}
 
-        {/* Search and Basic Filters */}
-        <Card className="bg-white rounded-xl shadow-lg border border-[#C69A72]/20">
-          <CardContent className="p-6">
-            <div className="flex flex-col lg:flex-row gap-4">
-              <div className="flex-1 relative">
-                <Search className="absolute right-4 top-1/2 transform -translate-y-1/2 text-[#155446] w-5 h-5" />
-                <Input
-                  placeholder="بحث عن الزبائن، الأسماء، أو أرقام الهاتف..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pr-12 pl-4 py-3 bg-white border-2 border-[#C69A72]/30 rounded-xl text-right text-lg focus:border-[#155446] focus:ring-2 focus:ring-[#155446]/20 transition-all duration-300"
-                />
-              </div>
-              <div className="flex flex-wrap gap-3">
-                <Select value={sortField} onValueChange={(val: string) => { setSortField(val); setSortDirection(defaultDescFields.has(val) ? 'desc' : 'asc'); }}>
-                  <SelectTrigger className="w-48 border-2 border-[#C69A72]/30 rounded-xl" aria-label="ترتيب حسب" title="ترتيب حسب">
-                    <SelectValue placeholder="ترتيب حسب" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="name">الاسم</SelectItem>
-                    <SelectItem value="totalSpent">إجمالي الإنفاق</SelectItem>
-                    <SelectItem value="ordersCount">عدد الطلبات</SelectItem>
-                    <SelectItem value="lastOrder">آخر طلب</SelectItem>
-                    <SelectItem value="label">التصنيف</SelectItem>
-                  </SelectContent>
-                </Select>
-                
-                <div className="flex items-center gap-2 bg-white rounded-xl p-2 border border-[#C69A72]/30">
-                  <Button
-                    variant={viewMode === 'table' ? 'default' : 'ghost'}
-                    size="sm"
-                    onClick={() => setViewMode('table')}
-                    className="flex items-center gap-2"
-                    aria-label="عرض بشكل جدول"
-                    title="عرض بشكل جدول"
-                  >
-                    <List className="w-4 h-4" />
-                    <span className="hidden sm:inline arabic-text">جدول</span>
-                  </Button>
-                  <Button
-                    variant={viewMode === 'grid' ? 'default' : 'ghost'}
-                    size="sm"
-                    onClick={() => setViewMode('grid')}
-                    className="flex items-center gap-2"
-                    aria-label="عرض بشكل شبكة"
-                    title="عرض بشكل شبكة"
-                  >
-                    <Grid3X3 className="w-4 h-4" />
-                    <span className="hidden sm:inline arabic-text">شبكة</span>
-                  </Button>
-                </div>
-                
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setSearchTerm('');
-                    setFilterLabel('all');
-                    setSortField('name');
-                    setSortDirection('asc');
-                  }}
-                  className="border-2 border-red-300 text-red-600 hover:bg-red-50 flex items-center gap-2 px-4 py-3 rounded-xl"
-                >
-                  <FilterX className="w-4 h-4" />
-                  <span className="arabic-text">مسح الفلاتر</span>
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        {/* Search and Basic Filters moved into header above */}
 
         {/* Advanced Filters */}
         {showFilters && (
@@ -700,50 +583,50 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false, on
                     <div className="overflow-x-auto">
                       <Table>
                         <TableHeader>
-                          <TableRow className="bg-gradient-to-r from-[#13312A] to-[#155446] hover:bg-gradient-to-r hover:from-[#13312A] hover:to-[#155446]">
-                            <TableHead className="text-black arabic-text text-right font-bold text-base select-none">
+                          <TableRow className="bg-[#155446] hover:bg-[#13312A]">
+                            <TableHead className="text-[#F6E9CA] arabic-text text-right font-bold text-base select-none">
                               <div className="flex items-center justify-between cursor-pointer" onClick={() => handleHeaderSort('name')}>
                                 <span>اسم الزبون</span>
                                 {sortField === 'name' ? (sortDirection === 'asc' ? <ArrowUp className="w-4 h-4" /> : <ArrowDown className="w-4 h-4" />) : <ArrowUpDown className="w-4 h-4 opacity-70" />}
                               </div>
                             </TableHead>
-                            <TableHead className="text-black arabic-text text-right font-bold text-base select-none">
+                            <TableHead className="text-[#F6E9CA] arabic-text text-right font-bold text-base select-none">
                               <div className="flex items-center justify-between cursor-pointer" onClick={() => handleHeaderSort('phone')}>
                                 <span>الهاتف</span>
                                 {sortField === 'phone' ? (sortDirection === 'asc' ? <ArrowUp className="w-4 h-4" /> : <ArrowDown className="w-4 h-4" />) : <ArrowUpDown className="w-4 h-4 opacity-70" />}
                               </div>
                             </TableHead>
-                            <TableHead className="text-black arabic-text text-right font-bold text-base select-none">
+                            <TableHead className="text-[#F6E9CA] arabic-text text-right font-bold text-base select-none">
                               <div className="flex items-center justify-between cursor-pointer" onClick={() => handleHeaderSort('address')}>
                                 <span>العنوان</span>
                                 {sortField === 'address' ? (sortDirection === 'asc' ? <ArrowUp className="w-4 h-4" /> : <ArrowDown className="w-4 h-4" />) : <ArrowUpDown className="w-4 h-4 opacity-70" />}
                               </div>
                             </TableHead>
-                            <TableHead className="text-black arabic-text text-right font-bold text-base select-none">
+                            <TableHead className="text-[#F6E9CA] arabic-text text-right font-bold text-base select-none">
                               <div className="flex items-center justify-between cursor-pointer" onClick={() => handleHeaderSort('label')}>
                                 <span>التصنيف</span>
                                 {sortField === 'label' ? (sortDirection === 'asc' ? <ArrowUp className="w-4 h-4" /> : <ArrowDown className="w-4 h-4" />) : <ArrowUpDown className="w-4 h-4 opacity-70" />}
                               </div>
                             </TableHead>
-                            <TableHead className="text-black arabic-text text-right font-bold text-base select-none">
+                            <TableHead className="text-[#F6E9CA] arabic-text text-right font-bold text-base select-none">
                               <div className="flex items-center justify-between cursor-pointer" onClick={() => handleHeaderSort('lastOrder')}>
                                 <span>آخر طلب</span>
                                 {sortField === 'lastOrder' ? (sortDirection === 'asc' ? <ArrowUp className="w-4 h-4" /> : <ArrowDown className="w-4 h-4" />) : <ArrowUpDown className="w-4 h-4 opacity-70" />}
                               </div>
                             </TableHead>
-                            <TableHead className="text-black arabic-text text-right font-bold text-base select-none">
+                            <TableHead className="text-[#F6E9CA] arabic-text text-right font-bold text-base select-none">
                               <div className="flex items-center justify-between cursor-pointer" onClick={() => handleHeaderSort('totalSpent')}>
                                 <span>إجمالي الإنفاق</span>
                                 {sortField === 'totalSpent' ? (sortDirection === 'asc' ? <ArrowUp className="w-4 h-4" /> : <ArrowDown className="w-4 h-4" />) : <ArrowUpDown className="w-4 h-4 opacity-70" />}
                               </div>
                             </TableHead>
-                            <TableHead className="text-black arabic-text text-right font-bold text-base select-none">
+                            <TableHead className="text-[#F6E9CA] arabic-text text-right font-bold text-base select-none">
                               <div className="flex items-center justify-between cursor-pointer" onClick={() => handleHeaderSort('ordersCount')}>
                                 <span>عدد الطلبات</span>
                                 {sortField === 'ordersCount' ? (sortDirection === 'asc' ? <ArrowUp className="w-4 h-4" /> : <ArrowDown className="w-4 h-4" />) : <ArrowUpDown className="w-4 h-4 opacity-70" />}
                               </div>
                             </TableHead>
-                            <TableHead className="text-black arabic-text text-right font-bold text-base">الإجراءات</TableHead>
+                            <TableHead className="text-[#F6E9CA] arabic-text text-right font-bold text-base">الإجراءات</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -798,6 +681,15 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false, on
                                           إضافة طلب جديد
                                         </DropdownMenuItem>
                                       )}
+                                  {hasActionPermission('delete_customer') && (
+                                    <DropdownMenuItem 
+                                      onClick={() => handleDeleteCustomer(customer)}
+                                      className="arabic-text text-red-600 hover:text-red-700 hover:bg-red-50"
+                                    >
+                                      <Trash2 className="w-4 h-4 ml-2" />
+                                      حذف الزبون
+                                    </DropdownMenuItem>
+                                  )}
                                     </DropdownMenuContent>
                                   </DropdownMenu>
                                 </div>
@@ -887,6 +779,15 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false, on
                                     <DropdownMenuItem className="arabic-text">
                                       <Plus className="w-4 h-4 ml-2" />
                                       طلب جديد
+                                    </DropdownMenuItem>
+                                  )}
+                                  {hasActionPermission('delete_customer') && (
+                                    <DropdownMenuItem 
+                                      className="arabic-text text-red-600 hover:text-red-700 hover:bg-red-50"
+                                      onClick={() => handleDeleteCustomer(customer)}
+                                    >
+                                      <Trash2 className="w-4 h-4 ml-2" />
+                                      حذف الزبون
                                     </DropdownMenuItem>
                                   )}
                                 </DropdownMenuContent>
@@ -993,168 +894,147 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false, on
         </DialogContent>
       </Dialog>
 
-      {/* Inline Edit Customer Dialog to avoid remounts on each keypress */}
-      <Dialog open={isEditOpen} onOpenChange={(open) => { setIsEditOpen(open); if (!open) setEditDraft(null); }}>
-        <DialogContent className="max-w-2xl bg-[#F6E9CA] border-[#C69A72]">
-          <DialogHeader>
-            <DialogTitle className="text-[#13312A] arabic-text">تعديل بيانات الزبون</DialogTitle>
-            <DialogDescription className="text-[#155446] arabic-text">
-              عدّل الحقول المطلوبة ثم احفظ التغييرات
-            </DialogDescription>
-          </DialogHeader>
-          {editDraft && (
-            <form
-              className="space-y-6"
-              onSubmit={async (e) => {
-                e.preventDefault();
-                try {
-                  setIsSavingEdit(true);
-                  await databaseService.updateCustomer(String(editDraft.id), {
-                    name: editDraft.name,
-                    phone: editDraft.phone,
-                    address: editDraft.address,
-                    measurements: editDraft.measurements,
-                  });
-                  setIsEditOpen(false);
-                } catch (err) {
-                  console.error('Error updating customer:', err);
-                } finally {
-                  setIsSavingEdit(false);
-                }
-              }}
-            >
-              <Card className="bg-white border-[#C69A72]">
-                <CardHeader>
-                  <CardTitle className="text-[#13312A] arabic-text text-lg">البيانات الأساسية</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div>
-                    <Label className="text-[#13312A] arabic-text">الاسم الكامل</Label>
-                    <Input
-                      className="bg-white border-[#C69A72] text-right"
-                      value={editDraft.name}
-                      onChange={(e) => setEditDraft({ ...(editDraft as Customer), name: e.target.value })}
-                      required
-                    />
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <Label className="text-[#13312A] arabic-text">رقم الهاتف</Label>
-                      <Input
-                        className="bg-white border-[#C69A72] text-right"
-                        value={editDraft.phone}
-                        onChange={(e) => setEditDraft({ ...(editDraft as Customer), phone: e.target.value })}
-                        required
-                      />
-                    </div>
-                    <div>
-                      <Label className="text-[#13312A] arabic-text">العنوان</Label>
-                      <Input
-                        className="bg-white border-[#C69A72] text-right"
-                        value={editDraft.address}
-                        onChange={(e) => setEditDraft({ ...(editDraft as Customer), address: e.target.value })}
-                      />
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="bg-white border-[#C69A72]">
-                <CardHeader>
-                  <CardTitle className="text-[#13312A] arabic-text text-lg">القياسات</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {/* الصف الأول: الطول، الكتف، الردن - 3 أعمدة */}
-                  <div className="grid grid-cols-3 gap-4 min-w-0">
-                    <div className="min-w-[120px]">
-                      <Label className="text-[#13312A] arabic-text">الطول (سم)</Label>
-                      <Input
-                        type="number"
-                        className="bg-white border-[#C69A72] text-right min-w-0"
-                        value={editDraft.measurements?.height ?? 0}
-                        onChange={(e) => setEditDraft({
-                          ...(editDraft as Customer),
-                          measurements: { ...(editDraft.measurements || {}), height: Number(e.target.value) }
-                        })}
-                      />
-                    </div>
-                    <div className="min-w-[120px]">
-                      <Label className="text-[#13312A] arabic-text">الكتف (سم)</Label>
-                      <Input
-                        type="number"
-                        className="bg-white border-[#C69A72] text-right min-w-0"
-                        value={editDraft.measurements?.shoulder ?? 0}
-                        onChange={(e) => setEditDraft({
-                          ...(editDraft as Customer),
-                          measurements: { ...(editDraft.measurements || {}), shoulder: Number(e.target.value) }
-                        })}
-                      />
-                    </div>
-                    <div className="min-w-[120px]">
-                      <Label className="text-[#13312A] arabic-text">الردن (سم)</Label>
-                      <Input
-                        type="number"
-                        className="bg-white border-[#C69A72] text-right min-w-0"
-                        value={editDraft.measurements?.waist ?? 0}
-                        onChange={(e) => setEditDraft({
-                          ...(editDraft as Customer),
-                          measurements: { ...(editDraft.measurements || {}), waist: Number(e.target.value) }
-                        })}
-                      />
-                    </div>
-                  </div>
-                  {/* الصف الثاني: الصدر، الياقة - 2 أعمدة */}
-                  <div className="grid grid-cols-2 gap-4 min-w-0">
-                    <div className="min-w-[120px]">
-                      <Label className="text-[#13312A] arabic-text">الصدر (سم)</Label>
-                      <Input
-                        type="number"
-                        className="bg-white border-[#C69A72] text-right min-w-0"
-                        value={editDraft.measurements?.chest ?? 0}
-                        onChange={(e) => setEditDraft({
-                          ...(editDraft as Customer),
-                          measurements: { ...(editDraft.measurements || {}), chest: Number(e.target.value) }
-                        })}
-                      />
-                    </div>
-                    <div className="min-w-[120px]">
-                      <Label className="text-[#13312A] arabic-text">الياقة (سم)</Label>
-                      <Input
-                        type="number"
-                        className="bg-white border-[#C69A72] text-right min-w-0"
-                        value={editDraft.measurements?.collar ?? 0}
-                        onChange={(e) => setEditDraft({
-                          ...(editDraft as Customer),
-                          measurements: { ...(editDraft.measurements || {}), collar: Number(e.target.value) }
-                        })}
-                      />
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <div className="flex gap-4 justify-end">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setIsEditOpen(false)}
-                  className="border-[#C69A72] text-[#13312A] hover:bg-[#C69A72]"
-                  disabled={isSavingEdit}
-                >
-                  إلغاء
-                </Button>
-                <Button
-                  type="submit"
-                  className="bg-[#155446] hover:bg-[#13312A] text-[#F6E9CA]"
-                  disabled={isSavingEdit}
-                >
-                  {isSavingEdit ? 'جاري الحفظ...' : 'حفظ التغييرات'}
-                </Button>
-              </div>
-            </form>
-          )}
-        </DialogContent>
-      </Dialog>
+            <CustomerEditDialog
+        open={isEditOpen}
+        customer={editCustomer}
+        onOpenChange={(open) => {
+          setIsEditOpen(open);
+          if (!open) {
+            setEditCustomer(null);
+          }
+        }}
+        onUpdated={(updated) => {
+          setEditCustomer(updated);
+        }}
+      />
     </div>
   );
 }
+
+interface CustomersPrintDocumentProps {
+  now: Date;
+  totalCustomers: number;
+  totalOrders: number;
+  totalSpent: number;
+  averageOrders: string;
+  labelCounts: Record<string, number>;
+  customers: Customer[];
+  labelStyleGetter: (label: string) => React.CSSProperties;
+}
+
+const CustomersPrintDocument: React.FC<CustomersPrintDocumentProps> = ({
+  now,
+  totalCustomers,
+  totalOrders,
+  totalSpent,
+  averageOrders,
+  labelCounts,
+  customers,
+  labelStyleGetter,
+}) => {
+
+  return (
+    <div className="print-container">
+      <div className="print-inner">
+        {/* Header */}
+        <div className="print-header">
+          <h1 className="print-title">قائمة الزبائن</h1>
+          <p className="print-subtitle">تقرير شامل لبيانات العملاء والزبائن</p>
+          <div className="print-meta">
+            <span>تاريخ التقرير: {formatPrintDateTime(now)}</span>
+            <span>إجمالي الزبائن: {totalCustomers}</span>
+          </div>
+        </div>
+
+        {/* Summary Section */}
+        <div className="print-section">
+          <h2 className="section-title">ملخص الإحصائيات</h2>
+          <p className="section-description">نظرة عامة على بيانات العملاء والإحصائيات الأساسية</p>
+          
+          <div className="metrics-grid">
+            <div className="metric-card accent">
+              <div className="metric-label">إجمالي الزبائن</div>
+              <div className="metric-value">{totalCustomers}</div>
+            </div>
+            
+            <div className="metric-card">
+              <div className="metric-label">إجمالي الطلبات</div>
+              <div className="metric-value">{totalOrders}</div>
+            </div>
+            
+            <div className="metric-card accent">
+              <div className="metric-label">إجمالي الإنفاق</div>
+              <div className="metric-value">{formatCurrency(totalSpent)}</div>
+            </div>
+            
+            <div className="metric-card">
+              <div className="metric-label">متوسط الطلبات</div>
+              <div className="metric-value">{Number(averageOrders).toFixed(1)}</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Label Distribution */}
+        <div className="print-section">
+          <h2 className="section-title">توزيع التصنيفات</h2>
+          <p className="section-description">توزيع الزبائن حسب التصنيفات المختلفة</p>
+          
+          <div className="metrics-grid">
+            {Object.entries(labelCounts).map(([label, count]) => (
+              <div key={label} className="metric-card">
+                <div className="metric-label">{label}</div>
+                <div className="metric-value">{count}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Customers Table */}
+        <div className="print-section">
+          <h2 className="section-title">قائمة الزبائن</h2>
+          <p className="section-description">تفاصيل الاتصال، الحالة، آخر طلب، قيمة المشتريات وإجمالي عدد الطلبات لكل زبون</p>
+          
+          <div className="print-table-wrapper">
+            <table className="print-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>اسم الزبون</th>
+                  <th>رقم الجوال</th>
+                  <th>العنوان</th>
+                  <th>التصنيف</th>
+                  <th>آخر عملية</th>
+                  <th>إجمالي الإنفاق</th>
+                  <th>عدد الطلبات</th>
+                </tr>
+              </thead>
+              <tbody>
+                {customers.map((customer, index) => (
+                  <tr key={`table-${customer.id}`}>
+                    <td>{index + 1}</td>
+                    <td>{customer.name}</td>
+                    <td>{formatStringNumber(customer.phone)}</td>
+                    <td>{customer.address}</td>
+                    <td>
+                      <span className="status-pill" style={labelStyleGetter(customer.label)}>
+                        {customer.label}
+                      </span>
+                    </td>
+                    <td>{formatDate(customer.lastOrder)}</td>
+                    <td>{formatCurrency(customer.totalSpent)}</td>
+                    <td>{customer.orders.length}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="print-footer">
+          تم إنشاء هذا التقرير من خلال نظام إدارة أزياء قرطبة
+        </div>
+      </div>
+    </div>
+  );
+};

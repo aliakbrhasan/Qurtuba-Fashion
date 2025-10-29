@@ -33,6 +33,14 @@ export interface LocalInvoice {
   invoice_date: string;
   due_date?: string;
   notes?: string;
+  customer_measurements?: any;
+  // Optional design details stored as comma-separated strings for portability
+  fabric_type?: string;
+  fabric_source?: string;
+  collar_type?: string;
+  chest_style?: string;
+  sleeve_end?: string;
+  bunija_type?: string;
   fabric_image_url?: string;
   paid_at?: string;
   created_at: string;
@@ -200,14 +208,38 @@ export class LocalDatabase {
         invoice_date TEXT NOT NULL,
         due_date TEXT,
         notes TEXT,
+        customer_measurements TEXT,
+        fabric_type TEXT,
+        fabric_source TEXT,
+        collar_type TEXT,
+        chest_style TEXT,
+        sleeve_end TEXT,
+        bunija_type TEXT,
         fabric_image_url TEXT,
         paid_at TEXT,
         version INTEGER NOT NULL DEFAULT 1,
         deleted INTEGER NOT NULL DEFAULT 0,
         created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL
+        updated_at TEXT NOT NULL,
+        synced INTEGER NOT NULL DEFAULT 0
       )
     `);
+
+    // Defensive migration: add optional design detail columns if they are missing
+    try {
+      const cols = this.all<{ name: string }>("PRAGMA table_info('invoices')");
+      const has = (n: string) => cols.some(c => String((c as any).name).toLowerCase() === n.toLowerCase());
+      const maybeAdd = (col: string) => { try { if (!has(col)) this.run(`ALTER TABLE invoices ADD COLUMN ${col} TEXT`); } catch {} };
+      maybeAdd('customer_measurements');
+      maybeAdd('fabric_type');
+      maybeAdd('fabric_source');
+      maybeAdd('collar_type');
+      maybeAdd('chest_style');
+      maybeAdd('sleeve_end');
+      maybeAdd('bunija_type');
+      // Add synced column if missing
+      try { if (!has('synced')) this.run(`ALTER TABLE invoices ADD COLUMN synced INTEGER NOT NULL DEFAULT 0`); } catch {}
+    } catch {}
 
     // Orders table
     this.run(`
@@ -652,11 +684,16 @@ export class LocalDatabase {
     try {
       await this.run(`
         INSERT INTO invoices (id, invoice_number, customer_id, customer_name, customer_phone, customer_address,
-                             total, paid_amount, status, invoice_date, due_date, notes, fabric_image_url, paid_at, version, deleted, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0, ?, ?)
+                             total, paid_amount, status, invoice_date, due_date, notes, customer_measurements,
+                             fabric_type, fabric_source, collar_type, chest_style, sleeve_end, bunija_type,
+                             fabric_image_url, paid_at, version, deleted, created_at, updated_at, synced)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `, [id, invoiceNumber, invoice.customer_id, invoice.customer_name, invoice.customer_phone,
           invoice.customer_address, invoice.total, invoice.paid_amount, invoice.status,
-          invoice.invoice_date, invoice.due_date, invoice.notes, invoice.fabric_image_url, invoice.paid_at || null, now, now]);
+          invoice.invoice_date, invoice.due_date, invoice.notes, JSON.stringify((invoice as any).customer_measurements || null),
+          (invoice as any).fabric_type || null, (invoice as any).fabric_source || null, (invoice as any).collar_type || null,
+          (invoice as any).chest_style || null, (invoice as any).sleeve_end || null, (invoice as any).bunija_type || null,
+          invoice.fabric_image_url, invoice.paid_at || null, 1, 0, now, now, 0]);
       
       console.log('Invoice created successfully with ID:', id);
     } catch (error) {
@@ -681,18 +718,21 @@ export class LocalDatabase {
     if (!this.db) throw new Error('Database not initialized');
     
     const now = new Date().toISOString();
-    const setClause = Object.keys(updates)
-      .filter(key => key !== 'id' && key !== 'created_at' && key !== 'invoice_number')
-      .map(key => `${key} = ?`)
-      .join(', ');
-    
-    const values = Object.values(updates).filter((_, index) => {
-      const key = Object.keys(updates)[index];
-      return key !== 'id' && key !== 'created_at' && key !== 'invoice_number';
-    });
+    // Only allow updating known columns to avoid 'no such column' errors
+    const allowed = new Set([
+      'customer_id','customer_name','customer_phone','customer_address','total','paid_amount','status','invoice_date','due_date','notes',
+      'customer_measurements','fabric_type','fabric_source','collar_type','chest_style','sleeve_end','bunija_type','fabric_image_url','paid_at','version','deleted','updated_at'
+    ]);
+    const entries = Object.entries(updates).filter(([k]) => allowed.has(k));
+    const setClause = entries.map(([k]) => `${k} = ?`).join(', ');
+    const values = entries.map(([, v]) => v);
     
     const versionUpdate = options?.fromCloud ? '' : ', version = version + 1';
-    await this.run(`UPDATE invoices SET ${setClause}, updated_at = ?${versionUpdate} WHERE id = ?`, [...values, now, id]);
+    if (setClause.length > 0) {
+      await this.run(`UPDATE invoices SET ${setClause}, updated_at = ?${versionUpdate} WHERE id = ?`, [...values, now, id]);
+    } else {
+      await this.run(`UPDATE invoices SET updated_at = ?${versionUpdate} WHERE id = ?`, [now, id]);
+    }
     if (!options?.fromCloud) {
       const row = await this.get<LocalInvoice>('SELECT * FROM invoices WHERE id = ?', [id]);
       await this.enqueueOutbox('invoices', id, 'update', row);

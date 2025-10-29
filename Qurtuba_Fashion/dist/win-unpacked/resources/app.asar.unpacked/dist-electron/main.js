@@ -481,6 +481,12 @@ electron_1.ipcMain.handle('print:document', async (_evt, args) => {
         if (!mainWindow) {
             throw new Error('Main window not available');
         }
+        const pageSize = args.pageSize ?? 'A5';
+        const landscape = args.landscape ?? true;
+        const printBackground = args.printBackground ?? true;
+        const pageDirective = typeof pageSize === 'string'
+            ? `@page { size: ${pageSize}${landscape ? ' landscape' : ' portrait'}; margin: 0; }`
+            : '@page { margin: 0; }';
         // Create a new off-screen window for printing
         const printWindow = new electron_1.BrowserWindow({
             width: 900,
@@ -503,15 +509,15 @@ electron_1.ipcMain.handle('print:document', async (_evt, args) => {
         const htmlContent = `<!DOCTYPE html>
 <html lang="ar" dir="rtl">
   <head>
-    <meta charset="utf-8" />
-    <title>${args.title}</title>
-    <style>
-      @page { size: A5 landscape; margin: 0; }
-      html, body { margin: 0; padding: 0; background: #ffffff; }
-      html, body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-      body { font-family: 'Tajawal', system-ui, 'Segoe UI', Arial, sans-serif; direction: rtl; }
-      ${args.styles || ''}
-    </style>
+      <meta charset="utf-8" />
+      <title>${args.title}</title>
+      <style>
+        ${pageDirective}
+        html, body { margin: 0; padding: 0; background: #ffffff; }
+        html, body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        body { font-family: 'Tajawal', system-ui, 'Segoe UI', Arial, sans-serif; direction: rtl; }
+        ${args.styles || ''}
+      </style>
   </head>
   <body>
     ${args.content}
@@ -531,10 +537,12 @@ electron_1.ipcMain.handle('print:document', async (_evt, args) => {
         `, true);
                 const printOptions = {
                     silent: false,
-                    printBackground: true,
-                    landscape: true,
-                    pageSize: 'A5',
+                    printBackground,
+                    landscape,
                 };
+                if (pageSize) {
+                    printOptions.pageSize = pageSize;
+                }
                 await new Promise((resolve) => {
                     printWindow.webContents.print(printOptions, () => resolve());
                 });

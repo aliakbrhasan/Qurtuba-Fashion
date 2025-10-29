@@ -130,3 +130,4 @@ Converted images: [...]
 2. **التشخيص في Renderer Process:** console.log في renderer process ستظهر في Developer Tools
 3. **تحقق من وجود جدول images:** يمكن فحص قاعدة البيانات المحلية للتأكد من وجود السجلات
 4. **تحقق من مسار الملفات:** تأكد من أن الصور تُحفظ في `userData/images/`
+

@@ -29,6 +29,7 @@ import {
   RefreshCw,
   Trash2,
 } from 'lucide-react';
+import { Clock, CreditCard } from 'lucide-react';
 import { Handshake } from 'lucide-react';
 import { ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
 import { InvoiceDetailsDialog } from './InvoiceDetailsDialog';
@@ -629,7 +630,7 @@ export function InvoicesPageWithDB({ onCreateInvoice, onViewInvoiceDetails, onMa
           </div>
         </section>
       </>
-    ));
+    ), { pageSize: 'A4', landscape: false });
   };
 
   const handleConfirmPrintRange = () => {
@@ -734,111 +735,139 @@ export function InvoicesPageWithDB({ onCreateInvoice, onViewInvoiceDetails, onMa
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#F6E9CA] to-[#FDFBF7]">
       <div className="container mx-auto p-4 space-y-6">
-        {/* Enhanced Header (Title and Buttons) */}
-        <div className="bg-white rounded-xl shadow-lg border border-[#C69A72]/20 p-4 mb-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="flex-1">
+        {/* Header Section with inline Search and Controls */}
+        <div className="bg-white rounded-xl shadow-lg border border-[#C69A72]/20 p-6">
+          <div className="flex flex-row-reverse items-center justify-between gap-4 overflow-x-auto whitespace-nowrap md:flex-nowrap">
+            {/* Title and description (right) */}
+            <div className="flex-shrink-0 text-right">
               <h1 className="text-3xl font-bold text-[#13312A] arabic-text mb-1">إدارة الفواتير</h1>
-              <p className="text-sm text-[#155446] arabic-text">إدارة شاملة لفواتير العملاء والطلبات</p>
-        </div>
-            
-            {/* Action Buttons */}
-            <div className="flex flex-wrap justify-end gap-2">
+              <p className="text-[#155446] arabic-text">إدارة شاملة لفواتير العملاء والطلبات</p>
+            </div>
+
+            {/* Center controls: search + sort + clear */}
+            <div className="flex-1 flex items-center justify-center gap-3 min-w-[320px]">
+              <div className="relative w-[360px] md:w-[480px]">
+                <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 text-[#155446] w-5 h-5 pointer-events-none" />
+                <Input
+                  placeholder="بحث عن الفواتير، الزبائن، أو أرقام الهاتف..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pr-16 pl-4 py-3 bg-white border-2 border-[#C69A72]/30 rounded-xl text-right text-base focus:border-[#155446] focus:ring-2 focus:ring-[#155446]/20 transition-all duration-300"
+                />
+              </div>
+
+              <Select value={sortField} onValueChange={(val: string) => { setSortField(val); setSortDirection(defaultDescFields.has(val) ? 'desc' : 'asc'); }}>
+                <SelectTrigger className="w-40 border-2 border-[#C69A72]/30 rounded-xl" aria-label="ترتيب حسب" title="ترتيب حسب">
+                  <SelectValue placeholder="ترتيب حسب" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="invoice_date">التاريخ</SelectItem>
+                  <SelectItem value="customer_name">اسم الزبون</SelectItem>
+                  <SelectItem value="total">المبلغ</SelectItem>
+                  <SelectItem value="status">الحالة</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setSearchTerm('');
+                  setStatusFilter('all');
+                  setDateFilter('all');
+                  setSortField('invoice_date');
+                  setSortDirection('desc');
+                }}
+                className="border-2 border-red-300 text-red-600 hover:bg-red-50 flex items-center gap-2 px-4 py-3 rounded-xl"
+              >
+                <FilterX className="w-4 h-4" />
+                <span className="arabic-text">مسح</span>
+              </Button>
+            </div>
+
+            {/* Action Buttons (left) */}
+            <div className="flex items-center gap-3 flex-shrink-0">
               {hasActionPermission('create_invoice') && (
                 <Button
-                  className="bg-[#13312A] hover:bg-[#155446] text-[#F6E9CA] px-4 py-2 text-sm rounded-md flex items-center gap-2 arabic-text"
+                  className="bg-[#13312A] hover:bg-[#155446] text-[#F6E9CA] px-6 py-3 text-lg rounded-xl flex items-center gap-2 arabic-text"
                   onClick={handleCreateInvoice}
                 >
-                  <Plus className="w-4 h-4" />
+                  <Plus className="w-5 h-5" />
                   فاتورة جديدة
                 </Button>
               )}
               {hasActionPermission('print_invoices_list') && (
                 <Button
-                  className="bg-[#C69A72] hover:bg-[#A87B5A] text-[#13312A] px-4 py-2 text-sm rounded-md flex items-center gap-2 arabic-text"
+                  className="border-2 border-[#C69A72] text-[#13312A] hover:bg-[#C69A72] hover:text-white px-6 py-3 text-lg rounded-xl flex items-center gap-2 arabic-text"
+                  variant="outline"
                   onClick={openPrintDialog}
                 >
-                  <Printer className="w-4 h-4" />
+                  <Printer className="w-5 h-5" />
                   طباعة القائمة
                 </Button>
               )}
               <Button
-                className="bg-[#13312A] hover:bg-[#155446] text-[#F6E9CA] px-4 py-2 text-sm rounded-md flex items-center gap-2 arabic-text"
+                className="border-2 border-[#155446] text-[#155446] hover:bg-[#155446] hover:text-white px-6 py-3 text-lg rounded-xl flex items-center gap-2 arabic-text"
+                variant="outline"
                 onClick={() => setShowFilters(!showFilters)}
               >
-                <Filter className="w-4 h-4" />
+                <Filter className="w-5 h-5" />
                 تصفية متقدمة
               </Button>
             </div>
           </div>
-      </div>
+        </div>
 
-        {/* Statistics Cards - Now in a separate section - Only show if user has permission */}
+        {/* Statistics Cards - compact layout */}
         {hasActionPermission('view_financial_reports') && (
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
-            <div className="bg-white text-[#13312A] p-3 rounded-lg text-center border border-[#C69A72]/20 shadow-sm">
-              <div className="text-xl font-bold">{formatArabicNumber(stats.total)}</div>
-              <div className="text-xs text-[#155446] arabic-text">إجمالي الفواتير</div>
-            </div>
-            <div className="bg-white text-[#13312A] p-3 rounded-lg text-center border border-[#C69A72]/20 shadow-sm">
-              <div className="text-xl font-bold">{formatArabicNumber(stats.paid)}</div>
-              <div className="text-xs text-[#155446] arabic-text">الفواتير المدفوعة</div>
-            </div>
-            <div className="bg-white text-[#13312A] p-3 rounded-lg text-center border border-[#C69A72]/20 shadow-sm">
-              <div className="text-xl font-bold">{formatArabicNumber(stats.pending)}</div>
-              <div className="text-xs text-[#155446] arabic-text">الفواتير المعلقة</div>
-            </div>
-            <div className="bg-white text-[#13312A] p-3 rounded-lg text-center border border-[#C69A72]/20 shadow-sm">
-              <div className="text-xl font-bold">{formatCurrency(stats.totalAmount)}</div>
-              <div className="text-xs text-[#155446] arabic-text">إجمالي المبلغ</div>
-            </div>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+            <Card className="bg-gradient-to-br from-[#155446] to-[#13312A] border-0 shadow-md hover:shadow-lg transition-all duration-300">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-semibold arabic-text text-black">إجمالي الفواتير</span>
+                  <div className="w-8 h-8 bg-white rounded-md flex items-center justify-center">
+                    {/* Simple list icon via CSS border boxes would be complex; keeping text-only title here */}
+                  </div>
+                </div>
+                <div className="mt-2 text-2xl font-bold text-black">{formatArabicNumber(stats.total)}</div>
+              </CardContent>
+            </Card>
+            <Card className="bg-gradient-to-br from-green-500 to-green-600 border-0 shadow-md hover:shadow-lg transition-all duration-300">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-semibold arabic-text text-black">مدفوعة</span>
+                  <div className="w-8 h-8 bg-white rounded-md flex items-center justify-center">
+                    <CheckCircle className="w-5 h-5 text-[#13312A]" />
+                  </div>
+                </div>
+                <div className="mt-2 text-2xl font-bold text-black">{formatArabicNumber(stats.paid)}</div>
+              </CardContent>
+            </Card>
+            <Card className="bg-gradient-to-br from-yellow-500 to-orange-500 border-0 shadow-md hover:shadow-lg transition-all duration-300">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-semibold arabic-text text-black">معلقة</span>
+                  <div className="w-8 h-8 bg-white rounded-md flex items-center justify-center">
+                    <Clock className="w-5 h-5 text-[#13312A]" />
+                  </div>
+                </div>
+                <div className="mt-2 text-2xl font-bold text-black">{formatArabicNumber(stats.pending)}</div>
+              </CardContent>
+            </Card>
+            <Card className="bg-gradient-to-br from-[#C69A72] to-[#B8860B] border-0 shadow-md hover:shadow-lg transition-all duration-300">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-semibold arabic-text text-black">إجمالي المبلغ</span>
+                  <div className="w-8 h-8 bg-white rounded-md flex items-center justify-center">
+                    <CreditCard className="w-5 h-5 text-[#13312A]" />
+                  </div>
+                </div>
+                <div className="mt-2 text-2xl font-bold text-black">{formatCurrency(stats.totalAmount)}</div>
+              </CardContent>
+            </Card>
           </div>
         )}
 
-        {/* Search and Basic Filters */}
-        <Card className="bg-white rounded-xl shadow-lg border border-[#C69A72]/20">
-        <CardContent className="p-6">
-            <div className="flex flex-col lg:flex-row gap-4">
-              <div className="flex-1 relative">
-                <Search className="absolute right-4 top-1/2 transform -translate-y-1/2 text-[#155446] w-5 h-5" />
-                <Input
-                  placeholder="بحث عن الفواتير، الزبائن، أو أرقام الهاتف..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pr-12 pl-4 py-3 bg-white border-2 border-[#C69A72]/30 rounded-xl text-right text-lg focus:border-[#155446] focus:ring-2 focus:ring-[#155446]/20 transition-all duration-300"
-                />
-              </div>
-              <div className="flex flex-wrap gap-3">
-                <Select value={sortField} onValueChange={(val: string) => { setSortField(val); setSortDirection(defaultDescFields.has(val) ? 'desc' : 'asc'); }}>
-                <SelectTrigger className="w-48 border-2 border-[#C69A72]/30 rounded-xl" aria-label="ترتيب حسب" title="ترتيب حسب">
-                    <SelectValue placeholder="ترتيب حسب" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="invoice_date">التاريخ</SelectItem>
-                    <SelectItem value="customer_name">اسم الزبون</SelectItem>
-                    <SelectItem value="total">المبلغ</SelectItem>
-                    <SelectItem value="status">الحالة</SelectItem>
-                  </SelectContent>
-                </Select>
-                
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setSearchTerm('');
-                    setStatusFilter('all');
-                    setDateFilter('all');
-                    setSortField('invoice_date');
-                    setSortDirection('desc');
-                  }}
-                  className="border-2 border-red-300 text-red-600 hover:bg-red-50 flex items-center gap-2 px-4 py-3 rounded-xl"
-                >
-                  <FilterX className="w-4 h-4" />
-                  <span className="arabic-text">مسح الفلاتر</span>
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        {/* Search card removed; controls moved into header */}
 
         {/* Advanced Filters */}
         {showFilters && (
@@ -912,9 +941,9 @@ export function InvoicesPageWithDB({ onCreateInvoice, onViewInvoiceDetails, onMa
             <div className="overflow-x-auto">
             <Table>
               <TableHeader>
-                      <TableRow className="bg-gradient-to-r from-[#13312A] to-[#155446] hover:bg-gradient-to-r hover:from-[#13312A] hover:to-[#155446]">
+                      <TableRow className="bg-[#155446] hover:bg-[#13312A]">
                        <TableHead 
-                         className="text-black arabic-text text-right font-bold text-base relative select-none group"
+                         className="text-[#F6E9CA] arabic-text text-right font-bold text-base relative select-none group"
                          style={{ width: `${columnWidths.invoiceNumber}px` }}
                        >
                          <div className="pr-2 flex items-center justify-between cursor-pointer" onClick={() => handleHeaderSort('invoice_number')}>
@@ -924,7 +953,7 @@ export function InvoicesPageWithDB({ onCreateInvoice, onViewInvoiceDetails, onMa
                          <ResizeHandle column="invoiceNumber" />
                        </TableHead>
                        <TableHead 
-                         className="text-black arabic-text text-right font-bold text-base relative select-none group"
+                         className="text-[#F6E9CA] arabic-text text-right font-bold text-base relative select-none group"
                          style={{ width: `${columnWidths.customerName}px` }}
                        >
                          <div className="pr-2 flex items-center justify-between cursor-pointer" onClick={() => handleHeaderSort('customer_name')}>
@@ -934,7 +963,7 @@ export function InvoicesPageWithDB({ onCreateInvoice, onViewInvoiceDetails, onMa
                          <ResizeHandle column="customerName" />
                        </TableHead>
                        <TableHead 
-                         className="text-black arabic-text text-right font-bold text-base relative select-none group"
+                         className="text-[#F6E9CA] arabic-text text-right font-bold text-base relative select-none group"
                          style={{ width: `${columnWidths.phone}px` }}
                        >
                          <div className="pr-2 flex items-center justify-between cursor-pointer" onClick={() => handleHeaderSort('customer_phone')}>
@@ -944,7 +973,7 @@ export function InvoicesPageWithDB({ onCreateInvoice, onViewInvoiceDetails, onMa
                          <ResizeHandle column="phone" />
                        </TableHead>
                        <TableHead 
-                         className="text-black arabic-text text-right font-bold text-base relative select-none group"
+                         className="text-[#F6E9CA] arabic-text text-right font-bold text-base relative select-none group"
                          style={{ width: `${columnWidths.totalAmount}px` }}
                        >
                          <div className="pr-2 flex items-center justify-between cursor-pointer" onClick={() => handleHeaderSort('total')}>
@@ -954,7 +983,7 @@ export function InvoicesPageWithDB({ onCreateInvoice, onViewInvoiceDetails, onMa
                          <ResizeHandle column="totalAmount" />
                        </TableHead>
                        <TableHead 
-                         className="text-black arabic-text text-right font-bold text-base relative select-none group"
+                         className="text-[#F6E9CA] arabic-text text-right font-bold text-base relative select-none group"
                          style={{ width: `${columnWidths.paidAmount}px` }}
                        >
                          <div className="pr-2">
@@ -963,7 +992,7 @@ export function InvoicesPageWithDB({ onCreateInvoice, onViewInvoiceDetails, onMa
                          <ResizeHandle column="paidAmount" />
                        </TableHead>
                        <TableHead 
-                         className="text-black arabic-text text-right font-bold text-base relative select-none group"
+                         className="text-[#F6E9CA] arabic-text text-right font-bold text-base relative select-none group"
                          style={{ width: `${columnWidths.remainingAmount}px` }}
                        >
                          <div className="pr-2">
@@ -972,7 +1001,7 @@ export function InvoicesPageWithDB({ onCreateInvoice, onViewInvoiceDetails, onMa
                          <ResizeHandle column="remainingAmount" />
                        </TableHead>
                        <TableHead 
-                         className="text-black arabic-text text-right font-bold text-base relative select-none group"
+                         className="text-[#F6E9CA] arabic-text text-right font-bold text-base relative select-none group"
                          style={{ width: `${columnWidths.receivedDate}px` }}
                        >
                          <div className="pr-2 flex items-center justify-between cursor-pointer" onClick={() => handleHeaderSort('invoice_date')}>
@@ -982,7 +1011,7 @@ export function InvoicesPageWithDB({ onCreateInvoice, onViewInvoiceDetails, onMa
                          <ResizeHandle column="receivedDate" />
                        </TableHead>
                        <TableHead 
-                         className="text-black arabic-text text-right font-bold text-base relative select-none group"
+                         className="text-[#F6E9CA] arabic-text text-right font-bold text-base relative select-none group"
                          style={{ width: `${columnWidths.deliveryDate}px` }}
                        >
                          <div className="pr-2 flex items-center justify-between cursor-pointer" onClick={() => handleHeaderSort('due_date')}>
@@ -992,7 +1021,7 @@ export function InvoicesPageWithDB({ onCreateInvoice, onViewInvoiceDetails, onMa
                          <ResizeHandle column="deliveryDate" />
                        </TableHead>
                        <TableHead 
-                         className="text-black arabic-text text-right font-bold text-base relative select-none group"
+                         className="text-[#F6E9CA] arabic-text text-right font-bold text-base relative select-none group"
                          style={{ width: `${columnWidths.status}px` }}
                        >
                          <div className="pr-2 flex items-center justify-between cursor-pointer" onClick={() => handleHeaderSort('status')}>
@@ -1002,7 +1031,7 @@ export function InvoicesPageWithDB({ onCreateInvoice, onViewInvoiceDetails, onMa
                          <ResizeHandle column="status" />
                        </TableHead>
                        <TableHead 
-                         className="text-black arabic-text text-right font-bold text-base relative select-none"
+                         className="text-[#F6E9CA] arabic-text text-right font-bold text-base relative select-none"
                          style={{ width: `${columnWidths.actions}px` }}
                        >
                          الإجراءات
