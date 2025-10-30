@@ -126,6 +126,7 @@ export function InvoicesPageWithDB({ onCreateInvoice, onViewInvoiceDetails, onMa
   const { invoices, loading, error, markAsPaid: markInvoiceAsPaid, loadInvoices } = useInvoices();
   const [currentUser] = useState(authService.getCurrentUser());
   const { hasActionPermission } = usePermissions(currentUser);
+  const canCreateInvoice = hasActionPermission('create_invoice') || !currentUser;
   const [searchTerm, setSearchTerm] = useState('');
   const [sortField, setSortField] = useState<string>('invoice_date');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
@@ -400,7 +401,7 @@ export function InvoicesPageWithDB({ onCreateInvoice, onViewInvoiceDetails, onMa
   };
 
   const handleDuplicateInvoice = (invoice: any) => {
-    if (hasActionPermission('create_invoice')) {
+    if (canCreateInvoice) {
       setInvoiceToDuplicate(invoice);
       setIsDuplicateDialogOpen(true);
     }
@@ -786,9 +787,10 @@ export function InvoicesPageWithDB({ onCreateInvoice, onViewInvoiceDetails, onMa
 
             {/* Action Buttons (left) */}
             <div className="flex items-center gap-3 flex-shrink-0">
-              {hasActionPermission('create_invoice') && (
+              {canCreateInvoice && (
                 <Button
-                  className="bg-[#13312A] hover:bg-[#155446] text-[#F6E9CA] px-6 py-3 text-lg rounded-xl flex items-center gap-2 arabic-text"
+                  variant="default"
+                  className="!bg-[#13312A] hover:!bg-[#155446] text-[#F6E9CA] px-6 py-3 text-lg rounded-xl flex items-center gap-2 arabic-text shadow-md"
                   onClick={handleCreateInvoice}
                 >
                   <Plus className="w-5 h-5" />
@@ -1180,7 +1182,7 @@ export function InvoicesPageWithDB({ onCreateInvoice, onViewInvoiceDetails, onMa
                                     تعديل الفاتورة
                                   </DropdownMenuItem>
                                 )}
-                                {hasActionPermission('create_invoice') && (
+                                {canCreateInvoice && (
                                   <DropdownMenuItem onClick={() => handleDuplicateInvoice(invoice)} className="arabic-text">
                                     <Copy className="w-4 h-4 ml-2" />
                                     تكرار الفاتورة

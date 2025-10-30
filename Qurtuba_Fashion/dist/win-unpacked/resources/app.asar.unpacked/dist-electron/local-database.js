@@ -91,6 +91,7 @@ class LocalDatabase {
         total_spent REAL DEFAULT 0,
         last_order TEXT,
         label TEXT,
+        label_auto INTEGER NOT NULL DEFAULT 1,
         measurements TEXT,
         notes TEXT,
         version INTEGER NOT NULL DEFAULT 1,
@@ -152,6 +153,13 @@ class LocalDatabase {
                     this.run(`ALTER TABLE invoices ADD COLUMN synced INTEGER NOT NULL DEFAULT 0`);
             }
             catch { }
+        }
+        catch { }
+        // Add missing columns for customers
+        try {
+            const has = (col) => this.db.prepare("PRAGMA table_info(customers)").all().some((r) => r.name === col);
+            if (!has('label_auto'))
+                this.run('ALTER TABLE customers ADD COLUMN label_auto INTEGER NOT NULL DEFAULT 1');
         }
         catch { }
         // Orders table
@@ -455,10 +463,10 @@ class LocalDatabase {
         const id = this.generateId();
         const now = new Date().toISOString();
         await this.run(`
-      INSERT INTO customers (id, name, phone, address, total_spent, last_order, label, measurements, notes, version, deleted, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0, ?, ?)
+      INSERT INTO customers (id, name, phone, address, total_spent, last_order, label, label_auto, measurements, notes, version, deleted, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0, ?, ?)
     `, [id, customer.name, customer.phone, customer.address, customer.totalSpent, customer.lastOrder, customer.label,
-            JSON.stringify(customer.measurements), customer.notes, now, now]);
+            customer.label_auto === false ? 0 : 1, JSON.stringify(customer.measurements), customer.notes, now, now]);
         await this.enqueueOutbox('customers', id, 'insert', {
             id,
             name: customer.name,
@@ -499,6 +507,9 @@ class LocalDatabase {
             columns.push(`${col} = ?`);
             if (col === 'measurements') {
                 values.push(JSON.stringify(v));
+            }
+            else if (col === 'label_auto') {
+                values.push(v ? 1 : 0);
             }
             else {
                 values.push(v);
@@ -586,7 +597,21 @@ class LocalDatabase {
             'customer_id', 'customer_name', 'customer_phone', 'customer_address', 'total', 'paid_amount', 'status', 'invoice_date', 'due_date', 'notes',
             'customer_measurements', 'fabric_type', 'fabric_source', 'collar_type', 'chest_style', 'sleeve_end', 'bunija_type', 'fabric_image_url', 'paid_at', 'version', 'deleted', 'updated_at'
         ]);
-        const entries = Object.entries(updates).filter(([k]) => allowed.has(k));
+        // Normalize entries: keep only allowed keys, drop undefined values, and serialize measurement snapshots
+        const entries = Object.entries(updates)
+            .filter(([k]) => allowed.has(k))
+            .map(([k, v]) => {
+            if (k === 'customer_measurements') {
+                try {
+                    return [k, v == null ? null : JSON.stringify(v)];
+                }
+                catch {
+                    return [k, null];
+                }
+            }
+            return [k, v];
+        })
+            .filter(([, v]) => v !== undefined);
         const setClause = entries.map(([k]) => `${k} = ?`).join(', ');
         const values = entries.map(([, v]) => v);
         const versionUpdate = options?.fromCloud ? '' : ', version = version + 1';
@@ -800,6 +825,33 @@ class LocalDatabase {
             ]);
         }
         return { imported: { customers: customers.length, invoices: invoices.length, orders: orders.length, invoiceItems: items.length } };
+    }
+    async clearAllData() {
+        if (!this.db)
+            throw new Error('Database not initialized');
+        const countRows = (table) => {
+            const row = this.db.prepare(`SELECT COUNT(1) AS count FROM ${table}`).get();
+            return Number(row?.count ?? 0);
+        };
+        const snapshot = {
+            customers: countRows('customers'),
+            invoices: countRows('invoices'),
+            orders: countRows('orders'),
+            invoiceItems: countRows('invoice_items'),
+            images: countRows('images'),
+            adminLogs: countRows('admin_logs'),
+            outbox: countRows('outbox'),
+            syncState: countRows('sync_state'),
+        };
+        const tablesToClear = ['invoice_items', 'orders', 'invoices', 'customers', 'images', 'admin_logs', 'outbox', 'sync_state'];
+        const db = this.db;
+        const wipe = db.transaction(() => {
+            for (const table of tablesToClear) {
+                db.prepare(`DELETE FROM ${table}`).run();
+            }
+        });
+        wipe();
+        return snapshot;
     }
     // Helper methods
     generateId() {

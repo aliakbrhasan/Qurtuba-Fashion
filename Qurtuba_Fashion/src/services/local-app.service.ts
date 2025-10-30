@@ -161,15 +161,36 @@ export class LocalAppService {
   }
 
   public async deleteCustomer(id: string): Promise<void> {
+    console.log('LocalAppService.deleteCustomer called with ID:', id);
+    
     if (this.config.isElectron) {
       try {
-        return await (window as any).electronAPI.local.deleteCustomer(id);
+        console.log('Attempting to delete customer via Electron API...');
+        const result = await (window as any).electronAPI.local.deleteCustomer(id);
+        console.log('Electron API deleteCustomer result:', result);
+        
+        // Check if IPC returned an error
+        if (result && typeof result === 'object' && 'ok' in result) {
+          if (!result.ok) {
+            const errorMsg = result.error || 'Failed to delete customer';
+            console.error('Electron API returned error:', errorMsg);
+            throw new Error(errorMsg);
+          }
+          // Success - result.data is void for delete operations
+          console.log('Customer deleted successfully via Electron API');
+          return;
+        }
+        // If result doesn't have ok flag, assume success (backward compatibility)
+        console.log('Customer deletion assumed successful (no ok flag)');
+        return;
       } catch (error) {
-        console.error('Error deleting customer from local DB:', error);
-        // Fallback to cloud database
+        console.error('Error deleting customer from local DB via Electron:', error);
+        // Fallback to database service
+        console.log('Falling back to database service deleteCustomer...');
         return await DatabaseService.getInstance().deleteCustomer(id);
       }
     } else {
+      console.log('Not in Electron, using database service directly...');
       return await DatabaseService.getInstance().deleteCustomer(id);
     }
   }
@@ -217,15 +238,36 @@ export class LocalAppService {
   }
 
   public async deleteInvoice(id: string): Promise<void> {
+    console.log('LocalAppService.deleteInvoice called with ID:', id);
+    
     if (this.config.isElectron) {
       try {
-        return await (window as any).electronAPI.local.deleteInvoice(id);
+        console.log('Attempting to delete invoice via Electron API...');
+        const result = await (window as any).electronAPI.local.deleteInvoice(id);
+        console.log('Electron API deleteInvoice result:', result);
+        
+        // Check if IPC returned an error
+        if (result && typeof result === 'object' && 'ok' in result) {
+          if (!result.ok) {
+            const errorMsg = result.error || 'Failed to delete invoice';
+            console.error('Electron API returned error:', errorMsg);
+            throw new Error(errorMsg);
+          }
+          // Success - result.data is void for delete operations
+          console.log('Invoice deleted successfully via Electron API');
+          return;
+        }
+        // If result doesn't have ok flag, assume success (backward compatibility)
+        console.log('Invoice deletion assumed successful (no ok flag)');
+        return;
       } catch (error) {
-        console.error('Error deleting invoice from local DB:', error);
-        // Fallback to cloud database
+        console.error('Error deleting invoice from local DB via Electron:', error);
+        // Fallback to database service
+        console.log('Falling back to database service deleteInvoice...');
         return await DatabaseService.getInstance().deleteInvoice(id);
       }
     } else {
+      console.log('Not in Electron, using database service directly...');
       return await DatabaseService.getInstance().deleteInvoice(id);
     }
   }

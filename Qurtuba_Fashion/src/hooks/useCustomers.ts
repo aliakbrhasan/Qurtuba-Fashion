@@ -104,9 +104,10 @@ export function useCustomers() {
 		const map = new Map<string, UiCustomer>(); // key -> customer
 		const aliasToKey = new Map<string, string>(); // name|phone -> key
 
-		for (const c of dbCustomers) {
+	for (const c of dbCustomers) {
 			const ui = mapDbCustomerToUi(c);
 			const key = String(c.id);
+			ui.totalSpent = 0;
 			map.set(key, ui);
 			const alias = `${(c.name || '').trim()}|${(c.phone || '').trim()}`;
 			if (alias !== '|') aliasToKey.set(alias, key);

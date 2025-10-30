@@ -757,11 +757,8 @@ export function InvoicesPage({ onCreateInvoice, onViewInvoiceDetails, onMarkAsPa
       try {
         const { InvoiceService } = await import('@/services/invoice.service');
         await InvoiceService.deleteInvoice(invoice.id);
-        
-        // Refresh data after deletion
-        if (loadInvoices) {
-          await loadInvoices();
-        }
+        // InvoiceService.deleteInvoice already handles optimistic cache update and invalidation
+        // DON'T call loadInvoices() here - it causes race condition where data is refetched before deletion is committed
         
         // Show success message
         alert('تم حذف الفاتورة بنجاح!');

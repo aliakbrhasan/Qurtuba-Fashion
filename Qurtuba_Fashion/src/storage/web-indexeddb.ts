@@ -146,7 +146,13 @@ export class WebIndexedDBStorage implements StoragePort {
 
 	async deleteOrder(id: string): Promise<void> { this.ordersArr = this.ordersArr.filter(o => String(o.id) !== String(id)); this.persistAll(); }
 
-	async getInvoices(): Promise<Invoice[]> { return [...this.invoicesArr]; }
+	async getInvoices(): Promise<Invoice[]> { 
+		// Filter out deleted invoices (soft delete: deleted = 1 or deleted = true)
+		return this.invoicesArr.filter(inv => {
+			const deleted = (inv as any).deleted;
+			return !deleted && deleted !== 1 && deleted !== '1' && deleted !== true;
+		});
+	}
 
 	async createInvoice(invoice: any): Promise<Invoice> {
 		const now = new Date().toISOString();

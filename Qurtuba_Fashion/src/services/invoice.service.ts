@@ -187,14 +187,61 @@ export class InvoiceService {
   // Delete invoice
   static async deleteInvoice(id: string): Promise<void> {
     try {
+      console.log('InvoiceService.deleteInvoice called with ID:', id);
       await invoicesAdapter.deleteInvoice(id);
-      // Invalidate caches so all pages update immediately
+      console.log('Invoice deleted successfully via adapter');
+      
+      // Invalidate and refetch caches so all pages update immediately
       try {
         const { queryClient } = await import('@/app/queryClient');
-        queryClient.invalidateQueries({ queryKey: ['invoices'] });
-        queryClient.invalidateQueries({ queryKey: ['customers'] });
-        queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
-      } catch {}
+        
+        // Remove invoice from cache optimistically for instant UI update
+        queryClient.setQueryData(['invoices'], (oldData: any[] = []) => {
+          if (Array.isArray(oldData)) {
+            const filtered = oldData.filter((inv: any) => {
+              const invId = String((inv as any).id || '');
+              const invIdNum = Number((inv as any).id || 0);
+              const idString = String(id || '');
+              const idNum = Number(id || 0);
+              // Match by both string and number comparison
+              const matches = (
+                invId === idString ||
+                (idNum && invIdNum === idNum)
+              );
+              // Also filter out deleted invoices (defensive)
+              const deleted = (inv as any).deleted;
+              const isDeleted = deleted === 1 || deleted === '1' || deleted === true;
+              return !matches && !isDeleted;
+            });
+            console.log(`Optimistically removed invoice from cache: ${oldData.length} -> ${filtered.length}`);
+            return filtered;
+          }
+          return oldData;
+        });
+        
+        // Invalidate queries to mark them as stale - this will trigger refetch on next access
+        // Don't refetch immediately to avoid race condition with database commit
+        queryClient.invalidateQueries({ queryKey: ['invoices'], exact: true });
+        queryClient.invalidateQueries({ queryKey: ['customers'], exact: true });
+        queryClient.invalidateQueries({ queryKey: ['dashboard-stats'], exact: true });
+        
+        // DON'T refetch immediately - let queries refetch naturally when needed
+        // This prevents race condition where refetch happens before deletion is committed
+        // The optimistic update already removed the invoice from cache, so UI is updated instantly
+        
+        try {
+          const { databaseService } = await import('@/db/database.service');
+          const refreshed = await databaseService.getInvoices();
+          queryClient.setQueryData(['invoices'], Array.isArray(refreshed) ? refreshed : []);
+        } catch (refreshError) {
+          console.warn('Failed to refresh invoices after deletion (non-fatal):', refreshError);
+        }
+        
+        console.log('Invoices queries invalidated (will refetch when needed)');
+      } catch (cacheError) {
+        console.warn('Cache invalidation error (non-fatal):', cacheError);
+      }
+      
       // Emit app notification to allow pages without react-query to react (e.g., customer details)
       try {
         notifications.emit({
@@ -362,5 +409,4 @@ export class InvoiceService {
     });
   }
 }
-
 

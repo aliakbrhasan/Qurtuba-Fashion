@@ -22,6 +22,7 @@
     { "from": "build/fonts", "to": "fonts" },
     { "from": "resources", "to": "resources", "filter": ["**/*"] },
     { "from": "build/icon.ico", "to": "icon.ico" },
+    { "from": "build/logo.png", "to": "logo.png" },
     { "from": "node_modules/better-sqlite3/build/Release", "to": "better-sqlite3" }
   ],
   "asar": true,

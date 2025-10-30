@@ -14,6 +14,7 @@ const wrap = async (fn) => {
 const electronAPI = {
     // App information
     getVersion: () => electron_1.ipcRenderer.invoke('app:getVersion'),
+    getLogoPath: () => electron_1.ipcRenderer.invoke('app:getLogoPath'),
     // Dialog functions
     showMessageBox: (options) => electron_1.ipcRenderer.invoke('app:showMessageBox', options),
     showOpenDialog: (options) => electron_1.ipcRenderer.invoke('app:showOpenDialog', options),
@@ -67,6 +68,8 @@ const electronAPI = {
         // Backup/export
         exportAll: () => electron_1.ipcRenderer.invoke('local:exportAll'),
         importAll: (data) => electron_1.ipcRenderer.invoke('local:importAll', data),
+        // Clear all data (for testing)
+        clearAllData: () => electron_1.ipcRenderer.invoke('local:clearAllData'),
     },
     // Sync functions
     sync: {

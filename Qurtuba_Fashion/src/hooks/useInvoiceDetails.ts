@@ -54,11 +54,11 @@ export function useInvoiceDetails(invoiceId: string | null) {
           if (typeof cm === 'string') { try { cm = JSON.parse(cm); } catch { cm = null; } }
           if (cm && typeof cm === 'object') {
             measurements = {
-              length: cm.length ?? cm.height ?? '',
-              shoulder: cm.shoulder ?? '',
-              waist: cm.waist ?? '',
-              chest: cm.chest ?? '',
-              collar: cm.collar ?? '',
+              length: String(cm.length ?? cm.height ?? ''),
+              shoulder: String(cm.shoulder ?? ''),
+              waist: String(cm.waist ?? ''),
+              chest: String(cm.chest ?? ''),
+              collar: String(cm.collar ?? ''),
             };
           }
         } catch (e) {

@@ -5,6 +5,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 declare global {
   interface Window {
     electronAPI?: {
+      getLogoPath: () => Promise<{ ok: boolean; data?: string; error?: string }>;
       print: (data: { title: string; content: string; styles?: string; pageSize?: string | { width: number; height: number }; landscape?: boolean; printBackground?: boolean }) => Promise<any>;
       printPreview: (data: { title: string; content: string; styles?: string; pageSize?: string | { width: number; height: number }; landscape?: boolean; printBackground?: boolean }) => Promise<any>;
       pdfPreview: (data: { title: string; content: string; styles?: string; pageSize?: string; landscape?: boolean }) => Promise<any>;
@@ -420,8 +421,36 @@ const fallbackPrint = (title: string, markup: string) => {
   printWindow.focus();
 };
 
-export const openPrintInvoiceWindow = (title: string, content: React.ReactElement) => {
-  const markup = renderToStaticMarkup(content);
+export const openPrintInvoiceWindow = async (title: string, content: React.ReactElement) => {
+  let markup = renderToStaticMarkup(content);
+  
+  // In Electron, replace logo src with base64 data URL for reliable printing
+  if (window.electronAPI && window.electronAPI.getLogoPath) {
+    try {
+      const logoResult = await window.electronAPI.getLogoPath();
+      if (logoResult?.ok && logoResult?.data) {
+        const logoDataUrl = logoResult.data;
+        // Replace any logo src attributes (including data URLs or file paths) with base64
+        // Match both quoted and unquoted src attributes
+        markup = markup.replace(
+          /(<img[^>]*src=["'])([^"']*logo[^"']*)(["'][^>]*>)/gi,
+          (_match, before, _src, after) => {
+            return `${before}${logoDataUrl}${after}`;
+          }
+        );
+        // Also handle alt text that might contain "logo" or "Qurtuba"
+        markup = markup.replace(
+          /(<img[^>]*alt=["'][^"']*(?:logo|Qurtuba)[^"']*["'][^>]*src=["'])([^"']*)(["'][^>]*>)/gi,
+          (_match, before, _src, after) => {
+            return `${before}${logoDataUrl}${after}`;
+          }
+        );
+        console.log('Logo replaced in print markup with base64 data URL');
+      }
+    } catch (error) {
+      console.warn('Failed to get logo path:', error);
+    }
+  }
   
   console.log('openPrintInvoiceWindow called with title:', title);
   console.log('window.electronAPI available:', !!window.electronAPI);

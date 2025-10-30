@@ -75,11 +75,11 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated,
     notes: prefillCustomer?.notes || '',
     items: prefillCustomer?.items || [],
     measurements: prefillCustomer?.measurements ? {
-      length: prefillCustomer.measurements.length || '',
-      shoulder: prefillCustomer.measurements.shoulder || '',
-      waist: prefillCustomer.measurements.waist || '',
-      chest: prefillCustomer.measurements.chest || '',
-      collar: (prefillCustomer.measurements as any)?.collar || ''
+      length: String(prefillCustomer.measurements.length || ''),
+      shoulder: String(prefillCustomer.measurements.shoulder || ''),
+      waist: String(prefillCustomer.measurements.waist || ''),
+      chest: String(prefillCustomer.measurements.chest || ''),
+      collar: String((prefillCustomer.measurements as any)?.collar || '')
     } : {
       length: '',
       shoulder: '',
@@ -758,16 +758,21 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated,
             ? payload.designDetails!.sleeveEnd.join(',')
             : undefined,
           bunija_type: payload.designDetails?.bunijaType || undefined,
+          // Save customer measurements snapshot to invoice to preserve them even if customer profile changes
+          ...(payload.measurements ? { customer_measurements: payload.measurements } as any : {}),
         };
 
         result = await InvoiceService.updateInvoice(prefillCustomer.id, updates);
-        // Ensure invoice details re-fetches so updated design fields appear
+        // Ensure invoice details re-fetches so updated design fields and measurements appear
         try {
           const { queryClient } = await import('@/app/queryClient');
+          // Invalidate using both possible ID formats to ensure cache is cleared
           queryClient.invalidateQueries({ queryKey: ['invoice-details', String(prefillCustomer.id)] });
+          queryClient.invalidateQueries({ queryKey: ['invoice-details', prefillCustomer.id] });
           queryClient.invalidateQueries({ queryKey: ['invoices'] });
+          queryClient.invalidateQueries({ queryKey: ['customers'] });
         } catch {}
-        // Also update customer's saved measurements if provided
+        // Also update customer's saved measurements if provided (preserve as strings to support text like "1 ونصف")
         try {
           const m: any = payload.measurements || {};
           const hasMeasurements = typeof m === 'object' && (m.length || m.shoulder || m.waist || m.chest);
@@ -779,10 +784,11 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated,
             if (target) {
               await databaseService.updateCustomer(String((target as any).id), {
                 measurements: {
-                  height: Number(m.length || 0),
-                  shoulder: Number(m.shoulder || 0),
-                  waist: Number(m.waist || 0),
-                  chest: Number(m.chest || 0),
+                  height: String(m.length || ''),
+                  shoulder: String(m.shoulder || ''),
+                  waist: String(m.waist || ''),
+                  chest: String(m.chest || ''),
+                  collar: String(m.collar || '')
                 }
               } as any, { silent: true } as any);
             }

@@ -14,6 +14,7 @@ export interface Customer {
   totalSpent?: number;
   lastOrder?: string;
   label?: string;
+  label_auto?: boolean; // Flag to indicate if label should be calculated automatically
   measurements?: {
     height: number;
     shoulder: number;
@@ -458,13 +459,15 @@ export class DatabaseService {
 
   async updateCustomer(id: string, updates: Partial<Customer>, options?: { silent?: boolean }): Promise<Customer> {
     try {
+      // Allow label_auto to persist (Electron DB now migrates it); keep updates as-is
+      const storageUpdates: any = { ...(updates as any) };
       // Skip write if no actual change for provided keys
       const idxExisting = this.localData.customers.findIndex(c => String(c.id) === String(id));
       if (idxExisting !== -1) {
         const current = this.localData.customers[idxExisting] as any;
         let changed = false;
-        for (const key of Object.keys(updates || {})) {
-          const nextVal = (updates as any)[key];
+        for (const key of Object.keys(storageUpdates || {})) {
+          const nextVal = (storageUpdates as any)[key];
           const prevVal = current[key];
           if (typeof nextVal === 'object' && nextVal !== null) {
             if (JSON.stringify(prevVal) !== JSON.stringify(nextVal)) { changed = true; break; }
@@ -475,9 +478,13 @@ export class DatabaseService {
         }
       }
 
-      const updated = await storage.updateCustomer(id, updates as any);
+      const updated = await storage.updateCustomer(id, storageUpdates as any);
       const idx = this.localData.customers.findIndex(c => String(c.id) === String(id));
-      if (idx !== -1) this.localData.customers[idx] = updated; else this.localData.customers.unshift(updated);
+      if (idx !== -1) this.localData.customers[idx] = { ...(updated as any) } as any; else this.localData.customers.unshift(updated);
+      // Overlay transient fields on local cache (e.g., label_auto)
+      if (idx !== -1 && 'label_auto' in (updates as any)) {
+        (this.localData.customers[idx] as any).label_auto = (updates as any).label_auto;
+      }
       this.persistAllToStorage();
       (syncEngine as any).schedule?.();
       try { await (syncEngine as any).sync?.(); } catch {}
@@ -489,7 +496,7 @@ export class DatabaseService {
             action_type: 'update',
             entity_type: 'customer',
             entity_id: String(id),
-            changed_fields: Object.keys(updates || {}),
+            changed_fields: Object.keys(storageUpdates || {}),
             user_name: execName,
           });
         }
@@ -521,11 +528,37 @@ export class DatabaseService {
   }
 
   async deleteCustomer(id: string): Promise<void> {
-    await (storage as any).deleteCustomer?.(id);
-    this.localData.customers = this.localData.customers.filter(c => c.id !== id);
+    try {
+      // Use LocalAppService if in Electron, otherwise use storage directly
+      const { LocalAppService } = await import('@/services/local-app.service');
+      const localApp = LocalAppService.getInstance?.();
+      if (localApp?.getConfig?.().isElectron) {
+        // Use LocalAppService which calls Electron API directly
+        await localApp.deleteCustomer(id);
+      } else {
+        // Web mode: use storage directly
+        await (storage as any).deleteCustomer?.(id);
+      }
+    } catch (error) {
+      console.warn('Primary delete method failed, trying fallback:', error);
+      // Fallback to direct storage call
+      try {
+        await (storage as any).deleteCustomer?.(id);
+      } catch (fallbackError) {
+        console.error('Fallback delete also failed:', fallbackError);
+        throw fallbackError;
+      }
+    }
+    
+    // Update local cache to remove deleted customer
+    const beforeCount = this.localData.customers.length;
+    this.localData.customers = this.localData.customers.filter(c => String((c as any).id) !== String(id));
+    const afterCount = this.localData.customers.length;
+    console.log(`Local cache updated: ${beforeCount} -> ${afterCount} customers (deleted: ${id})`);
     this.persistAllToStorage();
     (syncEngine as any).schedule?.();
     try { await (syncEngine as any).sync?.(); } catch {}
+    
     // Admin log: delete customer
     try {
       const execName = this.getExecutorName();
@@ -592,15 +625,54 @@ export class DatabaseService {
           }
         } catch {}
       }
-      this.localData.invoices = rows || [];
+      // Filter out deleted invoices (soft delete: deleted = 1 or deleted = true)
+      const filtered = (rows || []).filter(inv => {
+        const deleted = (inv as any).deleted;
+        return !deleted && deleted !== 1 && deleted !== '1' && deleted !== true;
+      });
+      this.localData.invoices = filtered;
       this.persistAllToStorage();
       return this.localData.invoices;
     } catch {
-      return this.localData.invoices;
+      // Filter local data as well
+      const filtered = this.localData.invoices.filter(inv => {
+        const deleted = (inv as any).deleted;
+        return !deleted && deleted !== 1 && deleted !== '1' && deleted !== true;
+      });
+      return filtered;
     }
   }
 
-  async getInvoiceById(id: string): Promise<Invoice | null> { const all = await this.getInvoices(); return all.find(i => i.id === id) || null; }
+  async getInvoiceById(id: string): Promise<Invoice | null> {
+    const all = await this.getInvoices();
+    const idStr = String(id ?? '').trim();
+    const idNum = Number(idStr);
+    const hasNumericId = !Number.isNaN(idNum) && Number.isFinite(idNum);
+
+    const matches = (invoice: Invoice): boolean => {
+      const invId = (invoice as any)?.id;
+      const invNumber = (invoice as any)?.invoice_number;
+      const invIdStr = String(invId ?? '').trim();
+      const invNumberStr = String(invNumber ?? '').trim();
+
+      if (idStr && (invIdStr === idStr || invNumberStr === idStr)) {
+        return true;
+      }
+
+      if (hasNumericId) {
+        const invIdNum = Number(invId);
+        const invNumberNum = Number(invNumber);
+        if ((Number.isFinite(invIdNum) && invIdNum === idNum) ||
+            (Number.isFinite(invNumberNum) && invNumberNum === idNum)) {
+          return true;
+        }
+      }
+
+      return false;
+    };
+
+    return all.find(matches) || null;
+  }
 
   async createInvoice(invoice: NewInvoice): Promise<Invoice> {
     // Local-first write for instant UX
@@ -675,7 +747,23 @@ export class DatabaseService {
 
   async updateInvoice(id: string, updates: Partial<Invoice>): Promise<Invoice> {
     const updated = await storage.updateInvoice(id, updates as any);
-    const idx = this.localData.invoices.findIndex(i => i.id === id);
+    const idx = this.localData.invoices.findIndex((inv) => {
+      const invId = String((inv as any)?.id ?? '').trim();
+      const targetId = String(id ?? '').trim();
+      if (invId && targetId && invId === targetId) {
+        return true;
+      }
+      const invIdNum = Number((inv as any)?.id);
+      const targetIdNum = Number(id);
+      if (Number.isFinite(invIdNum) && Number.isFinite(targetIdNum) && invIdNum === targetIdNum) {
+        return true;
+      }
+      const invNumber = String((inv as any)?.invoice_number ?? '').trim();
+      if (invNumber && targetId && invNumber === targetId) {
+        return true;
+      }
+      return false;
+    });
     if (idx !== -1) this.localData.invoices[idx] = updated;
     this.persistAllToStorage();
     if (!this.localOnly) {
@@ -698,9 +786,126 @@ export class DatabaseService {
   }
 
   async deleteInvoice(id: string): Promise<void> {
+    // Get invoice before deletion to update customer totals
+    const invoiceToDelete = await this.getInvoiceById(id);
+    
     await storage.deleteInvoice(id);
-    this.localData.invoices = this.localData.invoices.filter(i => i.id !== id);
+
+    const idStr = String(id ?? '').trim();
+    const idNum = Number(idStr);
+    const hasNumericId = !Number.isNaN(idNum) && Number.isFinite(idNum);
+    const removalKeys = new Set<string>();
+    if (idStr) removalKeys.add(idStr);
+    if (hasNumericId) removalKeys.add(String(idNum));
+
+    if (invoiceToDelete) {
+      const invId = String((invoiceToDelete as any)?.id ?? '').trim();
+      const invNumber = String((invoiceToDelete as any)?.invoice_number ?? '').trim();
+      if (invId) removalKeys.add(invId);
+      if (invNumber) removalKeys.add(invNumber);
+      const invIdNum = Number((invoiceToDelete as any)?.id);
+      const invNumberNum = Number((invoiceToDelete as any)?.invoice_number);
+      if (Number.isFinite(invIdNum)) removalKeys.add(String(invIdNum));
+      if (Number.isFinite(invNumberNum)) removalKeys.add(String(invNumberNum));
+    }
+
+    const shouldRemove = (candidate: any): boolean => {
+      const candidateId = String(candidate?.id ?? '').trim();
+      const candidateNumber = String(candidate?.invoice_number ?? '').trim();
+      const candidateIdNum = Number(candidate?.id);
+      const candidateNumberNum = Number(candidate?.invoice_number);
+
+      if ((candidateId && removalKeys.has(candidateId)) ||
+          (candidateNumber && removalKeys.has(candidateNumber))) {
+        return true;
+      }
+      if (Number.isFinite(candidateIdNum) && removalKeys.has(String(candidateIdNum))) {
+        return true;
+      }
+      if (Number.isFinite(candidateNumberNum) && removalKeys.has(String(candidateNumberNum))) {
+        return true;
+      }
+      return false;
+    };
+
+    this.localData.invoices = this.localData.invoices.filter(inv => !shouldRemove(inv));
+
+    const invoiceItemKeys = new Set<string>();
+    if (invoiceToDelete) {
+      const key = String((invoiceToDelete as any)?.id ?? '').trim();
+      if (key) invoiceItemKeys.add(key);
+      const keyNum = Number((invoiceToDelete as any)?.id);
+      if (Number.isFinite(keyNum)) invoiceItemKeys.add(String(keyNum));
+    }
+    for (const variant of removalKeys) {
+      if (variant) invoiceItemKeys.add(variant);
+    }
+
+    this.localData.invoiceItems = this.localData.invoiceItems.filter(item => {
+      const candidateId = String(item?.invoice_id ?? '').trim();
+      if (candidateId && invoiceItemKeys.has(candidateId)) {
+        return false;
+      }
+      const candidateIdNum = Number(item?.invoice_id);
+      if (Number.isFinite(candidateIdNum) && invoiceItemKeys.has(String(candidateIdNum))) {
+        return false;
+      }
+      return true;
+    });
     this.persistAllToStorage();
+    
+    // Recalculate customer totals from remaining invoices after deletion
+    // This ensures total_spent is always accurate and dynamic
+    let remainingInvoices: Invoice[] = [];
+    try {
+      remainingInvoices = await this.getInvoices();
+      await this.reconcileCustomersFromInvoices(remainingInvoices);
+      console.log(`Customer totals recalculated after deleting invoice ${id}`);
+    } catch (reconcileError) {
+      console.warn('Failed to reconcile customer totals after invoice deletion (non-fatal):', reconcileError);
+      // Fallback: manually update the customer if we know which one
+      if (invoiceToDelete) {
+        try {
+          // Get remaining invoices if not already fetched
+          if (remainingInvoices.length === 0) {
+            remainingInvoices = await this.getInvoices();
+          }
+          
+          const customers = await this.getCustomers();
+          const customerId = (invoiceToDelete as any).customer_id;
+          const customerName = invoiceToDelete.customer_name?.trim();
+          const customerPhone = invoiceToDelete.customer_phone?.trim();
+          
+          const target = customers.find((c: Customer) => 
+            (customerId && String((c as any).id) === String(customerId)) ||
+            (customerName && (c.name || '').trim() === customerName && 
+             customerPhone && (c.phone || '').trim() === customerPhone)
+          );
+          
+          if (target) {
+            // Recalculate total from remaining invoices for this customer
+            const customerInvoices = remainingInvoices.filter((inv: Invoice) =>
+              String((inv as any).customer_id || '') === String((target as any).id) ||
+              ((inv.customer_name || '').trim() === (target.name || '').trim() &&
+               (inv.customer_phone || '').trim() === (target.phone || '').trim())
+            );
+            const newTotalSpent = customerInvoices.reduce((sum: number, inv: Invoice) => sum + (inv.paid_amount || 0), 0);
+            const lastOrderDate = customerInvoices.length > 0
+              ? customerInvoices.sort((a: Invoice, b: Invoice) => new Date(b.invoice_date || b.created_at).getTime() - new Date(a.invoice_date || a.created_at).getTime())[0].invoice_date || customerInvoices[0].created_at
+              : null;
+            
+            await this.updateCustomer(String((target as any).id), {
+              totalSpent: newTotalSpent,
+              lastOrder: lastOrderDate || undefined,
+            }, { silent: true });
+            console.log(`Updated customer ${(target as any).id} total_spent to ${newTotalSpent} after invoice deletion`);
+          }
+        } catch (fallbackError) {
+          console.warn('Fallback customer update also failed:', fallbackError);
+        }
+      }
+    }
+    
     if (!this.localOnly) {
       (syncEngine as any).schedule?.();
       try { await (syncEngine as any).sync?.(); } catch {}
@@ -769,53 +974,132 @@ export class DatabaseService {
         if (alias !== '|') byAlias.set(alias, c);
       }
 
+      // First, collect all invoices per customer to recalculate totals from scratch
+      const customerInvoicesMap = new Map<string, Invoice[]>();
+      
       for (const inv of invoices) {
+        // Skip deleted invoices
+        const deleted = (inv as any).deleted;
+        if (deleted === 1 || deleted === '1' || deleted === true) {
+          continue;
+        }
+        
         const customerId = (inv as any).customer_id ? String((inv as any).customer_id) : '';
         const name = (inv.customer_name || '').trim();
         const phone = (inv.customer_phone || '').trim();
-        const address = (inv.customer_address || '').trim();
         const alias = `${name}|${phone}`;
 
-        // Skip self-test/demo records to avoid noisy duplicates and notifications
-        // Electron local DB self-test uses a customer named "Test Customer (LocalDB SelfTest)"
-        // which is intentionally hidden from the UI. Since getCustomers() excludes it,
-        // reconciliation would recreate it on every load and emit notifications.
+        // Skip self-test/demo records
         if (name && name.toLowerCase().includes('test customer')) {
           continue;
         }
 
-        let target: Customer | undefined = undefined;
-        if (customerId && byId.has(customerId)) target = byId.get(customerId);
-        else if (byAlias.has(alias)) target = byAlias.get(alias);
+        // Group invoices by customer (using ID if available, otherwise alias)
+        const key = customerId || alias;
+        if (!customerInvoicesMap.has(key)) {
+          customerInvoicesMap.set(key, []);
+        }
+        customerInvoicesMap.get(key)!.push(inv);
+      }
 
-        const paid = Number((inv as any).paid_amount || 0) || 0;
-        const lastOrderDate = inv.invoice_date || inv.created_at || new Date().toISOString();
+      // Now update each customer with recalculated totals from all their invoices
+      for (const [, invs] of customerInvoicesMap.entries()) {
+        if (invs.length === 0) continue;
+        
+        const firstInv = invs[0];
+        const customerId = (firstInv as any).customer_id ? String((firstInv as any).customer_id) : '';
+        const name = (firstInv.customer_name || '').trim();
+        const phone = (firstInv.customer_phone || '').trim();
+        const address = (firstInv.customer_address || '').trim();
+        const alias = `${name}|${phone}`;
+
+        // Find target customer
+        let target: Customer | undefined = undefined;
+        if (customerId && byId.has(customerId)) {
+          target = byId.get(customerId);
+        } else if (byAlias.has(alias)) {
+          target = byAlias.get(alias);
+        }
+
+        // Calculate totals from ALL invoices for this customer (recalculate from scratch)
+        const totalSpent = invs.reduce((sum: number, inv: Invoice) => sum + (Number((inv as any).paid_amount || 0) || 0), 0);
+        const lastOrderDate = invs.length > 0
+          ? invs.sort((a: Invoice, b: Invoice) => 
+              new Date(b.invoice_date || b.created_at).getTime() - new Date(a.invoice_date || a.created_at).getTime()
+            )[0].invoice_date || invs[0].created_at
+          : new Date().toISOString();
 
         if (!target && name && name.trim()) {
-          // Create a new customer derived from invoice
+          // Calculate initial label based on spending
+          const orderCount = invs.length;
+          let initialLabel = 'جديد';
+          if (totalSpent >= 1000000 || orderCount >= 50) {
+            initialLabel = 'ذهبي';
+          } else if (totalSpent >= 500000 || orderCount >= 20) {
+            initialLabel = 'وفي';
+          } else if (totalSpent >= 100000 || orderCount >= 5) {
+            initialLabel = 'منتظم';
+          }
+          
+          // Create a new customer derived from invoices
           const created = await this.createCustomer({
             name: name.trim(),
             phone,
             address,
-            label: 'جديد',
-            totalSpent: paid,
+            label: initialLabel,
+            label_auto: true, // Default to auto mode
+            totalSpent,
             lastOrder: lastOrderDate,
             measurements: { height: 0, shoulder: 0, waist: 0, chest: 0, collar: 0 },
             notes: '',
-            created_at: inv.created_at,
+            created_at: firstInv.created_at,
           } as any);
           byId.set(String((created as any).id), created);
           if (alias !== '|') byAlias.set(alias, created);
         } else if (target) {
-          // Update existing aggregate fields
-          const nextTotal = (target.totalSpent || 0) + paid;
-          const newerDate = !target.lastOrder || new Date(lastOrderDate) > new Date(target.lastOrder) ? lastOrderDate : target.lastOrder;
+          // Update existing customer with recalculated totals
+          // Recalculate label only if label_auto is true (auto mode)
+          let updatedLabel = target.label;
+          if ((target as any).label_auto !== false) {
+            // Calculate label automatically based on spending and orders
+            const orderCount = invs.length;
+            if (totalSpent >= 1000000 || orderCount >= 50) {
+              updatedLabel = 'ذهبي';
+            } else if (totalSpent >= 500000 || orderCount >= 20) {
+              updatedLabel = 'وفي';
+            } else if (totalSpent >= 100000 || orderCount >= 5) {
+              updatedLabel = 'منتظم';
+            } else {
+              updatedLabel = 'جديد';
+            }
+          }
+          
           await this.updateCustomer(String((target as any).id), {
             name: name || target.name,
             phone: phone || target.phone,
             address: address || target.address,
-            totalSpent: nextTotal,
-            lastOrder: newerDate,
+            totalSpent, // Recalculated from ALL invoices, not added incrementally
+            lastOrder: lastOrderDate,
+            // Update label only if auto mode, preserve manual labels
+            ...((target as any).label_auto !== false ? { label: updatedLabel } : {}),
+          }, { silent: true });
+        }
+      }
+      
+      // Reset customers without any invoices to zero
+      for (const [customerId, customer] of byId.entries()) {
+        const hasInvoices = Array.from(customerInvoicesMap.values()).some(invs => 
+          invs.some((inv: Invoice) => 
+            String((inv as any).customer_id || '') === customerId ||
+            `${(inv.customer_name || '').trim()}|${(inv.customer_phone || '').trim()}` === `${(customer.name || '').trim()}|${(customer.phone || '').trim()}`
+          )
+        );
+        
+        if (!hasInvoices) {
+          // Customer has no invoices, reset totals
+          await this.updateCustomer(customerId, {
+            totalSpent: 0,
+            lastOrder: undefined,
           }, { silent: true });
         }
       }

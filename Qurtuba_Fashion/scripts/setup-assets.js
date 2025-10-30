@@ -99,11 +99,31 @@ function copyNsis(projectRoot) {
   }
 }
 
+function copyLogo(projectRoot) {
+  const candidates = [
+    join(projectRoot, 'public', 'logo.png'),
+    join(projectRoot, 'resources', 'logo.png'),
+    join(projectRoot, '1x', 'Asset 2.png'),
+  ];
+  const targetLogo = join(projectRoot, 'build', 'logo.png');
+  
+  for (const srcLogo of candidates) {
+    if (existsSync(srcLogo)) {
+      ensureDir(join(projectRoot, 'build'));
+      copyFileSync(srcLogo, targetLogo);
+      console.log(`[assets] Copied logo.png -> ${targetLogo}`);
+      return;
+    }
+  }
+  console.warn('[assets] logo.png not found. Please place logo.png in public/ or resources/.');
+}
+
 function main() {
   const projectRoot = resolve(__dirname, '..');
   copyIcon(projectRoot);
   copyFonts(projectRoot);
   copyNsis(projectRoot);
+  copyLogo(projectRoot);
 }
 
 main();

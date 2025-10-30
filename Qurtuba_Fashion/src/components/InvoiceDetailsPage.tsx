@@ -103,7 +103,7 @@ export function InvoiceDetailsPage({ invoiceId, onBack }: InvoiceDetailsPageProp
         <Card className="shadow-sm bg-white">
           <CardContent className="p-3 md:p-4 flex items-center justify-between gap-3">
             <div className="flex items-center gap-3">
-              <Button variant="outline" size="sm" onClick={onBack} className="text-[#2B5A4D] border-[#C9D6D1]">
+              <Button variant="outline" size="sm" onClick={onBack} className="text-[#2B5A4D] border-[#C9D6D1] hover:bg-[#E6F0ED] font-medium">
                 <ArrowRight className="h-4 w-4 ml-2" /> رجوع
               </Button>
               <span className="text-gray-300">|</span>
@@ -112,10 +112,10 @@ export function InvoiceDetailsPage({ invoiceId, onBack }: InvoiceDetailsPageProp
               <span className="text-sm">تفاصيل الفاتورة</span>
             </div>
             <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" className="border-[#C9D6D1] text-[#2B5A4D]" onClick={() => setIsEditDialogOpen(true)}>
+              <Button variant="outline" size="sm" className="border-[#C9D6D1] text-[#2B5A4D] hover:bg-[#E6F0ED] font-medium" onClick={() => setIsEditDialogOpen(true)}>
                 <Edit className="h-4 w-4 ml-2" /> تعديل
               </Button>
-              <Button className="bg-[#2B5A4D] hover:bg-[#234A3F] text-white" size="sm" onClick={handlePrint}>
+              <Button variant="default" size="sm" onClick={handlePrint} className="!bg-[#2B5A4D] !hover:bg-[#234A3F] !text-white font-medium shadow-sm border-0">
                 <Printer className="h-4 w-4 ml-2" /> طباعة
               </Button>
             </div>
@@ -260,11 +260,11 @@ export function InvoiceDetailsPage({ invoiceId, onBack }: InvoiceDetailsPageProp
               } : undefined,
               items: [],
               measurements: invoice.measurements ? {
-                length: invoice.measurements.length || 0,
-                shoulder: invoice.measurements.shoulder || 0,
-                waist: invoice.measurements.waist || 0,
-                chest: invoice.measurements.chest || 0,
-                collar: 0
+                length: String(invoice.measurements.length || ''),
+                shoulder: String(invoice.measurements.shoulder || ''),
+                waist: String(invoice.measurements.waist || ''),
+                chest: String(invoice.measurements.chest || ''),
+                collar: String((invoice.measurements as any)?.collar || '')
               } : undefined,
             }}
           />

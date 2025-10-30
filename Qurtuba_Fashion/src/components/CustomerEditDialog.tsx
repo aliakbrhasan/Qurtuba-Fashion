@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Label } from "./ui/label";
 import { Input } from "./ui/input";
 import { Button } from "./ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { Customer } from "../types/customer";
 import { databaseService } from "../db/database.service";
 
@@ -36,6 +37,8 @@ export const CustomerEditDialog: React.FC<CustomerEditDialogProps> = ({
 }) => {
   const [draft, setDraft] = useState<Customer | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [labelAuto, setLabelAuto] = useState<boolean>(true);
+  const [manualLabel, setManualLabel] = useState<string>('O�O_USO_');
 
   useEffect(() => {
     if (open && customer) {
@@ -43,9 +46,13 @@ export const CustomerEditDialog: React.FC<CustomerEditDialogProps> = ({
         ...customer,
         measurements: ensureMeasurements(customer),
       });
+      setLabelAuto(((customer as any)?.label_auto) !== false);
+      setManualLabel(customer.label || 'O�O_USO_');
     } else if (!open) {
       setDraft(null);
       setIsSaving(false);
+      setLabelAuto(true);
+      setManualLabel('O�O_USO_');
     }
   }, [open, customer]);
 
@@ -55,12 +62,26 @@ export const CustomerEditDialog: React.FC<CustomerEditDialogProps> = ({
 
     setIsSaving(true);
     try {
-      const updated = await databaseService.updateCustomer(String(draft.id), {
-        name: draft.name,
-        phone: draft.phone,
-        address: draft.address,
-        measurements: draft.measurements,
+      const allCustomers = await databaseService.getCustomers();
+      const matched = allCustomers.find((c: any) => {
+        const cid = String((c as any).id || '');
+        const cidNum = Number((c as any).id);
+        const draftIdStr = typeof draft.id === 'number' ? String(draft.id) : String(draft.id || '');
+        const draftIdNum = typeof draft.id === 'number' ? draft.id : Number(draft.id);
+        if (cid && cid === draftIdStr) return true;
+        if (Number.isFinite(cidNum) && Number.isFinite(draftIdNum) && cidNum === draftIdNum) return true;
+        return (c.name || '').trim() === (draft.name || '').trim() &&
+               (c.phone || '').trim() === (draft.phone || '').trim();
       });
+      const targetId = matched ? String((matched as any).id) : (typeof draft.id === 'number' ? String(draft.id) : String(draft.id || ''));
+      if (!targetId) {
+        throw new Error('لا يمكن تحديد معرف الزبون للتحديث.');
+      }
+
+      const payload: any = { name: draft.name, phone: draft.phone, address: draft.address };
+      if (labelAuto) { payload.label_auto = true; }
+      else { payload.label = manualLabel; payload.label_auto = false; }
+      const updated = await databaseService.updateCustomer(targetId, payload);
 
       try {
         const { queryClient } = await import("@/app/queryClient");
@@ -151,11 +172,39 @@ export const CustomerEditDialog: React.FC<CustomerEditDialogProps> = ({
                           />
                         </div>
                       </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
+                        <div>
+                          <Label className="text-[#13312A] arabic-text text-xs">وضع التصنيف</Label>
+                          <Select value={labelAuto ? 'auto' : 'manual'} onValueChange={(v) => setLabelAuto(v === 'auto')}>
+                            <SelectTrigger className="bg-white border-[#C69A72] text-right h-8 text-sm w-full min-w-0">
+                              <SelectValue placeholder="اختر وضع التصنيف" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="auto">تلقائي</SelectItem>
+                              <SelectItem value="manual">يدوي</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <Label className="text-[#13312A] arabic-text text-xs">صنف الزبون (يدوي)</Label>
+                          <Select value={manualLabel} onValueChange={setManualLabel} disabled={labelAuto}>
+                            <SelectTrigger className="bg-white border-[#C69A72] text-right h-8 text-sm w-full min-w-0">
+                              <SelectValue placeholder="اختر الصنف" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="O�O_USO_">جديد</SelectItem>
+                              <SelectItem value="U.U+O�O,U.">اعتيادي</SelectItem>
+                              <SelectItem value="U^U?US">وفي</SelectItem>
+                              <SelectItem value='O�U�O"US'>ذهبي</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
                     </CardContent>
                   </Card>
 
                   {/* القياسات */}
-                  <Card className="bg-white border-[#E6D9C4] rounded-xl shadow-[0_2px_8px_rgba(0,0,0,0.04)] min-w-0 flex flex-col">
+                  <Card className="hidden bg-white border-[#E6D9C4] rounded-xl shadow-[0_2px_8px_rgba(0,0,0,0.04)] min-w-0 flex flex-col">
                     <CardHeader className="py-0.5 border-b border-[#EEE1CD] min-h-[24px]">
                       <CardTitle className="text-[#1F4529] arabic-text text-base font-bold">القياسات (سم)</CardTitle>
                     </CardHeader>
@@ -167,7 +216,8 @@ export const CustomerEditDialog: React.FC<CustomerEditDialogProps> = ({
                             type="number"
                             className="bg-white border-[#C69A72] text-right min-w-0 h-8 text-sm"
                             value={draft.measurements?.height ?? 0}
-                            onChange={(e) => updateMeasurement("height", Number(e.target.value))}
+                            readOnly
+                            disabled
                           />
                         </div>
                         <div className="min-w-[120px]">
@@ -176,7 +226,8 @@ export const CustomerEditDialog: React.FC<CustomerEditDialogProps> = ({
                             type="number"
                             className="bg-white border-[#C69A72] text-right min-w-0 h-8 text-sm"
                             value={draft.measurements?.shoulder ?? 0}
-                            onChange={(e) => updateMeasurement("shoulder", Number(e.target.value))}
+                            readOnly
+                            disabled
                           />
                         </div>
                         <div className="min-w-[120px]">
@@ -185,7 +236,8 @@ export const CustomerEditDialog: React.FC<CustomerEditDialogProps> = ({
                             type="number"
                             className="bg-white border-[#C69A72] text-right min-w-0 h-8 text-sm"
                             value={draft.measurements?.waist ?? 0}
-                            onChange={(e) => updateMeasurement("waist", Number(e.target.value))}
+                            readOnly
+                            disabled
                           />
                         </div>
                       </div>
@@ -197,7 +249,8 @@ export const CustomerEditDialog: React.FC<CustomerEditDialogProps> = ({
                             type="number"
                             className="bg-white border-[#C69A72] text-right min-w-0 h-8 text-sm"
                             value={draft.measurements?.chest ?? 0}
-                            onChange={(e) => updateMeasurement("chest", Number(e.target.value))}
+                            readOnly
+                            disabled
                           />
                         </div>
                         <div className="min-w-[120px]">
@@ -206,7 +259,8 @@ export const CustomerEditDialog: React.FC<CustomerEditDialogProps> = ({
                             type="number"
                             className="bg-white border-[#C69A72] text-right min-w-0 h-8 text-sm"
                             value={draft.measurements?.collar ?? 0}
-                            onChange={(e) => updateMeasurement("collar", Number(e.target.value))}
+                            readOnly
+                            disabled
                           />
                         </div>
                       </div>
@@ -243,4 +297,6 @@ export const CustomerEditDialog: React.FC<CustomerEditDialogProps> = ({
     </Dialog>
   );
 };
+
+
 

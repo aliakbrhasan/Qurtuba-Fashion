@@ -52,6 +52,21 @@ const getLabelIcon = (label: string) => {
   }
 };
 
+
+const getLabelText = (label: string) => {
+  switch (label) {
+    case 'O?O_USO_':
+      return '????';
+    case 'U.U+O?O,U.':
+      return '???????';
+    case 'U^U?US':
+      return '???';
+    case 'O?U?O"US':
+      return '????';
+    default:
+      return label || '';
+  }
+};
 const getStatusBadgeColor = (status: string) => {
   switch (status) {
     case 'جديد':
@@ -118,10 +133,13 @@ export function CustomerDetailsPageWithDB({
           invoice.customer_name === customer.name
         );
         setInvoices(customerInvoices);
-        // Capture latest measurements from the newest invoice, fallback to saved customer
+        // Measurements come from saved customer profile (which is updated from the last created invoice)
         try {
           const newest = [...customerInvoices].sort((a, b) => new Date(b.invoice_date).getTime() - new Date(a.invoice_date).getTime())[0];
-          const m: any = (newest as any)?.measurements || (freshCustomer as any)?.measurements || (customer as any)?.measurements || {};
+          let m: any = (freshCustomer as any)?.measurements || (customer as any)?.measurements || {};
+          if (!m || typeof m !== 'object' || Object.keys(m).length === 0) {
+            m = (newest as any)?.customer_measurements || (newest as any)?.measurements || {};
+          }
           setLatestMeasurements({
             height: m.length ?? m.height ?? '',
             shoulder: m.shoulder ?? '',
@@ -156,14 +174,17 @@ export function CustomerDetailsPageWithDB({
           setInvoices(customerInvoices);
           try {
             const newest = [...customerInvoices].sort((a, b) => new Date(b.invoice_date).getTime() - new Date(a.invoice_date).getTime())[0];
-            const m: any = (newest as any)?.measurements || (freshCustomer as any)?.measurements || (customer as any)?.measurements || {};
-          setLatestMeasurements({
-            height: Number(m.length || m.height || 0),
-            shoulder: Number(m.shoulder || 0),
-            waist: Number(m.waist || 0),
-            chest: Number(m.chest || 0),
-            collar: Number((m as any).collar || 0),
-          });
+            let m: any = (freshCustomer as any)?.measurements || (customer as any)?.measurements || {};
+            if (!m || typeof m !== 'object' || Object.keys(m).length === 0) {
+              m = (newest as any)?.customer_measurements || (newest as any)?.measurements || {};
+            }
+            setLatestMeasurements({
+              height: Number(m.length || m.height || 0),
+              shoulder: Number(m.shoulder || 0),
+              waist: Number(m.waist || 0),
+              chest: Number(m.chest || 0),
+              collar: Number((m as any).collar || 0),
+            });
           } catch {}
         }
       } catch {}
@@ -221,7 +242,12 @@ export function CustomerDetailsPageWithDB({
               <Button variant="outline" size="sm" className="border-[#C9D6D1] text-[#2B5A4D]" onClick={() => { setEditCustomer(freshCustomer || customer); setIsEditOpen(true); }}>
                 <Pencil className="h-4 w-4 ml-2" /> تعديل
               </Button>
-              <Button className="bg-[#2B5A4D] hover:bg-[#234A3F] text-white" size="sm" onClick={() => setIsInvoiceDialogOpen(true)}>
+              <Button
+                variant="default"
+                className="!bg-[#2B5A4D] hover:!bg-[#234A3F] text-white shadow-md"
+                size="sm"
+                onClick={() => setIsInvoiceDialogOpen(true)}
+              >
                 <Plus className="h-4 w-4 ml-2" /> فاتورة جديدة
               </Button>
             </div>
@@ -389,11 +415,11 @@ export function CustomerDetailsPageWithDB({
             phone: (freshCustomer?.phone || customer.phone) as any,
             address: (freshCustomer?.address || customer.address) as any,
             measurements: {
-              length: Number((latestMeasurements?.height ?? customer.measurements?.height ?? 0) as any),
-              shoulder: Number((latestMeasurements?.shoulder ?? customer.measurements?.shoulder ?? 0) as any),
-              waist: Number((latestMeasurements?.waist ?? customer.measurements?.waist ?? 0) as any),
-              chest: Number((latestMeasurements?.chest ?? customer.measurements?.chest ?? 0) as any),
-              collar: Number(((freshCustomer as any)?.measurements?.collar ?? (customer as any)?.measurements?.collar ?? 0) as any)
+              length: String(((freshCustomer as any)?.measurements?.height ?? customer.measurements?.height ?? '')),
+              shoulder: String(((freshCustomer as any)?.measurements?.shoulder ?? customer.measurements?.shoulder ?? '')),
+              waist: String(((freshCustomer as any)?.measurements?.waist ?? customer.measurements?.waist ?? '')),
+              chest: String(((freshCustomer as any)?.measurements?.chest ?? customer.measurements?.chest ?? '')),
+              collar: String(((freshCustomer as any)?.measurements?.collar ?? (customer as any)?.measurements?.collar ?? '')),
             }
           }}
         />
@@ -423,6 +449,7 @@ export function CustomerDetailsPageWithDB({
     </div>
   );
 }
+
 
 
 

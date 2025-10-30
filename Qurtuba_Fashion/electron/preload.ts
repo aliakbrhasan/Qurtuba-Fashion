@@ -22,6 +22,7 @@ type RendererPrintPayload = {
 const electronAPI = {
   // App information
   getVersion: () => ipcRenderer.invoke('app:getVersion'),
+  getLogoPath: () => ipcRenderer.invoke('app:getLogoPath'),
   
   // Dialog functions
   showMessageBox: (options: any) => ipcRenderer.invoke('app:showMessageBox', options),
@@ -88,6 +89,9 @@ const electronAPI = {
     // Backup/export
     exportAll: () => ipcRenderer.invoke('local:exportAll'),
     importAll: (data: any) => ipcRenderer.invoke('local:importAll', data),
+    
+    // Clear all data (for testing)
+    clearAllData: () => ipcRenderer.invoke('local:clearAllData'),
   },
 
   // Sync functions

@@ -16,7 +16,16 @@ export const invoicesAdapter: InvoicesPort = {
       const isElectron = !!localApp?.getConfig?.().isElectron;
       if (isElectron) {
         const res: any = await localApp!.getInvoices();
-        return res?.ok ? (res.data as Invoice[]) : (res as Invoice[]);
+        const invoices = res?.ok ? (res.data as Invoice[]) : (res as Invoice[]);
+        // CRITICAL: Filter out deleted invoices at adapter level for Electron
+        // This ensures deleted invoices never reach the UI, even if database query fails
+        if (Array.isArray(invoices)) {
+          return invoices.filter((inv: any) => {
+            const deleted = inv?.deleted;
+            return !deleted && deleted !== 1 && deleted !== '1' && deleted !== true;
+          });
+        }
+        return invoices || [];
       }
     } catch (e) {
       // Fallback to cloud database if anything goes wrong

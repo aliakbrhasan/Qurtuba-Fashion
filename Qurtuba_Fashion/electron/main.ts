@@ -320,8 +320,17 @@ ipcMain.handle('local:updateCustomer', async (_, id, updates) => {
 });
 
 ipcMain.handle('local:deleteCustomer', async (_, id) => {
-  console.log('IPC: deleteCustomer called with ID:', id);
-  return ok(() => localDB.deleteCustomer(id));
+  console.log('IPC: deleteCustomer called with ID:', id, 'Type:', typeof id);
+  
+  // Ensure ID is a string
+  const idString = String(id || '');
+  if (!idString || idString === 'undefined' || idString === 'null') {
+    console.error('Invalid customer ID received:', id);
+    return { ok: false, error: 'Invalid customer ID' };
+  }
+  
+  console.log('Calling localDB.deleteCustomer with string ID:', idString);
+  return ok(() => localDB.deleteCustomer(idString));
 });
 
 ipcMain.handle('local:getInvoices', async () => {
@@ -340,8 +349,17 @@ ipcMain.handle('local:updateInvoice', async (_, id, updates) => {
 });
 
 ipcMain.handle('local:deleteInvoice', async (_, id) => {
-  console.log('IPC: deleteInvoice called with ID:', id);
-  return ok(() => localDB.deleteInvoice(id));
+  console.log('IPC: deleteInvoice called with ID:', id, 'Type:', typeof id);
+  
+  // Ensure ID is a string
+  const idString = String(id || '');
+  if (!idString || idString === 'undefined' || idString === 'null') {
+    console.error('Invalid invoice ID received:', id);
+    return { ok: false, error: 'Invalid invoice ID' };
+  }
+  
+  console.log('Calling localDB.deleteInvoice with string ID:', idString);
+  return ok(() => localDB.deleteInvoice(idString));
 });
 
 ipcMain.handle('local:getOrders', async () => ok(() => localDB.getOrders()));
@@ -381,6 +399,12 @@ ipcMain.handle('local:importAll', async (_evt, data) => ok(async () => {
   const res = await localDB.importAll(data);
   return res;
 }));
+
+// Clear all data handler (for testing)
+ipcMain.handle('local:clearAllData', async () => {
+  console.log('IPC: clearAllData called');
+  return ok(() => localDB.clearAllData());
+});
 
 // Sync handlers (no-op in local-only mode)
 ipcMain.handle('sync:start', async () => ok(() => ({ success: true, message: 'local-only', syncedCount: 0 })));
@@ -503,6 +527,59 @@ ipcMain.handle('image:deleteById', async (_evt, imageId: string) => ok(async () 
   return true;
 }));
 
+// Get logo path for invoices - returns base64 data URL for reliable printing
+ipcMain.handle('app:getLogoPath', async () => ok(async () => {
+  let logoPath: string | null = null;
+  
+  // In production, logo is in resources folder (extraResources)
+  if (app.isPackaged) {
+    const candidates = [
+      join(process.resourcesPath, 'logo.png'),
+      join(app.getAppPath(), 'resources', 'logo.png'),
+    ];
+    for (const candidate of candidates) {
+      if (existsSync(candidate)) {
+        logoPath = candidate;
+        break;
+      }
+    }
+  } else {
+    // In development, check multiple locations
+    const devCandidates = [
+      join(__dirname, '../public/logo.png'),
+      join(__dirname, '../resources/logo.png'),
+      join(__dirname, '../build/logo.png'),
+    ];
+    
+    for (const candidate of devCandidates) {
+      if (existsSync(candidate)) {
+        logoPath = candidate;
+        break;
+      }
+    }
+  }
+  
+  // If logo found, convert to base64 data URL for reliable printing
+  if (logoPath && existsSync(logoPath)) {
+    try {
+      const logoBuffer = readFileSync(logoPath);
+      const base64 = logoBuffer.toString('base64');
+      // Determine MIME type from extension
+      const mimeType = logoPath.toLowerCase().endsWith('.png') ? 'image/png' : 
+                       logoPath.toLowerCase().endsWith('.jpg') || logoPath.toLowerCase().endsWith('.jpeg') ? 'image/jpeg' :
+                       'image/png';
+      return `data:${mimeType};base64,${base64}`;
+    } catch (error) {
+      console.error('Failed to read logo file:', error);
+      // Fallback to file URL
+      return pathToFileURL(logoPath).toString();
+    }
+  }
+  
+  // Fallback: use public path if available via build
+  return '/logo.png';
+}));
+
 // Print handlers
 ipcMain.handle('print:document', async (_evt, args: PrintDocumentArgs) => {
   try {
@@ -537,6 +614,9 @@ ipcMain.handle('print:document', async (_evt, args: PrintDocumentArgs) => {
     });
 
     // Load the print content
+    // Replace any file:// URLs with absolute paths for images to work in Electron print windows
+    let processedContent = args.content;
+    // This is already handled by PrintUtils, but keep it as fallback
     const htmlContent = `<!DOCTYPE html>
 <html lang="ar" dir="rtl">
   <head>
@@ -551,7 +631,7 @@ ipcMain.handle('print:document', async (_evt, args: PrintDocumentArgs) => {
       </style>
   </head>
   <body>
-    ${args.content}
+    ${processedContent}
   </body>
 </html>`;
     // Wait for content to load and fully render, then trigger native print dialog

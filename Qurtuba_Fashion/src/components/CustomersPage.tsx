@@ -69,16 +69,75 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false, on
 
   const handleDeleteCustomer = async (customer: Customer) => {
     if (!hasActionPermission('delete_customer')) return;
-    const ok = window.confirm(`هل أنت متأكد من حذف الزبون: ${customer.name}؟ سيتم حذف فواتيره المرتبطة أيضاً.`);
-    if (!ok) return;
+
     try {
-      await databaseService.deleteCustomerCascade(String(customer.id));
+      const customerNameNormalized = (customer.name || '').trim().toLowerCase();
+      const customerPhone = (customer.phone || '').trim();
+      const aliasKey = `${customerNameNormalized}|${customerPhone}`;
+
+      const dbCustomers = await databaseService.getCustomers();
+      const matched = dbCustomers.find((c: any) => {
+        const cid = String((c as any).id || '').trim();
+        const cidNum = Number((c as any).id);
+        const uiIdStr = typeof customer.id === 'number' ? String(customer.id) : String(customer.id || '');
+        const uiIdNum = typeof customer.id === 'number' ? customer.id : Number(customer.id);
+        if (cid && cid === uiIdStr) return true;
+        if (Number.isFinite(cidNum) && Number.isFinite(uiIdNum) && cidNum === uiIdNum) return true;
+        const dbAlias = `${((c.name || '') as string).trim().toLowerCase()}|${((c.phone || '') as string).trim()}`;
+        return dbAlias === aliasKey;
+      });
+
+      const resolvedId = matched ? String((matched as any).id) : (typeof customer.id === 'number' ? String(customer.id) : String(customer.id || ''));
+
+      const allInvoices = await databaseService.getInvoices();
+      const relatedInvoices = allInvoices.filter(inv => {
+        const invCustomerId = String((inv as any).customer_id || '').trim();
+        const invCustomerIdNum = Number((inv as any).customer_id);
+        const invAlias = `${(inv.customer_name || '').trim().toLowerCase()}|${(inv.customer_phone || '').trim()}`;
+        if (resolvedId && invCustomerId && resolvedId === invCustomerId) return true;
+        if (resolvedId && Number.isFinite(invCustomerIdNum) && resolvedId === String(invCustomerIdNum)) return true;
+        if (invAlias && invAlias === aliasKey) return true;
+        if (!customerPhone && !inv.customer_phone && invAlias === aliasKey) return true;
+        return false;
+      });
+
+      if (relatedInvoices.length > 0) {
+        const invoiceNumbers = relatedInvoices.map(inv => inv.invoice_number || inv.id).join(', ');
+        window.alert(
+          `لا يمكن حذف الزبون "${customer.name}" لأنه مرتبط بـ ${relatedInvoices.length} فاتورة نشطة.\n\n` +
+          `أرقام الفواتير: ${invoiceNumbers}\n\n` +
+          'يرجى حذف الفواتير المرتبطة أولاً ثم إعادة المحاولة.'
+        );
+        return;
+      }
+
+      const ok = window.confirm(`هل أنت متأكد من حذف الزبون: ${customer.name}؟`);
+      if (!ok) return;
+
+      if (!resolvedId) {
+        throw new Error('O�O1O�O� O�O-O_USO_ U.O1O�U? OU,O�O"U^U+.');
+      }
+
+      console.log('Deleting customer:', {
+        resolvedId,
+        customerName: customer.name,
+      });
+
+      try {
+        await databaseService.deleteCustomerCascade(resolvedId);
+      } catch (deleteError) {
+        console.error('Database service delete error:', deleteError);
+        throw deleteError;
+      }
+
       try {
         const { queryClient } = await import('@/app/queryClient');
         queryClient.invalidateQueries({ queryKey: ['customers'] });
         queryClient.invalidateQueries({ queryKey: ['invoices'] });
         queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
       } catch {}
+
+      window.alert(`تم حذف الزبون "${customer.name}" بنجاح.`);
     } catch (e) {
       console.error('Failed to delete customer:', e);
     }
@@ -127,6 +186,16 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false, on
     }
   };
 
+
+  const getLabelText = (label: string) => {
+    switch (label) {
+      case 'O?O_USO_': return '????';
+      case 'U.U+O?O,U.': return '???????';
+      case 'U^U?US': return '???';
+      case 'O?U?O"US': return '????';
+      default: return label || '';
+    }
+  };
   const getLabelPrintStyle = (label: string): React.CSSProperties => {
     switch (label) {
       case 'ذهبي':
@@ -642,7 +711,7 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false, on
                               <TableCell>
                                 <Badge className={`${getLabelColor(customer.label)} px-3 py-1 text-sm font-semibold rounded-full flex items-center gap-1 w-fit`}>
                                   {getLabelIcon(customer.label)}
-                                  {customer.label}
+                                  {getLabelText(customer.label)}
                                 </Badge>
                               </TableCell>
                               <TableCell className="text-[#13312A] arabic-text">{formatHumanDate(customer.lastOrder)}</TableCell>
@@ -717,7 +786,7 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false, on
                             <h3 className="text-lg font-semibold text-[#13312A] arabic-text truncate flex-1">{customer.name}</h3>
                             <Badge className={`${getLabelColor(customer.label)} flex items-center gap-1 px-3 py-1 text-sm font-medium rounded-full flex-shrink-0`}>
                               {getLabelIcon(customer.label)}
-                              {customer.label}
+                              {getLabelText(customer.label)}
                             </Badge>
                           </div>
 
@@ -1017,7 +1086,7 @@ const CustomersPrintDocument: React.FC<CustomersPrintDocumentProps> = ({
                     <td>{customer.address}</td>
                     <td>
                       <span className="status-pill" style={labelStyleGetter(customer.label)}>
-                        {customer.label}
+                        {getLabelText(customer.label)}
                       </span>
                     </td>
                     <td>{formatDate(customer.lastOrder)}</td>
@@ -1038,3 +1107,4 @@ const CustomersPrintDocument: React.FC<CustomersPrintDocumentProps> = ({
     </div>
   );
 };
+

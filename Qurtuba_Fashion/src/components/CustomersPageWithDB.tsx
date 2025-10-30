@@ -11,7 +11,18 @@ interface CustomersPageWithDBProps {
 export function CustomersPageWithDB({ onCustomerSelect }: CustomersPageWithDBProps) {
 	const { customers, loading } = useCustomers();
 	const [isInvoiceDialogOpen, setIsInvoiceDialogOpen] = useState(false);
-	const [prefill, setPrefill] = useState<{ name: string; phone: string; address: string } | null>(null);
+	const [prefill, setPrefill] = useState<{
+		name: string;
+		phone: string;
+		address: string;
+		measurements?: {
+			length?: string | number;
+			shoulder?: string | number;
+			waist?: string | number;
+			chest?: string | number;
+			collar?: string | number;
+		};
+	} | null>(null);
 
 	return (
 		<>
@@ -20,7 +31,19 @@ export function CustomersPageWithDB({ onCustomerSelect }: CustomersPageWithDBPro
 				onCustomerSelect={onCustomerSelect}
 				loading={loading}
 				onCreateInvoiceForCustomer={(c) => {
-					setPrefill({ name: c.name, phone: c.phone, address: c.address });
+					// Prepare customer data with measurements (as strings to preserve text like "1 ونصف")
+					setPrefill({
+						name: c.name,
+						phone: c.phone,
+						address: c.address,
+						measurements: c.measurements ? {
+							length: String(c.measurements.height || ''),
+							shoulder: String(c.measurements.shoulder || ''),
+							waist: String(c.measurements.waist || ''),
+							chest: String(c.measurements.chest || ''),
+							collar: String((c.measurements as any)?.collar || '')
+						} : undefined
+					});
 					setIsInvoiceDialogOpen(true);
 				}}
 				// Let CustomersPage handle edit dialog internally
