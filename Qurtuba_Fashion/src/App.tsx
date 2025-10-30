@@ -106,7 +106,7 @@ export default function App() {
       await InvoiceService.markAsPaid(invoiceId);
       try { queryClient.invalidateQueries({ queryKey: ['invoices'] }); } catch {}
       if (selectedInvoice && selectedInvoice.id === invoiceId) {
-        setSelectedInvoice({ ...selectedInvoice, status: 'Ù…Ø¯ÙÙˆØ¹' });
+        setSelectedInvoice({ ...selectedInvoice, status: 'مدفوع' });
       }
     } catch (e) {
       console.error('Failed to mark as paid:', e);

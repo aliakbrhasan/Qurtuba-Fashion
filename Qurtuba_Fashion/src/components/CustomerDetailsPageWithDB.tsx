@@ -88,6 +88,17 @@ const getStatusBadgeColor = (status: string) => {
   }
 };
 
+// Robust matcher to decide if an invoice belongs to a given customer
+function invoiceBelongsToCustomer(inv: Invoice, cust: Customer): boolean {
+  const idMatch = String((inv as any).customer_id || '') === String((cust as any).id || '');
+  const trim = (v: any) => String(v ?? '').trim();
+  const normPhone = (v: any) => trim(v).replace(/\s+/g, '');
+  const nameMatch = trim((inv as any).customer_name) === trim((cust as any).name);
+  const phoneMatch = normPhone((inv as any).customer_phone) === normPhone((cust as any).phone);
+  // Accept match if any of the reliable keys match
+  return idMatch || (nameMatch && (!cust.phone || phoneMatch)) || phoneMatch;
+}
+
 export function CustomerDetailsPageWithDB({ 
   customer, 
   onBack, 
@@ -126,12 +137,9 @@ export function CustomerDetailsPageWithDB({
         // Load orders for this customer (for future use)
         await databaseService.getOrdersByCustomer(customer.id.toString());
         
-        // Load all invoices and filter by customer
+        // Load all invoices and filter by customer (robust matching)
         const allInvoices = await databaseService.getInvoices();
-        const customerInvoices = allInvoices.filter(invoice => 
-          invoice.customer_id === customer.id.toString() || 
-          invoice.customer_name === customer.name
-        );
+        const customerInvoices = allInvoices.filter((invoice) => invoiceBelongsToCustomer(invoice, customer));
         setInvoices(customerInvoices);
         // Measurements come from saved customer profile (which is updated from the last created invoice)
         try {
@@ -170,7 +178,7 @@ export function CustomerDetailsPageWithDB({
             setFreshCustomer((found as any) || null);
           } catch {}
           const allInvoices = await databaseService.getInvoices();
-          const customerInvoices = allInvoices.filter(inv => inv.customer_id === String(customer.id) || inv.customer_name === customer.name);
+          const customerInvoices = allInvoices.filter((inv) => invoiceBelongsToCustomer(inv, customer));
           setInvoices(customerInvoices);
           try {
             const newest = [...customerInvoices].sort((a, b) => new Date(b.invoice_date).getTime() - new Date(a.invoice_date).getTime())[0];

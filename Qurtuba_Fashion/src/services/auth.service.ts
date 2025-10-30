@@ -7,7 +7,7 @@ export interface User {
   name: string;
   email: string;
   phone?: string;
-  status: 'Ø§Ø¯Ù…Ù†' | 'Ù…ÙˆØ¸Ù' | 'Ù…Ø­Ø§Ø³Ø¨';
+  status: 'ادمن' | 'موظف' | 'محاسب';
   role: string;
   is_active: boolean;
   created_at: string;
@@ -169,7 +169,7 @@ class AuthService {
       if (!username || !password) {
         return {
           success: false,
-          error: 'Ø§Ø³Ù… Ø§Ù„Ù…Ø³ØªØ®Ø¯Ù… ÙˆÙƒÙ„Ù…Ø© Ø§Ù„Ù…Ø±ÙˆØ± Ù…Ø·Ù„ÙˆØ¨Ø§Ù†'
+          error: 'اسم المستخدم وكلمة المرور مطلوبان'
         };
       }
 
@@ -179,7 +179,7 @@ class AuthService {
       const attempts = this.failedLoginAttempts.get(key);
       if (attempts?.lockedUntilMs && now < attempts.lockedUntilMs) {
         const seconds = Math.ceil((attempts.lockedUntilMs - now) / 1000);
-        return { success: false, error: `ØªÙ… Ø­Ø¸Ø± Ø§Ù„Ù…Ø­Ø§ÙˆÙ„Ø© Ù…Ø¤Ù‚ØªØ§Ù‹. Ø§Ù„Ø±Ø¬Ø§Ø¡ Ø§Ù„Ù…Ø­Ø§ÙˆÙ„Ø© Ø¨Ø¹Ø¯ ${seconds} Ø«Ø§Ù†ÙŠØ©.` };
+        return { success: false, error: `تم حظر المحاولة مؤقتاً. الرجاء المحاولة بعد ${seconds} ثانية.` };
       }
 
       // Try database first, fallback to local auth
@@ -290,7 +290,7 @@ class AuthService {
       } catch {}
       return {
         success: false,
-        error: 'Ø­Ø¯Ø« Ø®Ø·Ø£ Ø£Ø«Ù†Ø§Ø¡ ØªØ³Ø¬ÙŠÙ„ Ø§Ù„Ø¯Ø®ÙˆÙ„. ÙŠØ±Ø¬Ù‰ Ø§Ù„Ù…Ø­Ø§ÙˆÙ„Ø© Ù…Ø±Ø© Ø£Ø®Ø±Ù‰'
+        error: 'حدث خطأ أثناء تسجيل الدخول. يرجى المحاولة مرة أخرى'
       };
     }
   }
@@ -365,14 +365,14 @@ class AuthService {
     email: string;
     phone?: string;
     password: string;
-    status: 'Ø§Ø¯Ù…Ù†' | 'Ù…ÙˆØ¸Ù' | 'Ù…Ø­Ø§Ø³Ø¨';
+    status: 'ادمن' | 'موظف' | 'محاسب';
     role: string;
   }): Promise<AuthResult> {
     try {
       if (!this.isAdmin()) {
         return {
           success: false,
-          error: 'Ù„ÙŠØ³ Ù„Ø¯ÙŠÙƒ ØµÙ„Ø§Ø­ÙŠØ© Ù„Ø¥Ù†Ø´Ø§Ø¡ Ù…Ø³ØªØ®Ø¯Ù…ÙŠÙ† Ø¬Ø¯Ø¯'
+          error: 'ليس لديك صلاحية لإنشاء مستخدمين جدد'
         };
       }
 
@@ -386,7 +386,7 @@ class AuthService {
         if (existingUser) {
           return {
             success: false,
-            error: 'Ø§Ù„Ø¨Ø±ÙŠØ¯ Ø§Ù„Ø¥Ù„ÙƒØªØ±ÙˆÙ†ÙŠ Ù…Ø³ØªØ®Ø¯Ù… Ø¨Ø§Ù„ÙØ¹Ù„'
+            error: 'البريد الإلكتروني مستخدم بالفعل'
           };
         }
 
@@ -397,7 +397,7 @@ class AuthService {
         if (existingCode) {
           return {
             success: false,
-            error: 'ÙƒÙˆØ¯ Ø§Ù„Ù…Ø³ØªØ®Ø¯Ù… Ù…Ø³ØªØ®Ø¯Ù… Ø¨Ø§Ù„ÙØ¹Ù„'
+            error: 'كود المستخدم مستخدم بالفعل'
           };
         }
 
@@ -408,37 +408,7 @@ class AuthService {
         const usersHasRole = await this.tableHasColumn('users', 'role');
         const usersHasRoleId = await this.tableHasColumn('users', 'role_id');
 
-        // Validate unique code and email if changed
-        try {
-          const api = (window as any).electronAPI;
-          const listRes = await api.auth.listUsers();
-          if (listRes?.ok && Array.isArray(listRes.data)) {
-            const allUsers = listRes.data as any[];
-            const current = allUsers.find(u => String(u.id) === String(userId));
-            if (current) {
-              if (updates.email !== undefined) {
-                const newEmail = String(updates.email).trim().toLowerCase();
-                const oldEmail = String(current.email || '').trim().toLowerCase();
-                if (newEmail && newEmail !== oldEmail) {
-                  const dup = allUsers.some(u => String(u.id) !== String(userId) && String(u.email || '').trim().toLowerCase() === newEmail);
-                  if (dup) {
-                    return { success: false, error: 'البريد الإلكتروني مستخدم من قبل مستخدم آخر' };
-                  }
-                }
-              }
-              if (updates.code !== undefined) {
-                const newCode = String(updates.code).trim();
-                const oldCode = String(current.code || '').trim();
-                if (newCode && newCode !== oldCode) {
-                  const dup = allUsers.some(u => String(u.id) !== String(userId) && String(u.code || '').trim() === newCode);
-                  if (dup) {
-                    return { success: false, error: 'اسم المستخدم (الكود) مستخدم من قبل مستخدم آخر' };
-                  }
-                }
-              }
-            }
-          }
-        } catch {}
+        // Note: uniqueness checks for code/email were done above; skip per-user update validation here
 
         const insertPayload: any = {
           code: userData.code,
@@ -460,7 +430,7 @@ class AuthService {
 
         const created = await api.auth.createUser(insertPayload);
         if (!created?.ok) {
-          return { success: false, error: 'ÙØ´Ù„ ÙÙŠ Ø¥Ù†Ø´Ø§Ø¡ Ø§Ù„Ù…Ø³ØªØ®Ø¯Ù…' };
+          return { success: false, error: 'فشل في إنشاء المستخدم' };
         }
 
         const normalized: User = this.normalizeUserRow(created.data as any);
@@ -479,7 +449,7 @@ class AuthService {
       console.error('Create user error:', error);
       return {
         success: false,
-        error: 'Ø­Ø¯Ø« Ø®Ø·Ø£ Ø£Ø«Ù†Ø§Ø¡ Ø¥Ù†Ø´Ø§Ø¡ Ø§Ù„Ù…Ø³ØªØ®Ø¯Ù…'
+        error: 'حدث خطأ أثناء إنشاء المستخدم'
       };
     }
   }
@@ -497,7 +467,7 @@ class AuthService {
         if (!res?.ok) {
           return {
             success: false,
-            error: 'ÙØ´Ù„ ÙÙŠ ØªØ­Ø¯ÙŠØ« ÙƒÙ„Ù…Ø© Ø§Ù„Ù…Ø±ÙˆØ±'
+            error: 'فشل في تحديث كلمة المرور'
           };
         }
 
@@ -512,7 +482,7 @@ class AuthService {
       console.error('Update password error:', error);
       return {
         success: false,
-        error: 'Ø­Ø¯Ø« Ø®Ø·Ø£ Ø£Ø«Ù†Ø§Ø¡ ØªØ­Ø¯ÙŠØ« ÙƒÙ„Ù…Ø© Ø§Ù„Ù…Ø±ÙˆØ±'
+        error: 'حدث خطأ أثناء تحديث كلمة المرور'
       };
     }
   }
@@ -521,14 +491,14 @@ class AuthService {
   public async getUsers(): Promise<User[]> {
     try {
       if (!this.isAdmin()) {
-        throw new Error('Ù„ÙŠØ³ Ù„Ø¯ÙŠÙƒ ØµÙ„Ø§Ø­ÙŠØ© Ù„Ø¹Ø±Ø¶ Ø§Ù„Ù…Ø³ØªØ®Ø¯Ù…ÙŠÙ†');
+        throw new Error('ليس لديك صلاحية لعرض المستخدمين');
       }
 
       // Try database first, fallback to local auth
       try {
         const api = (window as any).electronAPI;
         const res = await api.auth.listUsers();
-        if (!res?.ok) throw new Error('ÙØ´Ù„ ÙÙŠ Ø¬Ù„Ø¨ Ø§Ù„Ù…Ø³ØªØ®Ø¯Ù…ÙŠÙ†');
+        if (!res?.ok) throw new Error('فشل في جلب المستخدمين');
         const rows = Array.isArray(res.data) ? res.data : [];
         // If desktop local mode returns empty, fallback to local auth users to keep page functional
         if (rows.length === 0) {
@@ -561,7 +531,7 @@ class AuthService {
       if (!this.isAdmin() && this.currentUser?.id !== userId) {
         return {
           success: false,
-          error: 'Ù„ÙŠØ³ Ù„Ø¯ÙŠÙƒ ØµÙ„Ø§Ø­ÙŠØ© Ù„ØªØ­Ø¯ÙŠØ« Ù‡Ø°Ø§ Ø§Ù„Ù…Ø³ØªØ®Ø¯Ù…'
+          error: 'ليس لديك صلاحية لتحديث هذا المستخدم'
         };
       }
 
@@ -638,7 +608,7 @@ class AuthService {
       console.error('Update user error:', error);
       return {
         success: false,
-        error: 'Ø­Ø¯Ø« Ø®Ø·Ø£ Ø£Ø«Ù†Ø§Ø¡ ØªØ­Ø¯ÙŠØ« Ø§Ù„Ù…Ø³ØªØ®Ø¯Ù…'
+        error: 'حدث خطأ أثناء تحديث المستخدم'
       };
     }
   }
@@ -649,14 +619,14 @@ class AuthService {
       if (!this.isAdmin()) {
         return {
           success: false,
-          error: 'Ù„ÙŠØ³ Ù„Ø¯ÙŠÙƒ ØµÙ„Ø§Ø­ÙŠØ© Ù„Ø­Ø°Ù Ø§Ù„Ù…Ø³ØªØ®Ø¯Ù…ÙŠÙ†'
+          error: 'ليس لديك صلاحية لحذف المستخدمين'
         };
       }
 
       if (this.currentUser?.id === userId) {
         return {
           success: false,
-          error: 'Ù„Ø§ ÙŠÙ…ÙƒÙ†Ùƒ Ø­Ø°Ù Ø­Ø³Ø§Ø¨Ùƒ Ø§Ù„Ø®Ø§Øµ'
+          error: 'لا يمكنك حذف حسابك الخاص'
         };
       }
 
@@ -668,7 +638,7 @@ class AuthService {
         if (!res?.ok) {
           return {
             success: false,
-            error: 'ÙØ´Ù„ ÙÙŠ Ø­Ø°Ù Ø§Ù„Ù…Ø³ØªØ®Ø¯Ù…'
+            error: 'فشل في حذف المستخدم'
           };
         }
 
@@ -683,7 +653,7 @@ class AuthService {
       console.error('Delete user error:', error);
       return {
         success: false,
-        error: 'Ø­Ø¯Ø« Ø®Ø·Ø£ Ø£Ø«Ù†Ø§Ø¡ Ø­Ø°Ù Ø§Ù„Ù…Ø³ØªØ®Ø¯Ù…'
+        error: 'حدث خطأ أثناء حذف المستخدم'
       };
     }
   }

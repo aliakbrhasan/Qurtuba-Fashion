@@ -123,7 +123,7 @@ export class DatabaseService {
       const code = (user?.code || '').trim();
       if (code) return code;
     } catch {}
-    return 'Ù…Ø³Ø¤ÙˆÙ„ Ø§Ù„Ù†Ø¸Ø§Ù…';
+    return 'مسؤول النظام';
   }
 
   // Helper function to ensure proper UTF-8 encoding for Arabic text
@@ -187,11 +187,11 @@ export class DatabaseService {
       {
         id: 1,
         code: 'ADM001',
-        name: 'Ø£Ø­Ù…Ø¯ Ù…Ø­Ù…Ø¯',
+        name: 'أحمد محمد',
         email: 'ahmed@qurtuba.com',
         phone: '07701234567',
-        status: 'Ø§Ø¯Ù…Ù†',
-        role: 'Ù…Ø¯ÙŠØ± Ø§Ù„Ù†Ø¸Ø§Ù…',
+        status: 'ادمن',
+        role: 'مدير النظام',
         isActive: true,
         createdAt: '2024-01-01',
         lastLogin: '2024-01-15'
@@ -201,8 +201,8 @@ export class DatabaseService {
     this.localData.roles = [
       {
         id: 1,
-        name: 'Ù…Ø¯ÙŠØ± Ø§Ù„Ù†Ø¸Ø§Ù…',
-        description: 'Ù…Ø¯ÙŠØ± Ø§Ù„Ù†Ø¸Ø§Ù… Ø§Ù„ÙƒØ§Ù…Ù„',
+        name: 'مدير النظام',
+        description: 'مدير النظام الكامل',
         permissions: ['all'],
         allowedPages: ['dashboard', 'customers', 'orders', 'invoices', 'users', 'roles'],
         allowedActions: ['create', 'read', 'update', 'delete', 'export', 'print'],
@@ -449,8 +449,8 @@ export class DatabaseService {
         const { notifications } = await import('@/services/notifications.service');
         notifications.emit({
           type: 'success',
-          title: 'Ø²Ø¨ÙˆÙ† Ø¬Ø¯ÙŠØ¯',
-          message: `ØªÙ… Ø¥Ø¶Ø§ÙØ© Ø§Ù„Ø²Ø¨ÙˆÙ† ${customer.name}`,
+          title: 'زبون جديد',
+          message: `تم إضافة الزبون ${customer.name}`,
           target: { page: 'customers', id: (this.localData.customers[0] as any).id?.toString?.() },
         });
       } catch {}
@@ -518,8 +518,8 @@ export class DatabaseService {
           const { notifications } = await import('@/services/notifications.service');
           notifications.emit({
             type: 'info',
-            title: 'ØªØ¹Ø¯ÙŠÙ„ Ø²Ø¨ÙˆÙ†',
-            message: `ØªÙ… ØªØ¹Ø¯ÙŠÙ„ Ø¨ÙŠØ§Ù†Ø§Øª Ø§Ù„Ø²Ø¨ÙˆÙ†`,
+            title: 'تعديل زبون',
+            message: `تم تعديل بيانات الزبون`,
             target: { page: 'customers', id: id?.toString?.() },
           });
         } catch {}
@@ -710,7 +710,7 @@ export class DatabaseService {
           name: customerName,
           phone: customerPhone || '',
           address: customerAddress || '',
-          label: 'Ø¬Ø¯ÙŠØ¯',
+          label: 'جديد',
           totalSpent: paid,
           lastOrder: lastOrderDate,
           measurements: { height: 0, shoulder: 0, waist: 0, chest: 0, collar: 0 },

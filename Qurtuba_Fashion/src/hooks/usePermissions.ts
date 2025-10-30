@@ -43,10 +43,10 @@ export function usePermissions(currentUser: User | null): UsePermissionsResult {
       setAllowedActions(actions);
     } catch (err) {
       console.error('Error loading permissions:', err);
-      setError('Ø­Ø¯Ø« Ø®Ø·Ø£ ÙÙŠ ØªØ­Ù…ÙŠÙ„ Ø§Ù„ØµÙ„Ø§Ø­ÙŠØ§Øª');
+      setError('حدث خطأ في تحميل الصلاحيات');
       // Fallback to admin permissions for admin users
-      if (currentUser.status === 'Ø§Ø¯Ù…Ù†' || currentUser.role === 'Ù…Ø¯ÙŠØ± Ø§Ù„Ù†Ø¸Ø§Ù…') {
-        setAllowedPages(['dashboard', 'invoices', 'customers', 'financial', 'users', 'adminLog']);
+      if (currentUser.status === 'ادمن' || currentUser.role === 'مدير النظام') {
+        setAllowedPages(['dashboard', 'customers', 'invoices', 'financial', 'users', 'adminLog']);
         setAllowedActions([
           'create_invoice', 'edit_invoice', 'delete_invoice', 'change_invoice_status', 
           'mark_invoice_paid', 'print_invoice', 'print_invoices_list', 'create_customer', 

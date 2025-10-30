@@ -31,10 +31,10 @@ export function UsersManagementPage({ onNavigate }: UsersManagementPageProps) {
     email: '',
     phone: '',
     password: '',
-    status: 'Ù…ÙˆØ¸Ù' as 'Ø§Ø¯Ù…Ù†' | 'Ù…ÙˆØ¸Ù' | 'Ù…Ø­Ø§Ø³Ø¨',
+    status: 'موظف' as 'ادمن' | 'موظف' | 'محاسب',
     role: '',
     is_active: true
-  });
+  } as any);
   const [newPassword, setNewPassword] = useState({
     currentPassword: '',
     newPassword: '',
@@ -138,7 +138,7 @@ export function UsersManagementPage({ onNavigate }: UsersManagementPageProps) {
           email: '',
           phone: '',
           password: '',
-          status: 'Ù…ÙˆØ¸Ù',
+          status: 'موظف',
           role: '',
           is_active: true
         });
@@ -283,11 +283,11 @@ export function UsersManagementPage({ onNavigate }: UsersManagementPageProps) {
 
   const getStatusBadgeVariant = (status: string) => {
     switch (status) {
-      case 'Ø§Ø¯Ù…Ù†':
+      case 'ادمن':
         return 'destructive';
-      case 'Ù…ÙˆØ¸Ù':
+      case 'موظف':
         return 'default';
-      case 'Ù…Ø­Ø§Ø³Ø¨':
+      case 'محاسب':
         return 'secondary';
       default:
         return 'outline';
@@ -299,7 +299,7 @@ export function UsersManagementPage({ onNavigate }: UsersManagementPageProps) {
       <div className="space-y-4">
         {/* Title */}
         <div>
-          <h1 className="text-3xl font-bold text-[#13312A] arabic-text">Ø¥Ø¯Ø§Ø±Ø© Ø§Ù„Ù…Ø³ØªØ®Ø¯Ù…ÙŠÙ†</h1>
+          <h1 className="text-3xl font-bold text-[#13312A] arabic-text">إدارة المستخدمين</h1>
         </div>
         
         {/* View Mode and Action Buttons */}
@@ -312,7 +312,7 @@ export function UsersManagementPage({ onNavigate }: UsersManagementPageProps) {
               className="flex items-center gap-2"
             >
               <Grid3X3 className="w-4 h-4" />
-              <span className="hidden sm:inline arabic-text">Ø§Ù„Ø¨Ø·Ø§Ù‚Ø§Øª</span>
+              <span className="hidden sm:inline arabic-text">البطاقات</span>
             </Button>
             <Button
               variant={viewMode === 'table' ? 'default' : 'ghost'}
@@ -321,7 +321,7 @@ export function UsersManagementPage({ onNavigate }: UsersManagementPageProps) {
               className="flex items-center gap-2"
             >
               <List className="w-4 h-4" />
-              <span className="hidden sm:inline arabic-text">Ø§Ù„Ø¬Ø¯ÙˆÙ„</span>
+              <span className="hidden sm:inline arabic-text">الجدول</span>
             </Button>
           </div>
           <div className="flex gap-2">
@@ -333,21 +333,21 @@ export function UsersManagementPage({ onNavigate }: UsersManagementPageProps) {
             title={!isAuthorized ? 'ØªØ­ØªØ§Ø¬ Ù„ØµÙ„Ø§Ø­ÙŠØ© Ø§Ø¯Ù…Ù†' : undefined}
           >
             <Shield className="w-4 h-4 mr-2" />
-            Ø¥Ø¯Ø§Ø±Ø© Ø§Ù„Ø£Ø¯ÙˆØ§Ø±
+            إدارة الأدوار
           </Button>
           
           <Dialog open={isAddUserDialogOpen} onOpenChange={setIsAddUserDialogOpen}>
             <DialogTrigger asChild>
-              <Button className="bg-[#13312A] hover:bg-[#155446] text-white" disabled={!isAuthorized} title={!isAuthorized ? 'ØªØ­ØªØ§Ø¬ Ù„ØµÙ„Ø§Ø­ÙŠØ© Ø§Ø¯Ù…Ù†' : undefined}>
+              <Button className="bg-[#13312A] hover:bg-[#155446] text-white" disabled={!isAuthorized} title={!isAuthorized ? 'تحتاج لصلاحية ادمن' : undefined}>
                 <UserPlus className="w-4 h-4 mr-2" />
-                Ø¥Ø¶Ø§ÙØ© Ù…Ø³ØªØ®Ø¯Ù…
+                إضافة مستخدم
               </Button>
             </DialogTrigger>
             <DialogContent className="w-full max-w-md h-[85vh] sm:h-[90vh] max-h-[85vh] sm:max-h-[90vh] p-3 sm:p-6 m-0 rounded-none sm:rounded-lg flex flex-col overscroll-contain">
               <DialogHeader className="flex-shrink-0">
-                <DialogTitle className="arabic-text">Ø¥Ø¶Ø§ÙØ© Ù…Ø³ØªØ®Ø¯Ù… Ø¬Ø¯ÙŠØ¯</DialogTitle>
+                <DialogTitle className="arabic-text">إضافة مستخدم جديد</DialogTitle>
                 <DialogDescription className="arabic-text">
-                  Ù‚Ù… Ø¨Ø¥Ø¶Ø§ÙØ© Ù…Ø³ØªØ®Ø¯Ù… Ø¬Ø¯ÙŠØ¯ Ù„Ù„Ù†Ø¸Ø§Ù…
+                  قم بإضافة مستخدم جديد للنظام
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4 overflow-y-auto flex-1 min-h-0 max-h-[calc(85vh-100px)] sm:max-h-[calc(90vh-120px)] pr-2 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 touch-pan-y">
@@ -360,40 +360,40 @@ export function UsersManagementPage({ onNavigate }: UsersManagementPageProps) {
                 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <Label htmlFor="userCode" className="arabic-text">Ø±Ù…Ø² Ø§Ù„Ù…Ø³ØªØ®Ø¯Ù… *</Label>
+                    <Label htmlFor="userCode" className="arabic-text">رمز المستخدم *</Label>
                     <Input
                       id="userCode"
                       value={newUser.code}
                       onChange={(e) => setNewUser({ ...newUser, code: e.target.value })}
-                      placeholder="Ø£Ø¯Ø®Ù„ Ø±Ù…Ø² Ø§Ù„Ù…Ø³ØªØ®Ø¯Ù…"
+                      placeholder="أدخل رمز المستخدم"
                       required
                     />
                   </div>
                   <div>
-                    <Label htmlFor="userName" className="arabic-text">Ø§Ø³Ù… Ø§Ù„Ù…Ø³ØªØ®Ø¯Ù… *</Label>
+                    <Label htmlFor="userName" className="arabic-text">اسم المستخدم *</Label>
                     <Input
                       id="userName"
                       value={newUser.name}
                       onChange={(e) => setNewUser({ ...newUser, name: e.target.value })}
-                      placeholder="Ø£Ø¯Ø®Ù„ Ø§Ø³Ù… Ø§Ù„Ù…Ø³ØªØ®Ø¯Ù…"
+                      placeholder="أدخل اسم المستخدم"
                       required
                     />
                   </div>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <Label htmlFor="userEmail" className="arabic-text">Ø§Ù„Ø¨Ø±ÙŠØ¯ Ø§Ù„Ø¥Ù„ÙƒØªØ±ÙˆÙ†ÙŠ *</Label>
+                    <Label htmlFor="userEmail" className="arabic-text">البريد الإلكتروني *</Label>
                     <Input
                       id="userEmail"
                       type="email"
                       value={newUser.email}
                       onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
-                      placeholder="Ø£Ø¯Ø®Ù„ Ø§Ù„Ø¨Ø±ÙŠØ¯ Ø§Ù„Ø¥Ù„ÙƒØªØ±ÙˆÙ†ÙŠ"
+                      placeholder="أدخل البريد الإلكتروني"
                       required
                     />
                   </div>
                   <div>
-                    <Label htmlFor="userPhone" className="arabic-text">Ø±Ù‚Ù… Ø§Ù„Ù‡Ø§ØªÙ</Label>
+                    <Label htmlFor="userPhone" className="arabic-text">رقم الهاتف</Label>
                     <Input
                       id="userPhone"
                       value={newUser.phone}
@@ -404,7 +404,7 @@ export function UsersManagementPage({ onNavigate }: UsersManagementPageProps) {
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <Label htmlFor="userPassword" className="arabic-text">ÙƒÙ„Ù…Ø© Ø§Ù„Ù…Ø±ÙˆØ± *</Label>
+                    <Label htmlFor="userPassword" className="arabic-text">كلمة المرور *</Label>
                     <div className="relative">
                       <Input
                         id="userPassword"
@@ -420,33 +420,33 @@ export function UsersManagementPage({ onNavigate }: UsersManagementPageProps) {
                         size="sm"
                         className="absolute left-0 top-0 h-full px-3 py-2 hover:bg-transparent"
                         onClick={() => setShowPassword(!showPassword)}
-                        aria-label={showPassword ? 'Ø¥Ø®ÙØ§Ø¡ ÙƒÙ„Ù…Ø© Ø§Ù„Ù…Ø±ÙˆØ±' : 'Ø¥Ø¸Ù‡Ø§Ø± ÙƒÙ„Ù…Ø© Ø§Ù„Ù…Ø±ÙˆØ±'}
-                        title={showPassword ? 'Ø¥Ø®ÙØ§Ø¡ ÙƒÙ„Ù…Ø© Ø§Ù„Ù…Ø±ÙˆØ±' : 'Ø¥Ø¸Ù‡Ø§Ø± ÙƒÙ„Ù…Ø© Ø§Ù„Ù…Ø±ÙˆØ±'}
+                        aria-label={showPassword ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'}
+                        title={showPassword ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'}
                       >
                         {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                       </Button>
                     </div>
                   </div>
                   <div>
-                    <Label htmlFor="userStatus" className="arabic-text">Ø§Ù„Ø­Ø§Ù„Ø© *</Label>
-                    <Select value={newUser.status} onValueChange={(value: 'Ø§Ø¯Ù…Ù†' | 'Ù…ÙˆØ¸Ù' | 'Ù…Ø­Ø§Ø³Ø¨') => setNewUser({ ...newUser, status: value })}>
-                      <SelectTrigger aria-label="ØªØ­Ø¯ÙŠØ¯ Ø§Ù„Ø¯ÙˆØ±" title="ØªØ­Ø¯ÙŠØ¯ Ø§Ù„Ø¯ÙˆØ±">
-                        <SelectValue placeholder="Ø§Ø®ØªØ± Ø§Ù„Ø­Ø§Ù„Ø©" />
+                    <Label htmlFor="userStatus" className="arabic-text">الحالة *</Label>
+                    <Select value={newUser.status} onValueChange={(value: string) => setNewUser({ ...newUser, status: value } as any)}>
+                      <SelectTrigger aria-label="تحديد الدور" title="تحديد الدور">
+                        <SelectValue placeholder="اختر الحالة" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="Ø§Ø¯Ù…Ù†">Ø§Ø¯Ù…Ù†</SelectItem>
-                        <SelectItem value="Ù…ÙˆØ¸Ù">Ù…ÙˆØ¸Ù</SelectItem>
-                        <SelectItem value="Ù…Ø­Ø§Ø³Ø¨">Ù…Ø­Ø§Ø³Ø¨</SelectItem>
+                        <SelectItem value="ادمن">ادمن</SelectItem>
+                        <SelectItem value="موظف">موظف</SelectItem>
+                        <SelectItem value="محاسب">محاسب</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                 </div>
                 <div className="grid grid-cols-1 gap-4">
                   <div>
-                    <Label htmlFor="userRole" className="arabic-text">Ø§Ù„Ø¯ÙˆØ± *</Label>
+                    <Label htmlFor="userRole" className="arabic-text">الدور *</Label>
                     <Select value={newUser.role} onValueChange={(value: string) => setNewUser({ ...newUser, role: value })}>
-                      <SelectTrigger aria-label="Ø­Ø§Ù„Ø© Ø§Ù„Ø­Ø³Ø§Ø¨" title="Ø­Ø§Ù„Ø© Ø§Ù„Ø­Ø³Ø§Ø¨">
-                        <SelectValue placeholder="Ø§Ø®ØªØ± Ø§Ù„Ø¯ÙˆØ±" />
+                      <SelectTrigger aria-label="حالة الحساب" title="حالة الحساب">
+                        <SelectValue placeholder="اختر الدور" />
                       </SelectTrigger>
                       <SelectContent>
                         {roles.length > 0 ? (
@@ -469,9 +469,9 @@ export function UsersManagementPage({ onNavigate }: UsersManagementPageProps) {
               </div>
               <DialogFooter className="flex-shrink-0 mt-4">
                 <Button variant="outline" onClick={() => setIsAddUserDialogOpen(false)}>
-                  Ø¥Ù„ØºØ§Ø¡
+                  إلغاء
                 </Button>
-                <Button onClick={handleAddUser} disabled={isSubmittingAdd} className={isSubmittingAdd ? 'opacity-60 cursor-not-allowed' : ''}>{isSubmittingAdd ? 'Ø¬Ø§Ø±Ù Ø§Ù„Ø¥Ø¶Ø§ÙØ©...' : 'Ø¥Ø¶Ø§ÙØ©'}</Button>
+                <Button onClick={handleAddUser} disabled={isSubmittingAdd} className={isSubmittingAdd ? 'opacity-60 cursor-not-allowed' : ''}>{isSubmittingAdd ? 'جارٍ الإضافة...' : 'إضافة'}</Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
@@ -479,20 +479,20 @@ export function UsersManagementPage({ onNavigate }: UsersManagementPageProps) {
         </div>
       </div>
 
-      {/* Ù‚Ø§Ø¦Ù…Ø© Ø§Ù„Ù…Ø³ØªØ®Ø¯Ù…ÙŠÙ† */}
+      {/* قائمة المستخدمين */}
       {loading ? (
         <div className="text-center py-8">
-          <div className="text-[#13312A] arabic-text">Ø¬Ø§Ø±ÙŠ ØªØ­Ù…ÙŠÙ„ Ø¨ÙŠØ§Ù†Ø§Øª Ø§Ù„Ù…Ø³ØªØ®Ø¯Ù…ÙŠÙ†...</div>
+          <div className="text-[#13312A] arabic-text">جاري تحميل بيانات المستخدمين...</div>
         </div>
       ) : viewMode === 'cards' ? (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 arabic-text">
               <Users className="w-5 h-5" />
-              Ù‚Ø§Ø¦Ù…Ø© Ø§Ù„Ù…Ø³ØªØ®Ø¯Ù…ÙŠÙ†
+              قائمة المستخدمين
             </CardTitle>
             <CardDescription className="arabic-text">
-              Ø¥Ø¯Ø§Ø±Ø© Ø§Ù„Ù…Ø³ØªØ®Ø¯Ù…ÙŠÙ† ÙˆØ§Ù„ØµÙ„Ø§Ø­ÙŠØ§Øª
+              إدارة المستخدمين والصلاحيات
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -521,7 +521,7 @@ export function UsersManagementPage({ onNavigate }: UsersManagementPageProps) {
                       </Badge>
                       <Badge variant="outline" className="text-xs px-2 py-1 border-[#13312A] text-[#13312A]">{user.role}</Badge>
                       <Badge variant={user.is_active ? "default" : "secondary"} className={`text-xs px-2 py-1 ${user.is_active ? 'bg-green-100 text-green-800 border-green-200' : 'bg-gray-100 text-gray-600 border-gray-200'}`}>
-                        {user.is_active ? 'Ù†Ø´Ø·' : 'ØºÙŠØ± Ù†Ø´Ø·'}
+                        {user.is_active ? 'نشط' : 'غير نشط'}
                       </Badge>
                     </div>
                   </div>
@@ -535,7 +535,7 @@ export function UsersManagementPage({ onNavigate }: UsersManagementPageProps) {
                       title={!isAuthorized ? 'ØªØ­ØªØ§Ø¬ Ù„ØµÙ„Ø§Ø­ÙŠØ© Ø§Ø¯Ù…Ù†' : undefined}
                     >
                       <Edit className="w-4 h-4 sm:mr-1" />
-                      <span className="sm:hidden arabic-text text-xs">ØªØ¹Ø¯ÙŠÙ„</span>
+                      <span className="sm:hidden arabic-text text-xs">تعديل</span>
                     </Button>
                     <Button
                       variant="outline"
@@ -546,7 +546,7 @@ export function UsersManagementPage({ onNavigate }: UsersManagementPageProps) {
                       title={!isAuthorized ? 'ØªØ­ØªØ§Ø¬ Ù„ØµÙ„Ø§Ø­ÙŠØ© Ø§Ø¯Ù…Ù†' : undefined}
                     >
                       <Key className="w-4 h-4 sm:mr-1" />
-                      <span className="sm:hidden arabic-text text-xs">ÙƒÙ„Ù…Ø© Ù…Ø±ÙˆØ±</span>
+                      <span className="sm:hidden arabic-text text-xs">تغيير كلمة المرور</span>
                     </Button>
                     <Button
                       variant="outline"
@@ -557,7 +557,7 @@ export function UsersManagementPage({ onNavigate }: UsersManagementPageProps) {
                       title={!isAuthorized ? 'ØªØ­ØªØ§Ø¬ Ù„ØµÙ„Ø§Ø­ÙŠØ© Ø§Ø¯Ù…Ù†' : undefined}
                     >
                       <Trash2 className="w-4 h-4 sm:mr-1" />
-                      <span className="sm:hidden arabic-text text-xs">Ø­Ø°Ù</span>
+                      <span className="sm:hidden arabic-text text-xs">حذف</span>
                     </Button>
                   </div>
                 </div>
@@ -571,21 +571,21 @@ export function UsersManagementPage({ onNavigate }: UsersManagementPageProps) {
           <div className="px-6 py-4 border-b border-gray-200">
             <h3 className="text-lg font-semibold text-[#13312A] arabic-text flex items-center gap-2">
               <Users className="w-5 h-5" />
-              Ù‚Ø§Ø¦Ù…Ø© Ø§Ù„Ù…Ø³ØªØ®Ø¯Ù…ÙŠÙ†
+              قائمة المستخدمين
             </h3>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
-                  <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700 arabic-text">Ø§Ù„Ø§Ø³Ù…</th>
-                  <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700 arabic-text">Ø§Ù„Ø±Ù…Ø²</th>
-                  <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700 arabic-text">Ø§Ù„Ø¨Ø±ÙŠØ¯ Ø§Ù„Ø¥Ù„ÙƒØªØ±ÙˆÙ†ÙŠ</th>
-                  <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700 arabic-text">Ø§Ù„Ù‡Ø§ØªÙ</th>
-                  <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700 arabic-text">Ø§Ù„Ø­Ø§Ù„Ø©</th>
-                  <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700 arabic-text">Ø§Ù„Ø¯ÙˆØ±</th>
-                  <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700 arabic-text">Ø§Ù„Ù†Ø´Ø§Ø·</th>
-                  <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700 arabic-text">Ø§Ù„Ø¥Ø¬Ø±Ø§Ø¡Ø§Øª</th>
+                  <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700 arabic-text">الاسم</th>
+                  <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700 arabic-text">الرمز</th>
+                  <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700 arabic-text">البريد الإلكتروني</th>
+                  <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700 arabic-text">الهاتف</th>
+                  <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700 arabic-text">الحالة</th>
+                  <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700 arabic-text">الدور</th>
+                  <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700 arabic-text">النشاط</th>
+                  <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700 arabic-text">الإجراءات</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
@@ -617,7 +617,7 @@ export function UsersManagementPage({ onNavigate }: UsersManagementPageProps) {
                     </td>
                     <td className="px-4 py-4">
                       <Badge variant={user.is_active ? "default" : "secondary"} className={`text-xs px-2 py-1 ${user.is_active ? 'bg-green-100 text-green-800 border-green-200' : 'bg-gray-100 text-gray-600 border-gray-200'}`}>
-                        {user.is_active ? 'Ù†Ø´Ø·' : 'ØºÙŠØ± Ù†Ø´Ø·'}
+                        {user.is_active ? 'نشط' : 'غير نشط'}
                       </Badge>
                     </td>
                     <td className="px-4 py-4">
@@ -667,9 +667,9 @@ export function UsersManagementPage({ onNavigate }: UsersManagementPageProps) {
         <Dialog open={!!editingUser} onOpenChange={() => setEditingUser(null)}>
           <DialogContent className="w-full max-w-md h-[100dvh] max-h-[100dvh] p-4 sm:p-6 m-0 rounded-none sm:rounded-lg flex flex-col overscroll-contain">
             <DialogHeader className="flex-shrink-0">
-              <DialogTitle className="arabic-text">ØªØ¹Ø¯ÙŠÙ„ Ø§Ù„Ù…Ø³ØªØ®Ø¯Ù…</DialogTitle>
+              <DialogTitle className="arabic-text">تعديل المستخدم</DialogTitle>
               <DialogDescription className="arabic-text">
-                Ù‚Ù… Ø¨ØªØ¹Ø¯ÙŠÙ„ Ø¨ÙŠØ§Ù†Ø§Øª Ø§Ù„Ù…Ø³ØªØ®Ø¯Ù…
+                قم بتعديل بيانات المستخدم
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 overflow-y-auto flex-1 min-h-0 max-h-[calc(100dvh-200px)] pr-2 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 touch-pan-y">
@@ -682,7 +682,7 @@ export function UsersManagementPage({ onNavigate }: UsersManagementPageProps) {
               
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="editUserCode" className="arabic-text">Ø±Ù…Ø² Ø§Ù„Ù…Ø³ØªØ®Ø¯Ù…</Label>
+                  <Label htmlFor="editUserCode" className="arabic-text">رمز المستخدم</Label>
                   <Input
                     id="editUserCode"
                     value={editingUser.code}
@@ -690,7 +690,7 @@ export function UsersManagementPage({ onNavigate }: UsersManagementPageProps) {
                   />
                 </div>
                 <div>
-                  <Label htmlFor="editUserName" className="arabic-text">Ø§Ø³Ù… Ø§Ù„Ù…Ø³ØªØ®Ø¯Ù…</Label>
+                  <Label htmlFor="editUserName" className="arabic-text">اسم المستخدم</Label>
                   <Input
                     id="editUserName"
                     value={editingUser.name}
@@ -700,7 +700,7 @@ export function UsersManagementPage({ onNavigate }: UsersManagementPageProps) {
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="editUserEmail" className="arabic-text">Ø§Ù„Ø¨Ø±ÙŠØ¯ Ø§Ù„Ø¥Ù„ÙƒØªØ±ÙˆÙ†ÙŠ</Label>
+                  <Label htmlFor="editUserEmail" className="arabic-text">البريد الإلكتروني</Label>
                   <Input
                     id="editUserEmail"
                     type="email"
@@ -709,7 +709,7 @@ export function UsersManagementPage({ onNavigate }: UsersManagementPageProps) {
                   />
                 </div>
                 <div>
-                  <Label htmlFor="editUserPhone" className="arabic-text">Ø±Ù‚Ù… Ø§Ù„Ù‡Ø§ØªÙ</Label>
+                  <Label htmlFor="editUserPhone" className="arabic-text">رقم الهاتف</Label>
                   <Input
                     id="editUserPhone"
                     value={editingUser.phone}
@@ -719,23 +719,23 @@ export function UsersManagementPage({ onNavigate }: UsersManagementPageProps) {
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="editUserStatus" className="arabic-text">Ø§Ù„Ø­Ø§Ù„Ø©</Label>
+                  <Label htmlFor="editUserStatus" className="arabic-text">الحالة</Label>
                   <Select 
                     value={editingUser.status} 
-                    onValueChange={(value: 'Ø§Ø¯Ù…Ù†' | 'Ù…ÙˆØ¸Ù' | 'Ù…Ø­Ø§Ø³Ø¨') => setEditingUser({ ...editingUser, status: value })}
+                    onValueChange={(value: string) => setEditingUser({ ...editingUser, status: value } as any)}
                   >
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="Ø§Ø¯Ù…Ù†">Ø§Ø¯Ù…Ù†</SelectItem>
-                      <SelectItem value="Ù…ÙˆØ¸Ù">Ù…ÙˆØ¸Ù</SelectItem>
-                      <SelectItem value="Ù…Ø­Ø§Ø³Ø¨">Ù…Ø­Ø§Ø³Ø¨</SelectItem>
+                      <SelectItem value="ادمن">ادمن</SelectItem>
+                      <SelectItem value="موظف">موظف</SelectItem>
+                      <SelectItem value="محاسب">محاسب</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
                 <div>
-                  <Label htmlFor="editUserRole" className="arabic-text">Ø§Ù„Ø¯ÙˆØ±</Label>
+                  <Label htmlFor="editUserRole" className="arabic-text">الدور</Label>
                   <Select 
                     value={editingUser.role} 
                     onValueChange={(value: string) => setEditingUser({ ...editingUser, role: value })}
@@ -761,10 +761,10 @@ export function UsersManagementPage({ onNavigate }: UsersManagementPageProps) {
                   </Select>
                 </div>
               </div>
-              {/* ÙƒÙ„Ù…Ø© Ø§Ù„Ù…Ø±ÙˆØ± Ø§Ù„Ø­Ø§Ù„ÙŠØ© - Ù„Ù„Ø¹Ø±Ø¶ ÙƒØ­Ù‚Ù„ Ø¯Ø§Ø¦Ù… Ù…Ø¹ Ø²Ø± ØªØºÙŠÙŠØ± */}
+              {/* كلمة المرور الحالية - للعرض كحقل دائم مع زر تغيير */}
               <div className="grid grid-cols-1 gap-4">
                 <div>
-                  <Label htmlFor="currentPassword" className="arabic-text">ÙƒÙ„Ù…Ø© Ø§Ù„Ù…Ø±ÙˆØ± Ø§Ù„Ø­Ø§Ù„ÙŠØ©</Label>
+                  <Label htmlFor="currentPassword" className="arabic-text">كلمة المرور الحالية</Label>
                   <div className="flex items-center gap-2">
                     <Input
                       id="currentPassword"
@@ -779,10 +779,10 @@ export function UsersManagementPage({ onNavigate }: UsersManagementPageProps) {
                       onClick={() => setChangingPasswordUser(editingUser!)}
                     >
                       <Key className="w-4 h-4 mr-1" />
-                      ØªØºÙŠÙŠØ±
+                      تغيير
                     </Button>
                   </div>
-                  <p className="text-xs text-gray-500 arabic-text mt-1">Ù„Ø§ ÙŠÙ…ÙƒÙ† Ø¹Ø±Ø¶ ÙƒÙ„Ù…Ø© Ø§Ù„Ù…Ø±ÙˆØ± Ø§Ù„Ø­Ø§Ù„ÙŠØ© Ù„Ø£Ø³Ø¨Ø§Ø¨ Ø£Ù…Ù†ÙŠØ©. ÙŠÙ…ÙƒÙ†Ùƒ ØªØºÙŠÙŠØ±Ù‡Ø§ Ù…Ù† Ù‡Ù†Ø§.</p>
+                  <p className="text-xs text-gray-500 arabic-text mt-1">لا يمكن عرض كلمة المرور الحالية لأسباب أمنية. يمكنك تغييرها من هنا.</p>
                 </div>
               </div>
               <div className="grid grid-cols-1 gap-4">
@@ -795,16 +795,16 @@ export function UsersManagementPage({ onNavigate }: UsersManagementPageProps) {
                     className="w-4 h-4 text-[#13312A] bg-gray-100 border-gray-300 rounded focus:ring-[#13312A] focus:ring-2"
                   />
                   <Label htmlFor="editUserActive" className="arabic-text cursor-pointer">
-                    Ø§Ù„Ù…Ø³ØªØ®Ø¯Ù… Ù†Ø´Ø·
+                    المستخدم نشط
                   </Label>
                 </div>
               </div>
             </div>
             <DialogFooter className="flex-shrink-0 mt-4">
               <Button variant="outline" onClick={() => setEditingUser(null)}>
-                Ø¥Ù„ØºØ§Ø¡
+                إلغاء
               </Button>
-              <Button onClick={handleSaveUser} disabled={isSavingUser}>{isSavingUser ? 'Ø¬Ø§Ø±Ù Ø§Ù„Ø­ÙØ¸...' : 'Ø­ÙØ¸'}</Button>
+              <Button onClick={handleSaveUser} disabled={isSavingUser}>{isSavingUser ? 'جارٍ الحفظ...' : 'حفظ'}</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -815,9 +815,9 @@ export function UsersManagementPage({ onNavigate }: UsersManagementPageProps) {
         <Dialog open={!!changingPasswordUser} onOpenChange={() => setChangingPasswordUser(null)}>
           <DialogContent className="w-full max-w-md h-[100dvh] max-h-[100dvh] p-4 sm:p-6 m-0 rounded-none sm:rounded-lg flex flex-col overscroll-contain">
             <DialogHeader className="flex-shrink-0">
-              <DialogTitle className="arabic-text">ØªØºÙŠÙŠØ± ÙƒÙ„Ù…Ø© Ø§Ù„Ù…Ø±ÙˆØ±</DialogTitle>
+              <DialogTitle className="arabic-text">تغيير كلمة المرور</DialogTitle>
               <DialogDescription className="arabic-text">
-                ØªØºÙŠÙŠØ± ÙƒÙ„Ù…Ø© Ù…Ø±ÙˆØ± Ø§Ù„Ù…Ø³ØªØ®Ø¯Ù…: {changingPasswordUser.name}
+                تغيير كلمة مرور المستخدم: {changingPasswordUser.name}
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 overflow-y-auto flex-1 min-h-0 max-h-[calc(100dvh-200px)] pr-2 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 touch-pan-y">
@@ -830,7 +830,7 @@ export function UsersManagementPage({ onNavigate }: UsersManagementPageProps) {
               
               <div className="space-y-4">
                 <div>
-                  <Label htmlFor="newPassword" className="arabic-text">ÙƒÙ„Ù…Ø© Ø§Ù„Ù…Ø±ÙˆØ± Ø§Ù„Ø¬Ø¯ÙŠØ¯Ø© *</Label>
+                  <Label htmlFor="newPassword" className="arabic-text">كلمة المرور الجديدة *</Label>
                   <div className="relative">
                     <Input
                       id="newPassword"
@@ -841,7 +841,7 @@ export function UsersManagementPage({ onNavigate }: UsersManagementPageProps) {
                         // Clear error when user starts typing
                         if (error) setError('');
                       }}
-                      placeholder="Ø£Ø¯Ø®Ù„ ÙƒÙ„Ù…Ø© Ø§Ù„Ù…Ø±ÙˆØ± Ø§Ù„Ø¬Ø¯ÙŠØ¯Ø©"
+                      placeholder="أدخل كلمة المرور الجديدة"
                       required
                       className={newPassword.newPassword && newPassword.newPassword.length < 6 ? 'border-red-300 focus:border-red-500' : ''}
                     />
@@ -851,19 +851,19 @@ export function UsersManagementPage({ onNavigate }: UsersManagementPageProps) {
                       size="sm"
                       className="absolute left-0 top-0 h-full px-3 py-2 hover:bg-transparent"
                       onClick={() => setShowNewPassword(!showNewPassword)}
-                      aria-label={showNewPassword ? 'Ø¥Ø®ÙØ§Ø¡ ÙƒÙ„Ù…Ø© Ø§Ù„Ù…Ø±ÙˆØ±' : 'Ø¥Ø¸Ù‡Ø§Ø± ÙƒÙ„Ù…Ø© Ø§Ù„Ù…Ø±ÙˆØ±'}
-                      title={showNewPassword ? 'Ø¥Ø®ÙØ§Ø¡ ÙƒÙ„Ù…Ø© Ø§Ù„Ù…Ø±ÙˆØ±' : 'Ø¥Ø¸Ù‡Ø§Ø± ÙƒÙ„Ù…Ø© Ø§Ù„Ù…Ø±ÙˆØ±'}
+                      aria-label={showNewPassword ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'}
+                      title={showNewPassword ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'}
                     >
                       {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </Button>
                   </div>
                   {newPassword.newPassword && newPassword.newPassword.length < 6 && (
-                    <p className="text-red-500 text-xs mt-1 arabic-text">ÙƒÙ„Ù…Ø© Ø§Ù„Ù…Ø±ÙˆØ± ÙŠØ¬Ø¨ Ø£Ù† ØªÙƒÙˆÙ† 6 Ø£Ø­Ø±Ù Ø¹Ù„Ù‰ Ø§Ù„Ø£Ù‚Ù„</p>
+                    <p className="text-red-500 text-xs mt-1 arabic-text">كلمة المرور يجب أن تكون 6 أحرف على الأقل</p>
                   )}
                 </div>
                 
                 <div>
-                  <Label htmlFor="confirmPassword" className="arabic-text">ØªØ£ÙƒÙŠØ¯ ÙƒÙ„Ù…Ø© Ø§Ù„Ù…Ø±ÙˆØ± *</Label>
+                  <Label htmlFor="confirmPassword" className="arabic-text">تأكيد كلمة المرور *</Label>
                   <div className="relative">
                     <Input
                       id="confirmPassword"
@@ -874,7 +874,7 @@ export function UsersManagementPage({ onNavigate }: UsersManagementPageProps) {
                         // Clear error when user starts typing
                         if (error) setError('');
                       }}
-                      placeholder="Ø£Ø¹Ø¯ Ø¥Ø¯Ø®Ø§Ù„ ÙƒÙ„Ù…Ø© Ø§Ù„Ù…Ø±ÙˆØ± Ø§Ù„Ø¬Ø¯ÙŠØ¯Ø©"
+                      placeholder="أعد إدخال كلمة المرور الجديدة"
                       required
                       className={newPassword.confirmPassword && newPassword.newPassword !== newPassword.confirmPassword ? 'border-red-300 focus:border-red-500' : ''}
                     />
@@ -884,17 +884,17 @@ export function UsersManagementPage({ onNavigate }: UsersManagementPageProps) {
                       size="sm"
                       className="absolute left-0 top-0 h-full px-3 py-2 hover:bg-transparent"
                       onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                      aria-label={showConfirmPassword ? 'Ø¥Ø®ÙØ§Ø¡ ÙƒÙ„Ù…Ø© Ø§Ù„Ù…Ø±ÙˆØ±' : 'Ø¥Ø¸Ù‡Ø§Ø± ÙƒÙ„Ù…Ø© Ø§Ù„Ù…Ø±ÙˆØ±'}
-                      title={showConfirmPassword ? 'Ø¥Ø®ÙØ§Ø¡ ÙƒÙ„Ù…Ø© Ø§Ù„Ù…Ø±ÙˆØ±' : 'Ø¥Ø¸Ù‡Ø§Ø± ÙƒÙ„Ù…Ø© Ø§Ù„Ù…Ø±ÙˆØ±'}
+                      aria-label={showConfirmPassword ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'}
+                      title={showConfirmPassword ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'}
                     >
                       {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </Button>
                   </div>
                   {newPassword.confirmPassword && newPassword.newPassword !== newPassword.confirmPassword && (
-                    <p className="text-red-500 text-xs mt-1 arabic-text">ÙƒÙ„Ù…Ø© Ø§Ù„Ù…Ø±ÙˆØ± ÙˆØªØ£ÙƒÙŠØ¯Ù‡Ø§ ØºÙŠØ± Ù…ØªØ·Ø§Ø¨Ù‚ØªÙŠÙ†</p>
+                    <p className="text-red-500 text-xs mt-1 arabic-text">كلمة المرور وتأكيدها غير متطابقتين</p>
                   )}
                   {newPassword.confirmPassword && newPassword.newPassword === newPassword.confirmPassword && newPassword.newPassword.length >= 6 && (
-                    <p className="text-green-500 text-xs mt-1 arabic-text">âœ“ ÙƒÙ„Ù…Ø© Ø§Ù„Ù…Ø±ÙˆØ± ØµØ­ÙŠØ­Ø©</p>
+                    <p className="text-green-500 text-xs mt-1 arabic-text">✓ كلمة المرور صحيحة</p>
                   )}
                 </div>
                 
@@ -902,11 +902,11 @@ export function UsersManagementPage({ onNavigate }: UsersManagementPageProps) {
                   <div className="flex items-start space-x-2 space-x-reverse">
                     <CheckCircle className="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" />
                     <div className="text-blue-700 arabic-text text-sm">
-                      <p className="font-medium">Ù…ØªØ·Ù„Ø¨Ø§Øª ÙƒÙ„Ù…Ø© Ø§Ù„Ù…Ø±ÙˆØ±:</p>
+                      <p className="font-medium">متطلبات كلمة المرور:</p>
                       <ul className="mt-1 space-y-1 text-xs">
-                        <li>â€¢ ÙŠØ¬Ø¨ Ø£Ù† ØªÙƒÙˆÙ† 6 Ø£Ø­Ø±Ù Ø¹Ù„Ù‰ Ø§Ù„Ø£Ù‚Ù„</li>
-                        <li>â€¢ ÙŠÙÙØ¶Ù„ Ø£Ù† ØªØ­ØªÙˆÙŠ Ø¹Ù„Ù‰ Ø£Ø±Ù‚Ø§Ù… ÙˆØ­Ø±ÙˆÙ</li>
-                        <li>â€¢ ØªØ¬Ù†Ø¨ Ø§Ø³ØªØ®Ø¯Ø§Ù… ÙƒÙ„Ù…Ø§Øª Ù…Ø±ÙˆØ± Ø¨Ø³ÙŠØ·Ø©</li>
+                        <li>• يجب أن تكون 6 أحرف على الأقل</li>
+                        <li>• يُفضّل أن تحتوي على أرقام وحروف</li>
+                        <li>• تجنّب استخدام كلمات مرور بسيطة</li>
                       </ul>
                     </div>
                   </div>
@@ -923,7 +923,7 @@ export function UsersManagementPage({ onNavigate }: UsersManagementPageProps) {
                 });
                 setError('');
               }}>
-                Ø¥Ù„ØºØ§Ø¡
+                إلغاء
               </Button>
               <Button 
                 onClick={handleChangePassword}
@@ -936,7 +936,7 @@ export function UsersManagementPage({ onNavigate }: UsersManagementPageProps) {
                 }
                 className="disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {isChangingPasswordSubmitting ? 'Ø¬Ø§Ø±Ù Ø§Ù„ØªØ­Ø¯ÙŠØ«...' : 'ØªØºÙŠÙŠØ± ÙƒÙ„Ù…Ø© Ø§Ù„Ù…Ø±ÙˆØ±'}
+                {isChangingPasswordSubmitting ? 'جارٍ التحديث...' : 'تغيير كلمة المرور'}
               </Button>
             </DialogFooter>
           </DialogContent>

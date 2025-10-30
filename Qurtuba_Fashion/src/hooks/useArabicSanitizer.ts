@@ -17,8 +17,13 @@ function sanitizeElement(el: Element) {
 }
 
 function sanitizeAll() {
-  const nodes = document.querySelectorAll('.arabic-text');
-  nodes.forEach((n) => sanitizeElement(n as Element));
+  // Sanitize all text in the document once on load (handles legacy mojibake literals)
+  try { if (document.body) sanitizeElement(document.body); } catch {}
+  // Additionally sanitize explicitly marked Arabic nodes
+  try {
+    const markedNodes = document.querySelectorAll('.arabic-text');
+    markedNodes.forEach((n) => sanitizeElement(n as Element));
+  } catch {}
 }
 
 export function useArabicSanitizer() {
@@ -26,19 +31,30 @@ export function useArabicSanitizer() {
     if (typeof window === 'undefined' || typeof document === 'undefined') return;
     try { sanitizeAll(); } catch {}
     const observer = new MutationObserver((mutations) => {
+      const findMarkedAncestor = (node: Element | null): Element | null => {
+        let cur: Element | null = node;
+        while (cur) {
+          if (cur.classList?.contains('arabic-text')) return cur;
+          cur = cur.parentElement;
+        }
+        return null;
+      };
       for (const m of mutations) {
         if (m.type === 'childList') {
           m.addedNodes.forEach((node) => {
             if (!(node instanceof Element)) return;
+            // Only sanitize nodes that are explicitly marked or contain marked descendants
             if (node.classList?.contains('arabic-text')) sanitizeElement(node);
             node.querySelectorAll?.('.arabic-text')?.forEach((el) => sanitizeElement(el));
           });
         } else if (m.type === 'characterData') {
-          const el = (m.target as any).parentElement as Element | null;
-          if (el && el.classList?.contains('arabic-text')) sanitizeElement(el);
+          const parent = (m.target as any).parentElement as Element | null;
+          const marked = findMarkedAncestor(parent);
+          if (marked) sanitizeElement(marked);
         } else if (m.type === 'attributes') {
           const el = m.target as Element;
-          if (el && el.classList?.contains('arabic-text')) sanitizeElement(el);
+          const marked = findMarkedAncestor(el);
+          if (marked) sanitizeElement(marked);
         }
       }
     });

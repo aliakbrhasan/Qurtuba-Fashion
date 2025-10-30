@@ -39,7 +39,7 @@ export const CustomerEditDialog: React.FC<CustomerEditDialogProps> = ({
   const [draft, setDraft] = useState<Customer | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [labelAuto, setLabelAuto] = useState<boolean>(true);
-  const [manualLabel, setManualLabel] = useState<string>('Oï¿½O_USO_');
+  const [manualLabel, setManualLabel] = useState<string>('جديد');
 
   useEffect(() => {
     if (open && customer) {
@@ -76,7 +76,7 @@ export const CustomerEditDialog: React.FC<CustomerEditDialogProps> = ({
       });
       const targetId = matched ? String((matched as any).id) : (typeof draft.id === 'number' ? String(draft.id) : String(draft.id || ''));
       if (!targetId) {
-        throw new Error('Ù„Ø§ ÙŠÙ…ÙƒÙ† ØªØ­Ø¯ÙŠØ¯ Ù…Ø¹Ø±Ù Ø§Ù„Ø²Ø¨ÙˆÙ† Ù„Ù„ØªØ­Ø¯ÙŠØ«.');
+        throw new Error('لا يمكن تحديد معرف الزبون للتحديث.');
       }
 
       const payload: any = { name: draft.name, phone: draft.phone, address: draft.address };
@@ -128,9 +128,9 @@ export const CustomerEditDialog: React.FC<CustomerEditDialogProps> = ({
     >
       <DialogContent className="max-w-4xl max-h-[85vh] bg-[#F6E9CA] border-[#C69A72] p-0 flex flex-col" onOpenAutoFocus={(e) => e.preventDefault()}>
         <DialogHeader className="px-4 pt-4 pb-2">
-          <DialogTitle className="text-[#13312A] arabic-text text-lg">ØªØ¹Ø¯ÙŠÙ„ Ø¨ÙŠØ§Ù†Ø§Øª Ø§Ù„Ø²Ø¨ÙˆÙ†</DialogTitle>
+          <DialogTitle className="text-[#13312A] arabic-text text-lg">تعديل بيانات الزبون</DialogTitle>
           <DialogDescription className="text-[#155446] arabic-text text-sm">
-            Ø¹Ø¯Ù„ Ø§Ù„Ø­Ù‚ÙˆÙ„ Ø§Ù„Ù…Ø·Ù„ÙˆØ¨Ø© Ø«Ù… Ø§Ø­ÙØ¸ Ø§Ù„ØªØºÙŠÙŠØ±Ø§Øª
+            عدّل الحقول المطلوبة ثم احفظ التغييرات
           </DialogDescription>
         </DialogHeader>
 
@@ -139,14 +139,14 @@ export const CustomerEditDialog: React.FC<CustomerEditDialogProps> = ({
             <div className="flex-1 overflow-y-auto px-4 pb-3" dir="rtl">
               <form id="customer-edit-form" className="space-y-3" onSubmit={handleSubmit}>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 min-w-0">
-                  {/* Ø§Ù„Ø¨ÙŠØ§Ù†Ø§Øª Ø§Ù„Ø£Ø³Ø§Ø³ÙŠØ© */}
+                  {/* البيانات الأساسية */}
                   <Card className="bg-white border-[#E6D9C4] rounded-xl shadow-[0_2px_8px_rgba(0,0,0,0.04)] min-w-0 flex flex-col">
                     <CardHeader className="py-0.5 border-b border-[#EEE1CD] min-h-[24px]">
-                      <CardTitle className="text-[#1F4529] arabic-text text-base font-bold">Ø§Ù„Ø¨ÙŠØ§Ù†Ø§Øª Ø§Ù„Ø£Ø³Ø§Ø³ÙŠØ©</CardTitle>
+                      <CardTitle className="text-[#1F4529] arabic-text text-base font-bold">البيانات الأساسية</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-2 py-2 flex-1 min-w-0">
                       <div>
-                        <Label className="text-[#13312A] arabic-text text-xs">Ø§Ù„Ø§Ø³Ù… Ø§Ù„ÙƒØ§Ù…Ù„</Label>
+                        <Label className="text-[#13312A] arabic-text text-xs">الاسم الكامل</Label>
                         <Input
                           className="bg-white border-[#C69A72] text-right h-8 text-sm w-full min-w-0"
                           value={draft.name}
@@ -156,7 +156,7 @@ export const CustomerEditDialog: React.FC<CustomerEditDialogProps> = ({
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                         <div>
-                          <Label className="text-[#13312A] arabic-text text-xs">Ø±Ù‚Ù… Ø§Ù„Ù‡Ø§ØªÙ</Label>
+                          <Label className="text-[#13312A] arabic-text text-xs">رقم الهاتف</Label>
                           <Input
                             className="bg-white border-[#C69A72] text-right h-8 text-sm w-full min-w-0"
                             value={draft.phone}
@@ -165,7 +165,7 @@ export const CustomerEditDialog: React.FC<CustomerEditDialogProps> = ({
                           />
                         </div>
                         <div>
-                          <Label className="text-[#13312A] arabic-text text-xs">Ø§Ù„Ø¹Ù†ÙˆØ§Ù†</Label>
+                          <Label className="text-[#13312A] arabic-text text-xs">العنوان</Label>
                           <Input
                             className="bg-white border-[#C69A72] text-right h-8 text-sm w-full min-w-0"
                             value={draft.address || ""}
@@ -175,28 +175,28 @@ export const CustomerEditDialog: React.FC<CustomerEditDialogProps> = ({
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
                         <div>
-                          <Label className="text-[#13312A] arabic-text text-xs">ÙˆØ¶Ø¹ Ø§Ù„ØªØµÙ†ÙŠÙ</Label>
-                          <Select value={labelAuto ? 'auto' : 'manual'} onValueChange={(v) => setLabelAuto(v === 'auto')}>
+                          <Label className="text-[#13312A] arabic-text text-xs">وضع التصنيف</Label>
+                          <Select value={labelAuto ? 'auto' : 'manual'} onValueChange={(v: string) => setLabelAuto(v === 'auto')}>
                             <SelectTrigger className="bg-white border-[#C69A72] text-right h-8 text-sm w-full min-w-0">
-                              <SelectValue placeholder="Ø§Ø®ØªØ± ÙˆØ¶Ø¹ Ø§Ù„ØªØµÙ†ÙŠÙ" />
+                              <SelectValue placeholder="اختر وضع التصنيف" />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="auto">ØªÙ„Ù‚Ø§Ø¦ÙŠ</SelectItem>
-                              <SelectItem value="manual">ÙŠØ¯ÙˆÙŠ</SelectItem>
+                              <SelectItem value="auto">تلقائي</SelectItem>
+                              <SelectItem value="manual">يدوي</SelectItem>
                             </SelectContent>
                           </Select>
                         </div>
                         <div>
-                          <Label className="text-[#13312A] arabic-text text-xs">ØµÙ†Ù Ø§Ù„Ø²Ø¨ÙˆÙ† (ÙŠØ¯ÙˆÙŠ)</Label>
+                          <Label className="text-[#13312A] arabic-text text-xs">تصنيف الزبون (يدوي)</Label>
                           <Select value={manualLabel} onValueChange={setManualLabel} disabled={labelAuto}>
                             <SelectTrigger className="bg-white border-[#C69A72] text-right h-8 text-sm w-full min-w-0">
-                              <SelectValue placeholder="Ø§Ø®ØªØ± Ø§Ù„ØµÙ†Ù" />
+                              <SelectValue placeholder="اختر التصنيف" />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="Oï¿½O_USO_">Ø¬Ø¯ÙŠØ¯</SelectItem>
-                              <SelectItem value="U.U+Oï¿½O,U.">Ø§Ø¹ØªÙŠØ§Ø¯ÙŠ</SelectItem>
-                              <SelectItem value="U^U?US">ÙˆÙÙŠ</SelectItem>
-                              <SelectItem value='Oï¿½Uï¿½O"US'>Ø°Ù‡Ø¨ÙŠ</SelectItem>
+                              <SelectItem value="جديد">جديد</SelectItem>
+                              <SelectItem value="منتظم">منتظم</SelectItem>
+                              <SelectItem value="وفي">وفي</SelectItem>
+                              <SelectItem value='ذهبي'>ذهبي</SelectItem>
                             </SelectContent>
                           </Select>
                         </div>
@@ -204,15 +204,15 @@ export const CustomerEditDialog: React.FC<CustomerEditDialogProps> = ({
                     </CardContent>
                   </Card>
 
-                  {/* Ø§Ù„Ù‚ÙŠØ§Ø³Ø§Øª */}
+                  {/* القياسات */}
                   <Card className="hidden bg-white border-[#E6D9C4] rounded-xl shadow-[0_2px_8px_rgba(0,0,0,0.04)] min-w-0 flex flex-col">
                     <CardHeader className="py-0.5 border-b border-[#EEE1CD] min-h-[24px]">
-                      <CardTitle className="text-[#1F4529] arabic-text text-base font-bold">Ø§Ù„Ù‚ÙŠØ§Ø³Ø§Øª (Ø³Ù…)</CardTitle>
+                      <CardTitle className="text-[#1F4529] arabic-text text-base font-bold">القياسات (سم)</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-2 py-2 flex-1 min-w-0">
                       <div className="grid grid-cols-3 gap-2 min-w-0">
                         <div className="min-w-[120px]">
-                          <Label className="text-[#13312A] arabic-text text-xs">Ø§Ù„Ø·ÙˆÙ„</Label>
+                          <Label className="text-[#13312A] arabic-text text-xs">الطول</Label>
                           <Input
                             type="number"
                             className="bg-white border-[#C69A72] text-right min-w-0 h-8 text-sm"
@@ -222,7 +222,7 @@ export const CustomerEditDialog: React.FC<CustomerEditDialogProps> = ({
                           />
                         </div>
                         <div className="min-w-[120px]">
-                          <Label className="text-[#13312A] arabic-text text-xs">Ø§Ù„ÙƒØªÙ</Label>
+                          <Label className="text-[#13312A] arabic-text text-xs">الكتف</Label>
                           <Input
                             type="number"
                             className="bg-white border-[#C69A72] text-right min-w-0 h-8 text-sm"
@@ -232,7 +232,7 @@ export const CustomerEditDialog: React.FC<CustomerEditDialogProps> = ({
                           />
                         </div>
                         <div className="min-w-[120px]">
-                          <Label className="text-[#13312A] arabic-text text-xs">Ø§Ù„Ø±Ø¯Ù†</Label>
+                          <Label className="text-[#13312A] arabic-text text-xs">الوسط</Label>
                           <Input
                             type="number"
                             className="bg-white border-[#C69A72] text-right min-w-0 h-8 text-sm"
@@ -245,7 +245,7 @@ export const CustomerEditDialog: React.FC<CustomerEditDialogProps> = ({
 
                       <div className="grid grid-cols-3 gap-2 min-w-0">
                         <div className="min-w-[120px]">
-                          <Label className="text-[#13312A] arabic-text text-xs">Ø§Ù„ØµØ¯Ø±</Label>
+                          <Label className="text-[#13312A] arabic-text text-xs">الصدر</Label>
                           <Input
                             type="number"
                             className="bg-white border-[#C69A72] text-right min-w-0 h-8 text-sm"
@@ -255,7 +255,7 @@ export const CustomerEditDialog: React.FC<CustomerEditDialogProps> = ({
                           />
                         </div>
                         <div className="min-w-[120px]">
-                          <Label className="text-[#13312A] arabic-text text-xs">Ø§Ù„ÙŠØ§Ø®Ø©</Label>
+                          <Label className="text-[#13312A] arabic-text text-xs">الياقة</Label>
                           <Input
                             type="number"
                             className="bg-white border-[#C69A72] text-right min-w-0 h-8 text-sm"
@@ -279,7 +279,7 @@ export const CustomerEditDialog: React.FC<CustomerEditDialogProps> = ({
                 className="border-[#C69A72] text-[#13312A] hover:bg-[#C69A72]"
                 disabled={isSaving}
               >
-                Ø¥Ù„ØºØ§Ø¡
+                إلغاء
               </Button>
               <Button
                 type="submit"
@@ -287,12 +287,12 @@ export const CustomerEditDialog: React.FC<CustomerEditDialogProps> = ({
                 className="bg-[#155446] hover:bg-[#13312A] text-[#F6E9CA]"
                 disabled={isSaving}
               >
-                {isSaving ? "Ø¬Ø§Ø±ÙŠ Ø§Ù„Ø­ÙØ¸..." : "Ø­ÙØ¸ Ø§Ù„ØªØºÙŠÙŠØ±Ø§Øª"}
+                {isSaving ? "جاري الحفظ..." : "حفظ التغييرات"}
               </Button>
             </div>
           </>
         ) : (
-          <div className="py-6 text-center text-[#155446] arabic-text">Ù„Ø§ ØªÙˆØ¬Ø¯ Ø¨ÙŠØ§Ù†Ø§Øª Ù…ØªØ§Ø­Ø©.</div>
+          <div className="py-6 text-center text-[#155446] arabic-text">لا توجد بيانات متاحة.</div>
         )}
       </DialogContent>
     </Dialog>
