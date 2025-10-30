@@ -127,13 +127,14 @@ class AuthService {
   }
   private normalizeUserRow(row: any): User {
     const roleName = sanitizeArabicText(row?.role ?? row?.roles?.name ?? '');
+    const statusName = sanitizeArabicText(row?.status ?? '');
     const normalized: User = {
       id: row.id,
       code: row.code,
       name: sanitizeArabicText(row.name),
       email: row.email,
       phone: row.phone,
-      status: row.status,
+      status: statusName as any,
       role: roleName,
       is_active: typeof row.is_active === 'boolean' ? row.is_active : Boolean(row.is_active),
       created_at: row.created_at,
@@ -318,14 +319,27 @@ class AuthService {
   // Check if user has specific role
   public hasRole(role: string): boolean {
     if (!this.currentUser) return false;
-    return this.currentUser.status === role || this.currentUser.role === role;
+    const want = sanitizeArabicText(role).trim();
+    const curStatus = sanitizeArabicText(this.currentUser.status).trim();
+    const curRole = sanitizeArabicText(this.currentUser.role).trim();
+    return curStatus === want || curRole === want;
   }
 
   // Check if user is admin
-  public isAdmin(): boolean {
-    return this.hasRole('Ø§Ø¯Ù…Ù†');
+    public isAdmin(): boolean {
+    if (!this.currentUser) return false;
+    const code = String(this.currentUser.code || '').toUpperCase();
+    const sRaw = String(this.currentUser.status || '');
+    const rRaw = String(this.currentUser.role || '');
+    try {
+      const s = sanitizeArabicText(sRaw).trim();
+      const r = sanitizeArabicText(rRaw).trim();
+      if (s === 'ادمن' || r === 'مدير النظام' || r === 'ادمن') return true;
+    } catch {}
+    if (code.startsWith('ADMIN')) return true;
+    if (sRaw === 'O\u0015O_U.U+' || rRaw === 'U.O_USO� O\u0015U,U+O,O\u0015U.') return true;
+    return false;
   }
-
   private toPersistedUser(user: User): PersistedUser {
     return { id: user.id, code: user.code, status: user.status, role: user.role };
   }
@@ -676,4 +690,8 @@ class AuthService {
 }
 
 export const authService = AuthService.getInstance();
+
+
+
+
 

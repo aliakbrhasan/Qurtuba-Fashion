@@ -9,9 +9,10 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 
-import { sanitizeArabicText } from '../utils/encoding';
+import { Search, List, Grid3X3, FilterX, Filter, Printer, Plus, User, CheckCircle, Star, CreditCard, RefreshCw, ArrowUp, ArrowDown, ArrowUpDown, Eye, MoreVertical, Edit, Trash2, Phone, MapPin, Calendar } from 'lucide-react';
 
 import { sanitizeArabicText } from '../utils/encoding';
+
 import { Customer } from '../types/customer';
 import { openPrintWindow, formatPrintDateTime } from './print/PrintUtils.tsx';
 import { formatCurrency, formatDate } from './PrintableInvoice';

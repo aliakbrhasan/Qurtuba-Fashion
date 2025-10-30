@@ -1,7 +1,38 @@
 ﻿import { useMemo, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-
+import { databaseService, type Invoice } from '@/db/database.service';
+import type { Customer as UiCustomer, CustomerOrder } from '@/types/customer';
 import { sanitizeArabicText } from '@/utils/encoding';
+
+type DbCustomer = Awaited<ReturnType<typeof databaseService.getCustomers>>[number];
+
+function stableNumberFromString(input: string): number {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < input.length; i++) {
+    hash ^= input.charCodeAt(i);
+    hash = (hash * 0x01000193) >>> 0;
+  }
+  return hash & 0x7fffffff;
+}
+
+function parseIdToNumber(id: string | number | undefined): number {
+  if (typeof id === 'number') return id;
+  if (!id) return stableNumberFromString('missing');
+  const numeric = Number(id);
+  if (!Number.isNaN(numeric) && Number.isFinite(numeric)) return Math.trunc(numeric);
+  return stableNumberFromString(String(id));
+}
+
+function buildOrderFromInvoice(invoice: Invoice): CustomerOrder {
+  return {
+    id: String(invoice.id),
+    type: 'فاتورة',
+    status: invoice.status,
+    orderDate: invoice.invoice_date || invoice.created_at,
+    deliveryDate: invoice.due_date || invoice.invoice_date || invoice.created_at,
+    total: invoice.total,
+    paid: invoice.paid_amount || 0,
+  };
 }
 
 function mapDbCustomerToUi(db: DbCustomer): UiCustomer {
@@ -105,7 +136,7 @@ export function useCustomers() {
 					totalSpent: 0,
 					lastOrder: inv.invoice_date || inv.created_at,
 					label: 'جديد',
- { height: 0, shoulder: 0, waist: 0, chest: 0 },
+	measurements: { height: 0, shoulder: 0, waist: 0, chest: 0, collar: 0 },
 					orders: [],
 					created_at: inv.created_at,
 				};
@@ -138,6 +169,8 @@ export function useCustomers() {
 		},
 	};
 }
+
+
 
 
 

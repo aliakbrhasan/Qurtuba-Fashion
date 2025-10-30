@@ -1,4 +1,6 @@
-import { useState } from 'react';
+﻿import { useState, Suspense } from 'react';
+import React from 'react';
+const AppProvidersLazy = React.lazy(() => import('./app/AppProviders').then(m => ({ default: m.AppProviders })));
 import { Layout } from './components/Layout';
 import { LoginPage } from './components/LoginPage';
 import { Dashboard } from './components/Dashboard';
@@ -13,7 +15,8 @@ import { UsersManagementPage } from './components/UsersManagementPage';
 import { AdminLogPage } from './components/AdminLogPage';
 import { RolesManagementPage } from './components/RolesManagementPage';
 import { Toaster } from './components/ui/sonner';
-import { AppProviders } from './app/AppProviders';
+
+import { useArabicSanitizer } from './hooks/useArabicSanitizer';
 import { Customer } from './types/customer';
 import { authService, User } from './services/auth.service';
 // Database init removed to prevent test/sync side-effects on reload
@@ -21,6 +24,7 @@ import { authService, User } from './services/auth.service';
 // Legacy sample customers removed; customers are now sourced from DB/invoices via CustomersPageWithDB
 
 export default function App() {
+  useArabicSanitizer();
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [currentPage, setCurrentPage] = useState('dashboard');
@@ -88,8 +92,8 @@ export default function App() {
   };
 
   const handleViewInvoiceDetails = (invoice: any) => {
-    // إذا كان invoice كائن كامل، نأخذ الـ ID
-    // إذا كان ID فقط، نستخدمه مباشرة
+    // Ø¥Ø°Ø§ ÙƒØ§Ù† invoice ÙƒØ§Ø¦Ù† ÙƒØ§Ù…Ù„ØŒ Ù†Ø£Ø®Ø° Ø§Ù„Ù€ ID
+    // Ø¥Ø°Ø§ ÙƒØ§Ù† ID ÙÙ‚Ø·ØŒ Ù†Ø³ØªØ®Ø¯Ù…Ù‡ Ù…Ø¨Ø§Ø´Ø±Ø©
     const invoiceId = typeof invoice === 'string' ? invoice : invoice.id;
     setSelectedInvoice({ id: invoiceId });
     setCurrentPage('invoiceDetails');
@@ -102,7 +106,7 @@ export default function App() {
       await InvoiceService.markAsPaid(invoiceId);
       try { queryClient.invalidateQueries({ queryKey: ['invoices'] }); } catch {}
       if (selectedInvoice && selectedInvoice.id === invoiceId) {
-        setSelectedInvoice({ ...selectedInvoice, status: 'مدفوع' });
+        setSelectedInvoice({ ...selectedInvoice, status: 'Ù…Ø¯ÙÙˆØ¹' });
       }
     } catch (e) {
       console.error('Failed to mark as paid:', e);
@@ -173,7 +177,8 @@ export default function App() {
   };
 
   return (
-    <AppProviders>
+    <Suspense fallback={null}>
+    <AppProvidersLazy>
       <div className="min-h-screen">
         {!isLoggedIn ? (
           <LoginPage onLogin={handleLogin} />
@@ -201,6 +206,9 @@ export default function App() {
         )}
         <Toaster position="top-center" />
       </div>
-    </AppProviders>
+    </AppProvidersLazy>
+    </Suspense>
   );
 }
+
+

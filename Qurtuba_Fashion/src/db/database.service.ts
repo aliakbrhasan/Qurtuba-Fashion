@@ -1,4 +1,4 @@
-import { supabase } from './client';
+﻿import { supabase } from './client';
 import { storage } from '@/storage';
 import { syncEngine } from '@/sync';
 import type { User, Role } from '../types/user';
@@ -72,8 +72,8 @@ export interface NewInvoice {
   items: Omit<InvoiceItem, 'id' | 'invoice_id' | 'created_at'>[];
   fabric_image_url?: string;
   // Optional design details saved with the invoice (comma-separated lists)
-  fabric_type?: string;   // e.g. "صيفي، شتوي"
-  fabric_source?: string; // e.g. "داخل المحل، خارج المحل"
+  fabric_type?: string;   // e.g. "ØµÙŠÙÙŠØŒ Ø´ØªÙˆÙŠ"
+  fabric_source?: string; // e.g. "Ø¯Ø§Ø®Ù„ Ø§Ù„Ù…Ø­Ù„ØŒ Ø®Ø§Ø±Ø¬ Ø§Ù„Ù…Ø­Ù„"
   collar_type?: string;
   chest_style?: string;
   sleeve_end?: string;
@@ -123,7 +123,7 @@ export class DatabaseService {
       const code = (user?.code || '').trim();
       if (code) return code;
     } catch {}
-    return 'مسؤول النظام';
+    return 'Ù…Ø³Ø¤ÙˆÙ„ Ø§Ù„Ù†Ø¸Ø§Ù…';
   }
 
   // Helper function to ensure proper UTF-8 encoding for Arabic text
@@ -187,11 +187,11 @@ export class DatabaseService {
       {
         id: 1,
         code: 'ADM001',
-        name: 'أحمد محمد',
+        name: 'Ø£Ø­Ù…Ø¯ Ù…Ø­Ù…Ø¯',
         email: 'ahmed@qurtuba.com',
         phone: '07701234567',
-        status: 'ادمن',
-        role: 'مدير النظام',
+        status: 'Ø§Ø¯Ù…Ù†',
+        role: 'Ù…Ø¯ÙŠØ± Ø§Ù„Ù†Ø¸Ø§Ù…',
         isActive: true,
         createdAt: '2024-01-01',
         lastLogin: '2024-01-15'
@@ -201,8 +201,8 @@ export class DatabaseService {
     this.localData.roles = [
       {
         id: 1,
-        name: 'مدير النظام',
-        description: 'مدير النظام الكامل',
+        name: 'Ù…Ø¯ÙŠØ± Ø§Ù„Ù†Ø¸Ø§Ù…',
+        description: 'Ù…Ø¯ÙŠØ± Ø§Ù„Ù†Ø¸Ø§Ù… Ø§Ù„ÙƒØ§Ù…Ù„',
         permissions: ['all'],
         allowedPages: ['dashboard', 'customers', 'orders', 'invoices', 'users', 'roles'],
         allowedActions: ['create', 'read', 'update', 'delete', 'export', 'print'],
@@ -449,8 +449,8 @@ export class DatabaseService {
         const { notifications } = await import('@/services/notifications.service');
         notifications.emit({
           type: 'success',
-          title: 'زبون جديد',
-          message: `تم إضافة الزبون ${customer.name}`,
+          title: 'Ø²Ø¨ÙˆÙ† Ø¬Ø¯ÙŠØ¯',
+          message: `ØªÙ… Ø¥Ø¶Ø§ÙØ© Ø§Ù„Ø²Ø¨ÙˆÙ† ${customer.name}`,
           target: { page: 'customers', id: (this.localData.customers[0] as any).id?.toString?.() },
         });
       } catch {}
@@ -518,8 +518,8 @@ export class DatabaseService {
           const { notifications } = await import('@/services/notifications.service');
           notifications.emit({
             type: 'info',
-            title: 'تعديل زبون',
-            message: `تم تعديل بيانات الزبون`,
+            title: 'ØªØ¹Ø¯ÙŠÙ„ Ø²Ø¨ÙˆÙ†',
+            message: `ØªÙ… ØªØ¹Ø¯ÙŠÙ„ Ø¨ÙŠØ§Ù†Ø§Øª Ø§Ù„Ø²Ø¨ÙˆÙ†`,
             target: { page: 'customers', id: id?.toString?.() },
           });
         } catch {}
@@ -710,7 +710,7 @@ export class DatabaseService {
           name: customerName,
           phone: customerPhone || '',
           address: customerAddress || '',
-          label: 'جديد',
+          label: 'Ø¬Ø¯ÙŠØ¯',
           totalSpent: paid,
           lastOrder: lastOrderDate,
           measurements: { height: 0, shoulder: 0, waist: 0, chest: 0, collar: 0 },
@@ -1034,11 +1034,11 @@ export class DatabaseService {
           const orderCount = invs.length;
           let initialLabel = 'جديد';
           if (totalSpent >= 1000000 || orderCount >= 50) {
-            initialLabel = 'ذهبي';
+            initialLabel = 'جديد';
           } else if (totalSpent >= 500000 || orderCount >= 20) {
-            initialLabel = 'وفي';
+            initialLabel = 'جديد';
           } else if (totalSpent >= 100000 || orderCount >= 5) {
-            initialLabel = 'منتظم';
+            initialLabel = 'جديد';
           }
           
           // Create a new customer derived from invoices
@@ -1064,11 +1064,11 @@ export class DatabaseService {
             // Calculate label automatically based on spending and orders
             const orderCount = invs.length;
             if (totalSpent >= 1000000 || orderCount >= 50) {
-              updatedLabel = 'ذهبي';
+              updatedLabel = 'جديد';
             } else if (totalSpent >= 500000 || orderCount >= 20) {
-              updatedLabel = 'وفي';
+              updatedLabel = 'جديد';
             } else if (totalSpent >= 100000 || orderCount >= 5) {
-              updatedLabel = 'منتظم';
+              updatedLabel = 'جديد';
             } else {
               updatedLabel = 'جديد';
             }
@@ -1161,3 +1161,6 @@ export class DatabaseService {
 
 // Export singleton instance
 export const databaseService = DatabaseService.getInstance();
+
+
+
