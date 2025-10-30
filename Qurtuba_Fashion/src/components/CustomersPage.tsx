@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+﻿import React, { useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -8,28 +8,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import {
-  Plus,
-  Search,
-  Edit,
-  Phone,
-  MapPin,
-  Calendar,
-  CreditCard,
-  Star,
-  Printer,
-  Filter,
-  Grid3X3,
-  List,
-  MoreVertical,
-  Eye,
-  FilterX,
-  RefreshCw,
-  User,
-  CheckCircle,
-  Trash2
-} from 'lucide-react';
-import { ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
+
+import { sanitizeArabicText } from '../utils/encoding';
+
+import { sanitizeArabicText } from '../utils/encoding';
 import { Customer } from '../types/customer';
 import { openPrintWindow, formatPrintDateTime } from './print/PrintUtils.tsx';
 import { formatCurrency, formatDate } from './PrintableInvoice';
@@ -104,18 +86,18 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false, on
       if (relatedInvoices.length > 0) {
         const invoiceNumbers = relatedInvoices.map(inv => inv.invoice_number || inv.id).join(', ');
         window.alert(
-          `لا يمكن حذف الزبون "${customer.name}" لأنه مرتبط بـ ${relatedInvoices.length} فاتورة نشطة.\n\n` +
-          `أرقام الفواتير: ${invoiceNumbers}\n\n` +
-          'يرجى حذف الفواتير المرتبطة أولاً ثم إعادة المحاولة.'
+          `Ù„Ø§ ÙŠÙ…ÙƒÙ† Ø­Ø°Ù Ø§Ù„Ø²Ø¨ÙˆÙ† "${customer.name}" Ù„Ø£Ù†Ù‡ Ù…Ø±ØªØ¨Ø· Ø¨Ù€ ${relatedInvoices.length} ÙØ§ØªÙˆØ±Ø© Ù†Ø´Ø·Ø©.\n\n` +
+          `Ø£Ø±Ù‚Ø§Ù… Ø§Ù„ÙÙˆØ§ØªÙŠØ±: ${invoiceNumbers}\n\n` +
+          'ÙŠØ±Ø¬Ù‰ Ø­Ø°Ù Ø§Ù„ÙÙˆØ§ØªÙŠØ± Ø§Ù„Ù…Ø±ØªØ¨Ø·Ø© Ø£ÙˆÙ„Ø§Ù‹ Ø«Ù… Ø¥Ø¹Ø§Ø¯Ø© Ø§Ù„Ù…Ø­Ø§ÙˆÙ„Ø©.'
         );
         return;
       }
 
-      const ok = window.confirm(`هل أنت متأكد من حذف الزبون: ${customer.name}؟`);
+      const ok = window.confirm(`Ù‡Ù„ Ø£Ù†Øª Ù…ØªØ£ÙƒØ¯ Ù…Ù† Ø­Ø°Ù Ø§Ù„Ø²Ø¨ÙˆÙ†: ${customer.name}ØŸ`);
       if (!ok) return;
 
       if (!resolvedId) {
-        throw new Error('O�O1O�O� O�O-O_USO_ U.O1O�U? OU,O�O"U^U+.');
+        throw new Error('Oï¿½O1Oï¿½Oï¿½ Oï¿½O-O_USO_ U.O1Oï¿½U? OU,Oï¿½O"U^U+.');
       }
 
       console.log('Deleting customer:', {
@@ -137,7 +119,7 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false, on
         queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
       } catch {}
 
-      window.alert(`تم حذف الزبون "${customer.name}" بنجاح.`);
+      window.alert(`ØªÙ… Ø­Ø°Ù Ø§Ù„Ø²Ø¨ÙˆÙ† "${customer.name}" Ø¨Ù†Ø¬Ø§Ø­.`);
     } catch (e) {
       console.error('Failed to delete customer:', e);
     }
@@ -145,7 +127,7 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false, on
 
   // Lightweight date formatter for human-readable dates
   const formatHumanDate = (dateString: string | null) => {
-    if (!dateString) return 'لا يوجد طلبات';
+    if (!dateString) return 'Ù„Ø§ ÙŠÙˆØ¬Ø¯ Ø·Ù„Ø¨Ø§Øª';
     
     try {
       const date = new Date(dateString);
@@ -153,9 +135,9 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false, on
       const diffTime = Math.abs(now.getTime() - date.getTime());
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
       
-      if (diffDays === 1) return 'أمس';
-      if (diffDays < 7) return `منذ ${diffDays} أيام`;
-      if (diffDays < 30) return `منذ ${Math.ceil(diffDays / 7)} أسابيع`;
+      if (diffDays === 1) return 'Ø£Ù…Ø³';
+      if (diffDays < 7) return `Ù…Ù†Ø° ${diffDays} Ø£ÙŠØ§Ù…`;
+      if (diffDays < 30) return `Ù…Ù†Ø° ${Math.ceil(diffDays / 7)} Ø£Ø³Ø§Ø¨ÙŠØ¹`;
       
       // Format as MM-YYYY HH:MM for older dates
       const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -165,30 +147,33 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false, on
       
       return `${month}-${year} ${hours}:${minutes}`;
     } catch {
-      return 'تاريخ غير صحيح';
+      return 'ØªØ§Ø±ÙŠØ® ØºÙŠØ± ØµØ­ÙŠØ­';
     }
   };
 
   const getLabelColor = (label: string) => {
-    switch (label) {
-      case 'جديد': return 'bg-blue-100 text-blue-800';
-      case 'منتظم': return 'bg-green-100 text-green-800';
-      case 'وفي': return 'bg-purple-100 text-purple-800';
-      case 'ذهبي': return 'bg-yellow-100 text-yellow-800';
+    const v = sanitizeArabicText(label);
+    switch (v) {
+      case 'Ø¬Ø¯ÙŠØ¯': return 'bg-blue-100 text-blue-800';
+      case 'Ù…Ù†ØªØ¸Ù…': return 'bg-green-100 text-green-800';
+      case 'ÙˆÙÙŠ': return 'bg-purple-100 text-purple-800';
+      case 'Ø°Ù‡Ø¨ÙŠ': return 'bg-yellow-100 text-yellow-800';
       default: return 'bg-gray-100 text-gray-800';
     }
   };
 
   const getLabelIcon = (label: string) => {
-    switch (label) {
-      case 'ذهبي': return <Star className="w-3 h-3" />;
+    const v = sanitizeArabicText(label);
+    switch (v) {
+      case 'Ø°Ù‡Ø¨ÙŠ': return <Star className="w-3 h-3" />;
       default: return null;
     }
   };
 
 
   const getLabelText = (label: string) => {
-    switch (label) {
+    const v = sanitizeArabicText(label);
+    switch (v) {
       case 'O?O_USO_': return '????';
       case 'U.U+O?O,U.': return '???????';
       case 'U^U?US': return '???';
@@ -197,26 +182,27 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false, on
     }
   };
   const getLabelPrintStyle = (label: string): React.CSSProperties => {
-    switch (label) {
-      case 'ذهبي':
+    const v = sanitizeArabicText(label);
+    switch (v) {
+      case 'Ø°Ù‡Ø¨ÙŠ':
         return {
           backgroundColor: 'rgba(246, 196, 120, 0.25)',
           color: '#8a5a00',
           border: '1px solid rgba(246, 196, 120, 0.5)',
         };
-      case 'وفي':
+      case 'ÙˆÙÙŠ':
         return {
           backgroundColor: 'rgba(134, 88, 190, 0.18)',
           color: '#533288',
           border: '1px solid rgba(134, 88, 190, 0.35)',
         };
-      case 'منتظم':
+      case 'Ù…Ù†ØªØ¸Ù…':
         return {
           backgroundColor: 'rgba(21, 84, 70, 0.15)',
           color: '#155446',
           border: '1px solid rgba(21, 84, 70, 0.4)',
         };
-      case 'جديد':
+      case 'Ø¬Ø¯ÙŠØ¯':
         return {
           backgroundColor: 'rgba(59, 130, 246, 0.12)',
           color: '#1d4ed8',
@@ -270,7 +256,7 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false, on
         phone: '',
         address: '',
         label: 'جديد'
-      });
+  });
       setIsNewCustomerOpen(false);
     } catch (error) {
       console.error('Error creating customer:', error);
@@ -352,10 +338,10 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false, on
   // Statistics
   const stats = useMemo(() => {
     const total = filteredAndSortedCustomers.length;
-    const newCustomers = filteredAndSortedCustomers.filter(c => c.label === 'جديد').length;
-    const regularCustomers = filteredAndSortedCustomers.filter(c => c.label === 'منتظم').length;
-    const loyalCustomers = filteredAndSortedCustomers.filter(c => c.label === 'وفي').length;
-    const goldenCustomers = filteredAndSortedCustomers.filter(c => c.label === 'ذهبي').length;
+    const newCustomers = filteredAndSortedCustomers.filter(c => c.label === 'Ø¬Ø¯ÙŠØ¯').length;
+    const regularCustomers = filteredAndSortedCustomers.filter(c => c.label === 'Ù…Ù†ØªØ¸Ù…').length;
+    const loyalCustomers = filteredAndSortedCustomers.filter(c => c.label === 'ÙˆÙÙŠ').length;
+    const goldenCustomers = filteredAndSortedCustomers.filter(c => c.label === 'Ø°Ù‡Ø¨ÙŠ').length;
     const totalSpent = filteredAndSortedCustomers.reduce((sum, c) => sum + c.totalSpent, 0);
     const totalOrders = filteredAndSortedCustomers.reduce((sum, c) => sum + c.orders.length, 0);
     
@@ -377,7 +363,7 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false, on
     const now = new Date();
 
     console.log('About to call openPrintWindow with:', {
-      title: 'قائمة الزبائن',
+      title: 'Ù‚Ø§Ø¦Ù…Ø© Ø§Ù„Ø²Ø¨Ø§Ø¦Ù†',
       totalCustomers,
       totalOrders,
       totalSpent,
@@ -385,7 +371,7 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false, on
       labelCounts
     });
 
-    openPrintWindow('قائمة الزبائن', (
+    openPrintWindow('Ù‚Ø§Ø¦Ù…Ø© Ø§Ù„Ø²Ø¨Ø§Ø¦Ù†', (
       <CustomersPrintDocument
         now={now}
         totalCustomers={totalCustomers}
@@ -409,8 +395,8 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false, on
           <div className="flex flex-row-reverse items-center justify-between gap-4 overflow-x-auto whitespace-nowrap md:flex-nowrap">
             {/* Title and description (right side) */}
             <div className="flex-shrink-0 text-right">
-              <h1 className="text-3xl font-bold text-[#13312A] arabic-text mb-1">إدارة الزبائن</h1>
-              <p className="text-[#155446] arabic-text">إدارة شاملة لبيانات العملاء والزبائن</p>
+              <h1 className="text-3xl font-bold text-[#13312A] arabic-text mb-1">Ø¥Ø¯Ø§Ø±Ø© Ø§Ù„Ø²Ø¨Ø§Ø¦Ù†</h1>
+              <p className="text-[#155446] arabic-text">Ø¥Ø¯Ø§Ø±Ø© Ø´Ø§Ù…Ù„Ø© Ù„Ø¨ÙŠØ§Ù†Ø§Øª Ø§Ù„Ø¹Ù…Ù„Ø§Ø¡ ÙˆØ§Ù„Ø²Ø¨Ø§Ø¦Ù†</p>
             </div>
 
             {/* Center controls: search + basic filters */}
@@ -419,7 +405,7 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false, on
               <div className="relative w-[360px] md:w-[480px]">
                 <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 text-[#155446] w-5 h-5 pointer-events-none" />
                 <Input
-                  placeholder="بحث عن الزبائن، الأسماء، أو أرقام الهاتف..."
+                  placeholder="Ø¨Ø­Ø« Ø¹Ù† Ø§Ù„Ø²Ø¨Ø§Ø¦Ù†ØŒ Ø§Ù„Ø£Ø³Ù…Ø§Ø¡ØŒ Ø£Ùˆ Ø£Ø±Ù‚Ø§Ù… Ø§Ù„Ù‡Ø§ØªÙ..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pr-16 pl-4 py-3 bg-white border-2 border-[#C69A72]/30 rounded-xl text-right text-base focus:border-[#155446] focus:ring-2 focus:ring-[#155446]/20 transition-all duration-300"
@@ -428,15 +414,15 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false, on
 
               {/* Sort */}
               <Select value={sortField} onValueChange={(val: string) => { setSortField(val); setSortDirection(defaultDescFields.has(val) ? 'desc' : 'asc'); }}>
-                <SelectTrigger className="w-40 border-2 border-[#C69A72]/30 rounded-xl" aria-label="ترتيب حسب" title="ترتيب حسب">
-                  <SelectValue placeholder="ترتيب حسب" />
+                <SelectTrigger className="w-40 border-2 border-[#C69A72]/30 rounded-xl" aria-label="ØªØ±ØªÙŠØ¨ Ø­Ø³Ø¨" title="ØªØ±ØªÙŠØ¨ Ø­Ø³Ø¨">
+                  <SelectValue placeholder="ØªØ±ØªÙŠØ¨ Ø­Ø³Ø¨" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="name">الاسم</SelectItem>
-                  <SelectItem value="totalSpent">إجمالي الإنفاق</SelectItem>
-                  <SelectItem value="ordersCount">عدد الطلبات</SelectItem>
-                  <SelectItem value="lastOrder">آخر طلب</SelectItem>
-                  <SelectItem value="label">التصنيف</SelectItem>
+                  <SelectItem value="name">Ø§Ù„Ø§Ø³Ù…</SelectItem>
+                  <SelectItem value="totalSpent">Ø¥Ø¬Ù…Ø§Ù„ÙŠ Ø§Ù„Ø¥Ù†ÙØ§Ù‚</SelectItem>
+                  <SelectItem value="ordersCount">Ø¹Ø¯Ø¯ Ø§Ù„Ø·Ù„Ø¨Ø§Øª</SelectItem>
+                  <SelectItem value="lastOrder">Ø¢Ø®Ø± Ø·Ù„Ø¨</SelectItem>
+                  <SelectItem value="label">Ø§Ù„ØªØµÙ†ÙŠÙ</SelectItem>
                 </SelectContent>
               </Select>
 
@@ -447,22 +433,22 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false, on
                   size="sm"
                   onClick={() => setViewMode('table')}
                   className="flex items-center gap-2"
-                  aria-label="عرض بشكل جدول"
-                  title="عرض بشكل جدول"
+                  aria-label="Ø¹Ø±Ø¶ Ø¨Ø´ÙƒÙ„ Ø¬Ø¯ÙˆÙ„"
+                  title="Ø¹Ø±Ø¶ Ø¨Ø´ÙƒÙ„ Ø¬Ø¯ÙˆÙ„"
                 >
                   <List className="w-4 h-4" />
-                  <span className="hidden sm:inline arabic-text">جدول</span>
+                  <span className="hidden sm:inline arabic-text">Ø¬Ø¯ÙˆÙ„</span>
                 </Button>
                 <Button
                   variant={viewMode === 'grid' ? 'default' : 'ghost'}
                   size="sm"
                   onClick={() => setViewMode('grid')}
                   className="flex items-center gap-2"
-                  aria-label="عرض بشكل شبكة"
-                  title="عرض بشكل شبكة"
+                  aria-label="Ø¹Ø±Ø¶ Ø¨Ø´ÙƒÙ„ Ø´Ø¨ÙƒØ©"
+                  title="Ø¹Ø±Ø¶ Ø¨Ø´ÙƒÙ„ Ø´Ø¨ÙƒØ©"
                 >
                   <Grid3X3 className="w-4 h-4" />
-                  <span className="hidden sm:inline arabic-text">شبكة</span>
+                  <span className="hidden sm:inline arabic-text">Ø´Ø¨ÙƒØ©</span>
                 </Button>
               </div>
 
@@ -478,7 +464,7 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false, on
                 className="border-2 border-red-300 text-red-600 hover:bg-red-50 flex items-center gap-2 px-4 py-3 rounded-xl"
               >
                 <FilterX className="w-4 h-4" />
-                <span className="arabic-text">مسح</span>
+                <span className="arabic-text">Ù…Ø³Ø­</span>
               </Button>
             </div>
 
@@ -490,7 +476,7 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false, on
                 className="border-2 border-[#155446] text-[#155446] hover:bg-[#155446] hover:text-white flex items-center gap-2 px-6 py-3 text-lg font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
               >
                 <Filter className="w-5 h-5" />
-                <span className="arabic-text">تصفية متقدمة</span>
+                <span className="arabic-text">ØªØµÙÙŠØ© Ù…ØªÙ‚Ø¯Ù…Ø©</span>
               </Button>
 
               {hasActionPermission('print_customers_list') && (
@@ -500,7 +486,7 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false, on
                   className="border-2 border-[#C69A72] text-[#13312A] hover:bg-[#C69A72] hover:text-white flex items-center gap-2 px-6 py-3 text-lg font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
                 >
                   <Printer className="w-5 h-5" />
-                  <span className="arabic-text">طباعة القائمة</span>
+                  <span className="arabic-text">Ø·Ø¨Ø§Ø¹Ø© Ø§Ù„Ù‚Ø§Ø¦Ù…Ø©</span>
                 </Button>
               )}
 
@@ -510,7 +496,7 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false, on
                   className="bg-[#155446] hover:bg-[#13312A] text-[#F6E9CA] flex items-center gap-2 px-6 py-3 text-lg font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
                 >
                   <Plus className="w-5 h-5" />
-                  <span className="arabic-text">زبون جديد</span>
+                  <span className="arabic-text">Ø²Ø¨ÙˆÙ† Ø¬Ø¯ÙŠØ¯</span>
                 </Button>
               )}
             </div>
@@ -524,7 +510,7 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false, on
               <CardContent className="p-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-semibold arabic-text text-black">إجمالي الزبائن</span>
+                    <span className="text-sm font-semibold arabic-text text-black">Ø¥Ø¬Ù…Ø§Ù„ÙŠ Ø§Ù„Ø²Ø¨Ø§Ø¦Ù†</span>
                   </div>
                   <div className="w-8 h-8 bg-white rounded-md flex items-center justify-center">
                     <User className="w-5 h-5 text-[#13312A]" />
@@ -538,7 +524,7 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false, on
               <CardContent className="p-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-semibold arabic-text text-black">منتظمون</span>
+                    <span className="text-sm font-semibold arabic-text text-black">Ù…Ù†ØªØ¸Ù…ÙˆÙ†</span>
                   </div>
                   <div className="w-8 h-8 bg-white rounded-md flex items-center justify-center">
                     <CheckCircle className="w-5 h-5 text-[#13312A]" />
@@ -552,7 +538,7 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false, on
               <CardContent className="p-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-semibold arabic-text text-black">زبائن ذهبيون</span>
+                    <span className="text-sm font-semibold arabic-text text-black">Ø²Ø¨Ø§Ø¦Ù† Ø°Ù‡Ø¨ÙŠÙˆÙ†</span>
                   </div>
                   <div className="w-8 h-8 bg-white rounded-md flex items-center justify-center">
                     <Star className="w-5 h-5 text-[#13312A]" />
@@ -566,7 +552,7 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false, on
               <CardContent className="p-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-semibold arabic-text text-black">إجمالي الإنفاق</span>
+                    <span className="text-sm font-semibold arabic-text text-black">Ø¥Ø¬Ù…Ø§Ù„ÙŠ Ø§Ù„Ø¥Ù†ÙØ§Ù‚</span>
                   </div>
                   <div className="w-8 h-8 bg-white rounded-md flex items-center justify-center">
                     <CreditCard className="w-5 h-5 text-[#13312A]" />
@@ -584,20 +570,20 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false, on
         {showFilters && (
           <Card className="bg-white rounded-xl shadow-lg border border-[#C69A72]/20">
             <CardContent className="p-6">
-              <h3 className="text-xl font-bold text-[#13312A] arabic-text mb-4">تصفية متقدمة</h3>
+              <h3 className="text-xl font-bold text-[#13312A] arabic-text mb-4">ØªØµÙÙŠØ© Ù…ØªÙ‚Ø¯Ù…Ø©</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 <div>
-                  <Label className="text-[#155446] arabic-text font-semibold mb-2 block">تصنيف الزبون</Label>
+                  <Label className="text-[#155446] arabic-text font-semibold mb-2 block">ØªØµÙ†ÙŠÙ Ø§Ù„Ø²Ø¨ÙˆÙ†</Label>
                   <Select value={filterLabel} onValueChange={setFilterLabel}>
-                    <SelectTrigger className="border-2 border-[#C69A72]/30 rounded-xl" aria-label="تصفية حسب التصنيف" title="تصفية حسب التصنيف">
-                      <SelectValue placeholder="اختر التصنيف" />
+                    <SelectTrigger className="border-2 border-[#C69A72]/30 rounded-xl" aria-label="ØªØµÙÙŠØ© Ø­Ø³Ø¨ Ø§Ù„ØªØµÙ†ÙŠÙ" title="ØªØµÙÙŠØ© Ø­Ø³Ø¨ Ø§Ù„ØªØµÙ†ÙŠÙ">
+                      <SelectValue placeholder="Ø§Ø®ØªØ± Ø§Ù„ØªØµÙ†ÙŠÙ" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">جميع التصنيفات</SelectItem>
-                      <SelectItem value="جديد">جديد</SelectItem>
-                      <SelectItem value="منتظم">منتظم</SelectItem>
-                      <SelectItem value="وفي">وفي</SelectItem>
-                      <SelectItem value="ذهبي">ذهبي</SelectItem>
+                      <SelectItem value="all">Ø¬Ù…ÙŠØ¹ Ø§Ù„ØªØµÙ†ÙŠÙØ§Øª</SelectItem>
+                      <SelectItem value="Ø¬Ø¯ÙŠØ¯">Ø¬Ø¯ÙŠØ¯</SelectItem>
+                      <SelectItem value="Ù…Ù†ØªØ¸Ù…">Ù…Ù†ØªØ¸Ù…</SelectItem>
+                      <SelectItem value="ÙˆÙÙŠ">ÙˆÙÙŠ</SelectItem>
+                      <SelectItem value="Ø°Ù‡Ø¨ÙŠ">Ø°Ù‡Ø¨ÙŠ</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -608,7 +594,7 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false, on
                     className="w-full bg-[#155446] hover:bg-[#13312A] text-white flex items-center gap-2 px-4 py-3 rounded-xl"
                   >
                     <RefreshCw className="w-4 h-4" />
-                    <span className="arabic-text">تطبيق الفلاتر</span>
+                    <span className="arabic-text">ØªØ·Ø¨ÙŠÙ‚ Ø§Ù„ÙÙ„Ø§ØªØ±</span>
                   </Button>
                 </div>
               </div>
@@ -621,7 +607,7 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false, on
           <div className="flex items-center justify-center py-16">
             <div className="text-center">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#155446] mx-auto mb-4"></div>
-              <div className="text-[#13312A] arabic-text text-lg">جاري تحميل بيانات الزبائن...</div>
+              <div className="text-[#13312A] arabic-text text-lg">Ø¬Ø§Ø±ÙŠ ØªØ­Ù…ÙŠÙ„ Ø¨ÙŠØ§Ù†Ø§Øª Ø§Ù„Ø²Ø¨Ø§Ø¦Ù†...</div>
             </div>
           </div>
         )}
@@ -633,14 +619,14 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false, on
               <Card className="bg-white rounded-xl shadow-lg border border-[#C69A72]/20">
                 <CardContent className="p-16 text-center">
                   <User className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                  <h3 className="text-xl font-semibold text-[#13312A] arabic-text mb-2">لا توجد زبائن</h3>
-                  <p className="text-[#155446] arabic-text mb-6">لم يتم العثور على زبائن تطابق معايير البحث</p>
+                  <h3 className="text-xl font-semibold text-[#13312A] arabic-text mb-2">Ù„Ø§ ØªÙˆØ¬Ø¯ Ø²Ø¨Ø§Ø¦Ù†</h3>
+                  <p className="text-[#155446] arabic-text mb-6">Ù„Ù… ÙŠØªÙ… Ø§Ù„Ø¹Ø«ÙˆØ± Ø¹Ù„Ù‰ Ø²Ø¨Ø§Ø¦Ù† ØªØ·Ø§Ø¨Ù‚ Ù…Ø¹Ø§ÙŠÙŠØ± Ø§Ù„Ø¨Ø­Ø«</p>
                   <Button
                     onClick={() => setIsNewCustomerOpen(true)}
                     className="bg-[#155446] hover:bg-[#13312A] text-white px-8 py-3 text-lg rounded-xl"
                   >
                     <Plus className="w-5 h-5 ml-2" />
-                    إضافة زبون جديد
+                    Ø¥Ø¶Ø§ÙØ© Ø²Ø¨ÙˆÙ† Ø¬Ø¯ÙŠØ¯
                   </Button>
                 </CardContent>
               </Card>
@@ -655,47 +641,47 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false, on
                           <TableRow className="bg-[#155446] hover:bg-[#13312A]">
                             <TableHead className="text-[#F6E9CA] arabic-text text-right font-bold text-base select-none">
                               <div className="flex items-center justify-between cursor-pointer" onClick={() => handleHeaderSort('name')}>
-                                <span>اسم الزبون</span>
+                                <span>Ø§Ø³Ù… Ø§Ù„Ø²Ø¨ÙˆÙ†</span>
                                 {sortField === 'name' ? (sortDirection === 'asc' ? <ArrowUp className="w-4 h-4" /> : <ArrowDown className="w-4 h-4" />) : <ArrowUpDown className="w-4 h-4 opacity-70" />}
                               </div>
                             </TableHead>
                             <TableHead className="text-[#F6E9CA] arabic-text text-right font-bold text-base select-none">
                               <div className="flex items-center justify-between cursor-pointer" onClick={() => handleHeaderSort('phone')}>
-                                <span>الهاتف</span>
+                                <span>Ø§Ù„Ù‡Ø§ØªÙ</span>
                                 {sortField === 'phone' ? (sortDirection === 'asc' ? <ArrowUp className="w-4 h-4" /> : <ArrowDown className="w-4 h-4" />) : <ArrowUpDown className="w-4 h-4 opacity-70" />}
                               </div>
                             </TableHead>
                             <TableHead className="text-[#F6E9CA] arabic-text text-right font-bold text-base select-none">
                               <div className="flex items-center justify-between cursor-pointer" onClick={() => handleHeaderSort('address')}>
-                                <span>العنوان</span>
+                                <span>Ø§Ù„Ø¹Ù†ÙˆØ§Ù†</span>
                                 {sortField === 'address' ? (sortDirection === 'asc' ? <ArrowUp className="w-4 h-4" /> : <ArrowDown className="w-4 h-4" />) : <ArrowUpDown className="w-4 h-4 opacity-70" />}
                               </div>
                             </TableHead>
                             <TableHead className="text-[#F6E9CA] arabic-text text-right font-bold text-base select-none">
                               <div className="flex items-center justify-between cursor-pointer" onClick={() => handleHeaderSort('label')}>
-                                <span>التصنيف</span>
+                                <span>Ø§Ù„ØªØµÙ†ÙŠÙ</span>
                                 {sortField === 'label' ? (sortDirection === 'asc' ? <ArrowUp className="w-4 h-4" /> : <ArrowDown className="w-4 h-4" />) : <ArrowUpDown className="w-4 h-4 opacity-70" />}
                               </div>
                             </TableHead>
                             <TableHead className="text-[#F6E9CA] arabic-text text-right font-bold text-base select-none">
                               <div className="flex items-center justify-between cursor-pointer" onClick={() => handleHeaderSort('lastOrder')}>
-                                <span>آخر طلب</span>
+                                <span>Ø¢Ø®Ø± Ø·Ù„Ø¨</span>
                                 {sortField === 'lastOrder' ? (sortDirection === 'asc' ? <ArrowUp className="w-4 h-4" /> : <ArrowDown className="w-4 h-4" />) : <ArrowUpDown className="w-4 h-4 opacity-70" />}
                               </div>
                             </TableHead>
                             <TableHead className="text-[#F6E9CA] arabic-text text-right font-bold text-base select-none">
                               <div className="flex items-center justify-between cursor-pointer" onClick={() => handleHeaderSort('totalSpent')}>
-                                <span>إجمالي الإنفاق</span>
+                                <span>Ø¥Ø¬Ù…Ø§Ù„ÙŠ Ø§Ù„Ø¥Ù†ÙØ§Ù‚</span>
                                 {sortField === 'totalSpent' ? (sortDirection === 'asc' ? <ArrowUp className="w-4 h-4" /> : <ArrowDown className="w-4 h-4" />) : <ArrowUpDown className="w-4 h-4 opacity-70" />}
                               </div>
                             </TableHead>
                             <TableHead className="text-[#F6E9CA] arabic-text text-right font-bold text-base select-none">
                               <div className="flex items-center justify-between cursor-pointer" onClick={() => handleHeaderSort('ordersCount')}>
-                                <span>عدد الطلبات</span>
+                                <span>Ø¹Ø¯Ø¯ Ø§Ù„Ø·Ù„Ø¨Ø§Øª</span>
                                 {sortField === 'ordersCount' ? (sortDirection === 'asc' ? <ArrowUp className="w-4 h-4" /> : <ArrowDown className="w-4 h-4" />) : <ArrowUpDown className="w-4 h-4 opacity-70" />}
                               </div>
                             </TableHead>
-                            <TableHead className="text-[#F6E9CA] arabic-text text-right font-bold text-base">الإجراءات</TableHead>
+                            <TableHead className="text-[#F6E9CA] arabic-text text-right font-bold text-base">Ø§Ù„Ø¥Ø¬Ø±Ø§Ø¡Ø§Øª</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -724,30 +710,30 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false, on
                                     variant="outline"
                                     onClick={() => onCustomerSelect(customer)}
                                     className="border-[#C69A72] text-[#13312A] hover:bg-[#C69A72] hover:text-white rounded-lg"
-                                    aria-label={`عرض تفاصيل ${customer.name}`}
+                                    aria-label={`Ø¹Ø±Ø¶ ØªÙØ§ØµÙŠÙ„ ${customer.name}`}
                                   >
                                     <Eye className="w-4 h-4" />
                                   </Button>
                                   
                                   <DropdownMenu>
-                                    <DropdownMenuTrigger className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground h-8 px-3" aria-label={`مزید إجراءات لـ ${customer.name}`} title={`مزید إجراءات لـ ${customer.name}`}>
+                                    <DropdownMenuTrigger className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground h-8 px-3" aria-label={`Ù…Ø²ÛŒØ¯ Ø¥Ø¬Ø±Ø§Ø¡Ø§Øª Ù„Ù€ ${customer.name}`} title={`Ù…Ø²ÛŒØ¯ Ø¥Ø¬Ø±Ø§Ø¡Ø§Øª Ù„Ù€ ${customer.name}`}>
                                       <MoreVertical className="w-4 h-4" />
                                     </DropdownMenuTrigger>
                                     <DropdownMenuContent align="end" className="bg-white border-[#C69A72] rounded-xl shadow-lg">
                                       <DropdownMenuItem onClick={() => onCustomerSelect(customer)} className="arabic-text">
                                         <Eye className="w-4 h-4 ml-2" />
-                                        عرض التفاصيل
+                                        Ø¹Ø±Ø¶ Ø§Ù„ØªÙØ§ØµÙŠÙ„
                                       </DropdownMenuItem>
                                       {hasActionPermission('edit_customer') && (
                                         <DropdownMenuItem className="arabic-text" onClick={() => { setEditCustomer(customer); setIsEditOpen(true); }}>
                                           <Edit className="w-4 h-4 ml-2" />
-                                          تعديل البيانات
+                                          ØªØ¹Ø¯ÙŠÙ„ Ø§Ù„Ø¨ÙŠØ§Ù†Ø§Øª
                                         </DropdownMenuItem>
                                       )}
                                       {hasActionPermission('create_invoice') && (
                                         <DropdownMenuItem className="arabic-text" onClick={() => onCreateInvoiceForCustomer?.(customer)}>
                                           <Plus className="w-4 h-4 ml-2" />
-                                          إضافة طلب جديد
+                                          Ø¥Ø¶Ø§ÙØ© Ø·Ù„Ø¨ Ø¬Ø¯ÙŠØ¯
                                         </DropdownMenuItem>
                                       )}
                                   {hasActionPermission('delete_customer') && (
@@ -756,7 +742,7 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false, on
                                       className="arabic-text text-red-600 hover:text-red-700 hover:bg-red-50"
                                     >
                                       <Trash2 className="w-4 h-4 ml-2" />
-                                      حذف الزبون
+                                      Ø­Ø°Ù Ø§Ù„Ø²Ø¨ÙˆÙ†
                                     </DropdownMenuItem>
                                   )}
                                     </DropdownMenuContent>
@@ -802,7 +788,7 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false, on
                             </div>
                             <div className="flex items-center gap-3 text-[#155446]">
                               <Calendar className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
-                              <span className="text-sm arabic-text">آخر طلب: {formatHumanDate(customer.lastOrder)}</span>
+                              <span className="text-sm arabic-text">Ø¢Ø®Ø± Ø·Ù„Ø¨: {formatHumanDate(customer.lastOrder)}</span>
                             </div>
                             <div className="flex items-center gap-3 text-[#155446]">
                               <CreditCard className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
@@ -814,7 +800,7 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false, on
                           <div className="flex items-center justify-between pt-4 border-t border-[#C69A72]/20">
                             <div className="text-center">
                               <p className="text-2xl font-bold text-[#13312A]">{customer.orders.length}</p>
-                              <p className="text-xs text-[#155446] arabic-text">طلب</p>
+                              <p className="text-xs text-[#155446] arabic-text">Ø·Ù„Ø¨</p>
                             </div>
 
                             <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
@@ -823,31 +809,31 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false, on
                                 variant="outline"
                                 onClick={() => onCustomerSelect(customer)}
                                 className="border-[#C69A72] text-[#13312A] hover:bg-[#C69A72] hover:text-white rounded-lg"
-                                aria-label={`عرض تفاصيل ${customer.name}`}
+                                aria-label={`Ø¹Ø±Ø¶ ØªÙØ§ØµÙŠÙ„ ${customer.name}`}
                               >
                                 <Eye className="w-4 h-4" />
                               </Button>
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
-                                  <Button size="sm" variant="outline" className="border-[#C69A72] text-[#13312A] hover:bg-[#C69A72] hover:text-white rounded-lg" aria-label={`مزید إجراءات لـ ${customer.name}`} title={`مزید إجراءات لـ ${customer.name}`}>
+                                  <Button size="sm" variant="outline" className="border-[#C69A72] text-[#13312A] hover:bg-[#C69A72] hover:text-white rounded-lg" aria-label={`Ù…Ø²ÛŒØ¯ Ø¥Ø¬Ø±Ø§Ø¡Ø§Øª Ù„Ù€ ${customer.name}`} title={`Ù…Ø²ÛŒØ¯ Ø¥Ø¬Ø±Ø§Ø¡Ø§Øª Ù„Ù€ ${customer.name}`}>
                                     <MoreVertical className="w-4 h-4" />
                                   </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end" className="bg-white border-[#C69A72] rounded-xl shadow-lg">
                                   <DropdownMenuItem onClick={() => onCustomerSelect(customer)} className="arabic-text">
                                     <Eye className="w-4 h-4 ml-2" />
-                                    عرض التفاصيل
+                                    Ø¹Ø±Ø¶ Ø§Ù„ØªÙØ§ØµÙŠÙ„
                                   </DropdownMenuItem>
                                   {hasActionPermission('edit_customer') && (
                                     <DropdownMenuItem className="arabic-text">
                                       <Edit className="w-4 h-4 ml-2" />
-                                      تعديل
+                                      ØªØ¹Ø¯ÙŠÙ„
                                     </DropdownMenuItem>
                                   )}
                                   {hasActionPermission('create_invoice') && (
                                     <DropdownMenuItem className="arabic-text">
                                       <Plus className="w-4 h-4 ml-2" />
-                                      طلب جديد
+                                      Ø·Ù„Ø¨ Ø¬Ø¯ÙŠØ¯
                                     </DropdownMenuItem>
                                   )}
                                   {hasActionPermission('delete_customer') && (
@@ -856,7 +842,7 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false, on
                                       onClick={() => handleDeleteCustomer(customer)}
                                     >
                                       <Trash2 className="w-4 h-4 ml-2" />
-                                      حذف الزبون
+                                      Ø­Ø°Ù Ø§Ù„Ø²Ø¨ÙˆÙ†
                                     </DropdownMenuItem>
                                   )}
                                 </DropdownMenuContent>
@@ -878,22 +864,22 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false, on
       <Dialog open={isNewCustomerOpen} onOpenChange={setIsNewCustomerOpen}>
         <DialogContent className="max-w-2xl bg-[#F6E9CA] border-[#C69A72]">
           <DialogHeader>
-            <DialogTitle className="text-[#13312A] arabic-text">إضافة زبون جديد</DialogTitle>
+            <DialogTitle className="text-[#13312A] arabic-text">Ø¥Ø¶Ø§ÙØ© Ø²Ø¨ÙˆÙ† Ø¬Ø¯ÙŠØ¯</DialogTitle>
             <DialogDescription className="text-[#155446] arabic-text">
-              أدخل بيانات الزبون الجديد
+              Ø£Ø¯Ø®Ù„ Ø¨ÙŠØ§Ù†Ø§Øª Ø§Ù„Ø²Ø¨ÙˆÙ† Ø§Ù„Ø¬Ø¯ÙŠØ¯
             </DialogDescription>
           </DialogHeader>
           
           <form className="space-y-6" onSubmit={(e) => { e.preventDefault(); handleCreateCustomer(); }}>
             <Card className="bg-white border-[#C69A72]">
               <CardHeader>
-                <CardTitle className="text-[#13312A] arabic-text text-lg">البيانات الأساسية</CardTitle>
+                <CardTitle className="text-[#13312A] arabic-text text-lg">Ø§Ù„Ø¨ÙŠØ§Ù†Ø§Øª Ø§Ù„Ø£Ø³Ø§Ø³ÙŠØ©</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div>
-                  <Label className="text-[#13312A] arabic-text">الاسم الكامل</Label>
+                  <Label className="text-[#13312A] arabic-text">Ø§Ù„Ø§Ø³Ù… Ø§Ù„ÙƒØ§Ù…Ù„</Label>
                   <Input 
-                    placeholder="أدخل الاسم الكامل" 
+                    placeholder="Ø£Ø¯Ø®Ù„ Ø§Ù„Ø§Ø³Ù… Ø§Ù„ÙƒØ§Ù…Ù„" 
                     className="bg-white border-[#C69A72] text-right"
                     value={newCustomer.name}
                     onChange={(e) => setNewCustomer({...newCustomer, name: e.target.value})}
@@ -902,7 +888,7 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false, on
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <Label className="text-[#13312A] arabic-text">رقم الهاتف</Label>
+                    <Label className="text-[#13312A] arabic-text">Ø±Ù‚Ù… Ø§Ù„Ù‡Ø§ØªÙ</Label>
                     <Input 
                       placeholder="077xxxxxxxx" 
                       className="bg-white border-[#C69A72] text-right"
@@ -912,27 +898,27 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false, on
                     />
                   </div>
                   <div>
-                    <Label className="text-[#13312A] arabic-text">تصنيف الزبون</Label>
+                    <Label className="text-[#13312A] arabic-text">ØªØµÙ†ÙŠÙ Ø§Ù„Ø²Ø¨ÙˆÙ†</Label>
                     <Select 
                       value={newCustomer.label}
                       onValueChange={(value: string) => setNewCustomer({...newCustomer, label: value})}
                     >
-                      <SelectTrigger className="bg-white border-[#C69A72]" aria-label="تصنيف الزبون" title="تصنيف الزبون">
-                        <SelectValue placeholder="اختر التصنيف" />
+                      <SelectTrigger className="bg-white border-[#C69A72]" aria-label="ØªØµÙ†ÙŠÙ Ø§Ù„Ø²Ø¨ÙˆÙ†" title="ØªØµÙ†ÙŠÙ Ø§Ù„Ø²Ø¨ÙˆÙ†">
+                        <SelectValue placeholder="Ø§Ø®ØªØ± Ø§Ù„ØªØµÙ†ÙŠÙ" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="جديد">جديد</SelectItem>
-                        <SelectItem value="منتظم">منتظم</SelectItem>
-                        <SelectItem value="وفي">وفي</SelectItem>
-                        <SelectItem value="ذهبي">ذهبي</SelectItem>
+                        <SelectItem value="Ø¬Ø¯ÙŠØ¯">Ø¬Ø¯ÙŠØ¯</SelectItem>
+                        <SelectItem value="Ù…Ù†ØªØ¸Ù…">Ù…Ù†ØªØ¸Ù…</SelectItem>
+                        <SelectItem value="ÙˆÙÙŠ">ÙˆÙÙŠ</SelectItem>
+                        <SelectItem value="Ø°Ù‡Ø¨ÙŠ">Ø°Ù‡Ø¨ÙŠ</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                 </div>
                 <div>
-                  <Label className="text-[#13312A] arabic-text">العنوان</Label>
+                  <Label className="text-[#13312A] arabic-text">Ø§Ù„Ø¹Ù†ÙˆØ§Ù†</Label>
                   <Input 
-                    placeholder="أدخل العنوان الكامل" 
+                    placeholder="Ø£Ø¯Ø®Ù„ Ø§Ù„Ø¹Ù†ÙˆØ§Ù† Ø§Ù„ÙƒØ§Ù…Ù„" 
                     className="bg-white border-[#C69A72] text-right"
                     value={newCustomer.address}
                     onChange={(e) => setNewCustomer({...newCustomer, address: e.target.value})}
@@ -949,14 +935,14 @@ export function CustomersPage({ customers, onCustomerSelect, loading = false, on
                 className="border-[#C69A72] text-[#13312A] hover:bg-[#C69A72]"
                 disabled={isCreating}
               >
-                إلغاء
+                Ø¥Ù„ØºØ§Ø¡
               </Button>
               <Button 
                 type="submit"
                 className="bg-[#155446] hover:bg-[#13312A] text-[#F6E9CA]"
                 disabled={isCreating}
               >
-                {isCreating ? 'جاري الحفظ...' : 'حفظ الزبون'}
+                {isCreating ? 'Ø¬Ø§Ø±ÙŠ Ø§Ù„Ø­ÙØ¸...' : 'Ø­ÙØ¸ Ø§Ù„Ø²Ø¨ÙˆÙ†'}
               </Button>
             </div>
           </form>
@@ -1007,37 +993,37 @@ const CustomersPrintDocument: React.FC<CustomersPrintDocumentProps> = ({
       <div className="print-inner">
         {/* Header */}
         <div className="print-header">
-          <h1 className="print-title">قائمة الزبائن</h1>
-          <p className="print-subtitle">تقرير شامل لبيانات العملاء والزبائن</p>
+          <h1 className="print-title">Ù‚Ø§Ø¦Ù…Ø© Ø§Ù„Ø²Ø¨Ø§Ø¦Ù†</h1>
+          <p className="print-subtitle">ØªÙ‚Ø±ÙŠØ± Ø´Ø§Ù…Ù„ Ù„Ø¨ÙŠØ§Ù†Ø§Øª Ø§Ù„Ø¹Ù…Ù„Ø§Ø¡ ÙˆØ§Ù„Ø²Ø¨Ø§Ø¦Ù†</p>
           <div className="print-meta">
-            <span>تاريخ التقرير: {formatPrintDateTime(now)}</span>
-            <span>إجمالي الزبائن: {totalCustomers}</span>
+            <span>ØªØ§Ø±ÙŠØ® Ø§Ù„ØªÙ‚Ø±ÙŠØ±: {formatPrintDateTime(now)}</span>
+            <span>Ø¥Ø¬Ù…Ø§Ù„ÙŠ Ø§Ù„Ø²Ø¨Ø§Ø¦Ù†: {totalCustomers}</span>
           </div>
         </div>
 
         {/* Summary Section */}
         <div className="print-section">
-          <h2 className="section-title">ملخص الإحصائيات</h2>
-          <p className="section-description">نظرة عامة على بيانات العملاء والإحصائيات الأساسية</p>
+          <h2 className="section-title">Ù…Ù„Ø®Øµ Ø§Ù„Ø¥Ø­ØµØ§Ø¦ÙŠØ§Øª</h2>
+          <p className="section-description">Ù†Ø¸Ø±Ø© Ø¹Ø§Ù…Ø© Ø¹Ù„Ù‰ Ø¨ÙŠØ§Ù†Ø§Øª Ø§Ù„Ø¹Ù…Ù„Ø§Ø¡ ÙˆØ§Ù„Ø¥Ø­ØµØ§Ø¦ÙŠØ§Øª Ø§Ù„Ø£Ø³Ø§Ø³ÙŠØ©</p>
           
           <div className="metrics-grid">
             <div className="metric-card accent">
-              <div className="metric-label">إجمالي الزبائن</div>
+              <div className="metric-label">Ø¥Ø¬Ù…Ø§Ù„ÙŠ Ø§Ù„Ø²Ø¨Ø§Ø¦Ù†</div>
               <div className="metric-value">{totalCustomers}</div>
             </div>
             
             <div className="metric-card">
-              <div className="metric-label">إجمالي الطلبات</div>
+              <div className="metric-label">Ø¥Ø¬Ù…Ø§Ù„ÙŠ Ø§Ù„Ø·Ù„Ø¨Ø§Øª</div>
               <div className="metric-value">{totalOrders}</div>
             </div>
             
             <div className="metric-card accent">
-              <div className="metric-label">إجمالي الإنفاق</div>
+              <div className="metric-label">Ø¥Ø¬Ù…Ø§Ù„ÙŠ Ø§Ù„Ø¥Ù†ÙØ§Ù‚</div>
               <div className="metric-value">{formatCurrency(totalSpent)}</div>
             </div>
             
             <div className="metric-card">
-              <div className="metric-label">متوسط الطلبات</div>
+              <div className="metric-label">Ù…ØªÙˆØ³Ø· Ø§Ù„Ø·Ù„Ø¨Ø§Øª</div>
               <div className="metric-value">{Number(averageOrders).toFixed(1)}</div>
             </div>
           </div>
@@ -1045,8 +1031,8 @@ const CustomersPrintDocument: React.FC<CustomersPrintDocumentProps> = ({
 
         {/* Label Distribution */}
         <div className="print-section">
-          <h2 className="section-title">توزيع التصنيفات</h2>
-          <p className="section-description">توزيع الزبائن حسب التصنيفات المختلفة</p>
+          <h2 className="section-title">ØªÙˆØ²ÙŠØ¹ Ø§Ù„ØªØµÙ†ÙŠÙØ§Øª</h2>
+          <p className="section-description">ØªÙˆØ²ÙŠØ¹ Ø§Ù„Ø²Ø¨Ø§Ø¦Ù† Ø­Ø³Ø¨ Ø§Ù„ØªØµÙ†ÙŠÙØ§Øª Ø§Ù„Ù…Ø®ØªÙ„ÙØ©</p>
           
           <div className="metrics-grid">
             {Object.entries(labelCounts).map(([label, count]) => (
@@ -1060,21 +1046,21 @@ const CustomersPrintDocument: React.FC<CustomersPrintDocumentProps> = ({
 
         {/* Customers Table */}
         <div className="print-section">
-          <h2 className="section-title">قائمة الزبائن</h2>
-          <p className="section-description">تفاصيل الاتصال، الحالة، آخر طلب، قيمة المشتريات وإجمالي عدد الطلبات لكل زبون</p>
+          <h2 className="section-title">Ù‚Ø§Ø¦Ù…Ø© Ø§Ù„Ø²Ø¨Ø§Ø¦Ù†</h2>
+          <p className="section-description">ØªÙØ§ØµÙŠÙ„ Ø§Ù„Ø§ØªØµØ§Ù„ØŒ Ø§Ù„Ø­Ø§Ù„Ø©ØŒ Ø¢Ø®Ø± Ø·Ù„Ø¨ØŒ Ù‚ÙŠÙ…Ø© Ø§Ù„Ù…Ø´ØªØ±ÙŠØ§Øª ÙˆØ¥Ø¬Ù…Ø§Ù„ÙŠ Ø¹Ø¯Ø¯ Ø§Ù„Ø·Ù„Ø¨Ø§Øª Ù„ÙƒÙ„ Ø²Ø¨ÙˆÙ†</p>
           
           <div className="print-table-wrapper">
             <table className="print-table">
               <thead>
                 <tr>
                   <th>#</th>
-                  <th>اسم الزبون</th>
-                  <th>رقم الجوال</th>
-                  <th>العنوان</th>
-                  <th>التصنيف</th>
-                  <th>آخر عملية</th>
-                  <th>إجمالي الإنفاق</th>
-                  <th>عدد الطلبات</th>
+                  <th>Ø§Ø³Ù… Ø§Ù„Ø²Ø¨ÙˆÙ†</th>
+                  <th>Ø±Ù‚Ù… Ø§Ù„Ø¬ÙˆØ§Ù„</th>
+                  <th>Ø§Ù„Ø¹Ù†ÙˆØ§Ù†</th>
+                  <th>Ø§Ù„ØªØµÙ†ÙŠÙ</th>
+                  <th>Ø¢Ø®Ø± Ø¹Ù…Ù„ÙŠØ©</th>
+                  <th>Ø¥Ø¬Ù…Ø§Ù„ÙŠ Ø§Ù„Ø¥Ù†ÙØ§Ù‚</th>
+                  <th>Ø¹Ø¯Ø¯ Ø§Ù„Ø·Ù„Ø¨Ø§Øª</th>
                 </tr>
               </thead>
               <tbody>
@@ -1101,10 +1087,12 @@ const CustomersPrintDocument: React.FC<CustomersPrintDocumentProps> = ({
 
         {/* Footer */}
         <div className="print-footer">
-          تم إنشاء هذا التقرير من خلال نظام إدارة أزياء قرطبة
+          ØªÙ… Ø¥Ù†Ø´Ø§Ø¡ Ù‡Ø°Ø§ Ø§Ù„ØªÙ‚Ø±ÙŠØ± Ù…Ù† Ø®Ù„Ø§Ù„ Ù†Ø¸Ø§Ù… Ø¥Ø¯Ø§Ø±Ø© Ø£Ø²ÙŠØ§Ø¡ Ù‚Ø±Ø·Ø¨Ø©
         </div>
       </div>
     </div>
   );
 };
+
+
 

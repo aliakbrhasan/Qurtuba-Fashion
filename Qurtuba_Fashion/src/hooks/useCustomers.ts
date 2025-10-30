@@ -1,39 +1,7 @@
-import { useMemo, useEffect } from 'react';
+﻿import { useMemo, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { databaseService, type Invoice } from '@/db/database.service';
-import type { Customer as UiCustomer, CustomerOrder } from '@/types/customer';
 
-type DbCustomer = Awaited<ReturnType<typeof databaseService.getCustomers>>[number];
-
-function stableNumberFromString(input: string): number {
-    // Simple 32-bit FNV-1a hash for stable numeric id
-    let hash = 0x811c9dc5;
-    for (let i = 0; i < input.length; i++) {
-        hash ^= input.charCodeAt(i);
-        hash = (hash * 0x01000193) >>> 0; // unsigned 32-bit
-    }
-    // Ensure positive and within JS safe int range
-    return hash & 0x7fffffff;
-}
-
-function parseIdToNumber(id: string | number | undefined): number {
-    if (typeof id === 'number') return id;
-    if (!id) return stableNumberFromString('missing');
-    const numeric = Number(id);
-    if (!Number.isNaN(numeric) && Number.isFinite(numeric)) return Math.trunc(numeric);
-    return stableNumberFromString(String(id));
-}
-
-function buildOrderFromInvoice(invoice: Invoice): CustomerOrder {
-	return {
-		id: String(invoice.id),
-		type: 'فاتورة',
-		status: invoice.status,
-		orderDate: invoice.invoice_date || invoice.created_at,
-		deliveryDate: invoice.due_date || invoice.invoice_date || invoice.created_at,
-		total: invoice.total,
-		paid: invoice.paid_amount || 0,
-	};
+import { sanitizeArabicText } from '@/utils/encoding';
 }
 
 function mapDbCustomerToUi(db: DbCustomer): UiCustomer {
@@ -53,7 +21,8 @@ function mapDbCustomerToUi(db: DbCustomer): UiCustomer {
         address: (db as any).address || '',
         totalSpent: Number(totalSpent) || 0,
         lastOrder: String(lastOrder || ''),
-        label: (db as any).label || 'جديد',
+        label: sanitizeArabicText((db as any).label) || 'جديد',
+        label_auto: ((db as any).label_auto === 0) ? false : true,
         measurements,
         orders: [],
         notes: (db as any).notes,
@@ -136,7 +105,7 @@ export function useCustomers() {
 					totalSpent: 0,
 					lastOrder: inv.invoice_date || inv.created_at,
 					label: 'جديد',
-					measurements: { height: 0, shoulder: 0, waist: 0, chest: 0 },
+ { height: 0, shoulder: 0, waist: 0, chest: 0 },
 					orders: [],
 					created_at: inv.created_at,
 				};
@@ -169,5 +138,6 @@ export function useCustomers() {
 		},
 	};
 }
+
 
 
