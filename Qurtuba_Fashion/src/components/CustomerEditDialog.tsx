@@ -204,69 +204,7 @@ export const CustomerEditDialog: React.FC<CustomerEditDialogProps> = ({
                     </CardContent>
                   </Card>
 
-                  {/* القياسات */}
-                  <Card className="hidden bg-white border-[#E6D9C4] rounded-xl shadow-[0_2px_8px_rgba(0,0,0,0.04)] min-w-0 flex flex-col">
-                    <CardHeader className="py-0.5 border-b border-[#EEE1CD] min-h-[24px]">
-                      <CardTitle className="text-[#1F4529] arabic-text text-base font-bold">القياسات (سم)</CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-2 py-2 flex-1 min-w-0">
-                      <div className="grid grid-cols-3 gap-2 min-w-0">
-                        <div className="min-w-[120px]">
-                          <Label className="text-[#13312A] arabic-text text-xs">الطول</Label>
-                          <Input
-                            type="number"
-                            className="bg-white border-[#C69A72] text-right min-w-0 h-8 text-sm"
-                            value={draft.measurements?.height ?? 0}
-                            readOnly
-                            disabled
-                          />
-                        </div>
-                        <div className="min-w-[120px]">
-                          <Label className="text-[#13312A] arabic-text text-xs">الكتف</Label>
-                          <Input
-                            type="number"
-                            className="bg-white border-[#C69A72] text-right min-w-0 h-8 text-sm"
-                            value={draft.measurements?.shoulder ?? 0}
-                            readOnly
-                            disabled
-                          />
-                        </div>
-                        <div className="min-w-[120px]">
-                          <Label className="text-[#13312A] arabic-text text-xs">الوسط</Label>
-                          <Input
-                            type="number"
-                            className="bg-white border-[#C69A72] text-right min-w-0 h-8 text-sm"
-                            value={draft.measurements?.waist ?? 0}
-                            readOnly
-                            disabled
-                          />
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-3 gap-2 min-w-0">
-                        <div className="min-w-[120px]">
-                          <Label className="text-[#13312A] arabic-text text-xs">الصدر</Label>
-                          <Input
-                            type="number"
-                            className="bg-white border-[#C69A72] text-right min-w-0 h-8 text-sm"
-                            value={draft.measurements?.chest ?? 0}
-                            readOnly
-                            disabled
-                          />
-                        </div>
-                        <div className="min-w-[120px]">
-                          <Label className="text-[#13312A] arabic-text text-xs">الياقة</Label>
-                          <Input
-                            type="number"
-                            className="bg-white border-[#C69A72] text-right min-w-0 h-8 text-sm"
-                            value={draft.measurements?.collar ?? 0}
-                            readOnly
-                            disabled
-                          />
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
+                  
                 </div>
               </form>
             </div>

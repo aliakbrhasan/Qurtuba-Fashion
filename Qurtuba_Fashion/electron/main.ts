@@ -13,6 +13,24 @@ let localDB: LocalDatabase;
 // Sync and remote DB disabled in local-only mode
 let supabaseMain: any = null;
 
+// Enforce single instance of the application
+const gotTheLock = app.requestSingleInstanceLock();
+if (!gotTheLock) {
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    // Someone tried to run a second instance, we should focus our window
+    if (mainWindow) {
+      try { if (mainWindow.isMinimized()) mainWindow.restore(); } catch {}
+      try { mainWindow.show(); } catch {}
+      try { mainWindow.focus(); } catch {}
+    } else {
+      // If for some reason window doesn't exist, create it
+      createWindow();
+    }
+  });
+}
+
 type PrintDocumentArgs = {
   title: string;
   content: string;
@@ -136,6 +154,7 @@ const createWindow = (): void => {
 };
 
 // This method will be called when Electron has finished initialization
+if (gotTheLock) {
 app.whenReady().then(async () => {
   // Initialize local database
   try {
@@ -182,6 +201,7 @@ app.whenReady().then(async () => {
     }
   });
 });
+}
 
 // Quit when all windows are closed
 app.on('window-all-closed', () => {

@@ -461,6 +461,24 @@ export class DatabaseService {
     try {
       // Allow label_auto to persist (Electron DB now migrates it); keep updates as-is
       const storageUpdates: any = { ...(updates as any) };
+      // Resolve target id robustly (by id or alias) to avoid 'Customer not found' due to id drift
+      let resolvedId = String(id);
+      try {
+        // Refresh customers snapshot for accurate matching
+        const customers = await this.getCustomers();
+        const trim = (v: any) => String(v ?? '').trim();
+        const aliasFromUpdates = `${trim((updates as any)?.name)}|${trim((updates as any)?.phone)}`;
+        const candidate = customers.find((c: any) => {
+          const cid = trim((c as any).id);
+          const name = trim((c as any).name);
+          const phone = trim((c as any).phone);
+          const alias = `${name}|${phone}`;
+          return (cid && cid === trim(id)) || (aliasFromUpdates !== '|' && alias === aliasFromUpdates);
+        });
+        if (candidate) {
+          resolvedId = String((candidate as any).id);
+        }
+      } catch {}
       // Skip write if no actual change for provided keys
       const idxExisting = this.localData.customers.findIndex(c => String(c.id) === String(id));
       if (idxExisting !== -1) {
@@ -478,8 +496,8 @@ export class DatabaseService {
         }
       }
 
-      const updated = await storage.updateCustomer(id, storageUpdates as any);
-      const idx = this.localData.customers.findIndex(c => String(c.id) === String(id));
+      const updated = await storage.updateCustomer(resolvedId, this.sanitizeTextData(storageUpdates) as any);
+      const idx = this.localData.customers.findIndex(c => String(c.id) === String(resolvedId));
       if (idx !== -1) this.localData.customers[idx] = { ...(updated as any) } as any; else this.localData.customers.unshift(updated);
       // Overlay transient fields on local cache (e.g., label_auto)
       if (idx !== -1 && 'label_auto' in (updates as any)) {
@@ -495,7 +513,7 @@ export class DatabaseService {
           await (storage as any).createAdminLog?.({
             action_type: 'update',
             entity_type: 'customer',
-            entity_id: String(id),
+            entity_id: String(resolvedId),
             changed_fields: Object.keys(storageUpdates || {}),
             user_name: execName,
           });

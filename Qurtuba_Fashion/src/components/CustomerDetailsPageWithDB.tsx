@@ -148,12 +148,16 @@ export function CustomerDetailsPageWithDB({
           if (!m || typeof m !== 'object' || Object.keys(m).length === 0) {
             m = (newest as any)?.customer_measurements || (newest as any)?.measurements || {};
           }
+          const toNumber = (val: any) => {
+            const s = String(val ?? '').replace(/[\u0660-\u0669]/g, (d) => String(d.charCodeAt(0) - 0x0660)).replace(/[^0-9.]/g, '');
+            return s ? Number(s) : 0;
+          };
           setLatestMeasurements({
-            height: m.length ?? m.height ?? '',
-            shoulder: m.shoulder ?? '',
-            waist: m.waist ?? '',
-            chest: m.chest ?? '',
-            collar: (m as any).collar ?? '',
+            height: toNumber((m as any).length ?? (m as any).height),
+            shoulder: toNumber((m as any).shoulder),
+            waist: toNumber((m as any).waist),
+            chest: toNumber((m as any).chest),
+            collar: toNumber((m as any).collar),
           });
         } catch {}
         
@@ -417,6 +421,24 @@ export function CustomerDetailsPageWithDB({
         <NewInvoiceDialogWithDB
           isOpen={isInvoiceDialogOpen}
           onOpenChange={setIsInvoiceDialogOpen}
+          onInvoiceCreated={async () => {
+            try {
+              const allInvoices = await databaseService.getInvoices();
+              const customerInvoices = allInvoices.filter((inv) => invoiceBelongsToCustomer(inv, freshCustomer || customer));
+              setInvoices(customerInvoices);
+              if (customerInvoices.length > 0) {
+                const newest = [...customerInvoices].sort((a, b) => new Date(b.invoice_date).getTime() - new Date(a.invoice_date).getTime())[0];
+                const m: any = (newest as any)?.customer_measurements || (newest as any)?.measurements || {};
+                setLatestMeasurements({
+                  height: m.length ?? m.height ?? '',
+                  shoulder: m.shoulder ?? '',
+                  waist: m.waist ?? '',
+                  chest: m.chest ?? '',
+                  collar: (m as any)?.collar ?? ''
+                });
+              }
+            } catch {}
+          }}
           lockCustomerFields
           prefillCustomer={{
             name: (freshCustomer?.name || customer.name) as any,

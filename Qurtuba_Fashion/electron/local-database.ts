@@ -644,12 +644,16 @@ export class LocalDatabase {
     const versionUpdate = options?.fromCloud ? '' : ', version = version + 1';
     await this.run(`UPDATE customers SET ${setClause}, updated_at = ?${versionUpdate} WHERE id = ?`, [...values, now, id]);
 
+    const row = await this.get<LocalCustomer | undefined>('SELECT * FROM customers WHERE id = ?', [id]);
+    if (!row) {
+      // Ensure we don't enqueue an invalid payload causing NOT NULL constraint on outbox.payload
+      throw new Error('Customer not found');
+    }
     if (!options?.fromCloud) {
-      const row = await this.get<LocalCustomer>('SELECT * FROM customers WHERE id = ?', [id]);
       await this.enqueueOutbox('customers', id, 'update', row);
     }
 
-    return await this.get<LocalCustomer>('SELECT * FROM customers WHERE id = ?', [id]);
+    return row;
   }
 
   async deleteCustomer(id: string): Promise<void> {
@@ -1031,10 +1035,19 @@ export class LocalDatabase {
 
   private async enqueueOutbox(tableName: string, recordId: string, action: 'insert' | 'update' | 'delete', payload: any): Promise<void> {
     if (!this.db) throw new Error('Database not initialized');
+    const payloadString = (() => {
+      try {
+        const json = JSON.stringify(payload ?? {});
+        // If JSON.stringify returns undefined (only for functions/undefined at top-level), fallback to '{}'
+        return json === undefined ? '{}' : json;
+      } catch {
+        return '{}';
+      }
+    })();
     await this.run(`
       INSERT INTO outbox (table_name, record_id, action, payload, created_at)
       VALUES (?, ?, ?, ?, ?)
-    `, [tableName, recordId, action, JSON.stringify(payload), new Date().toISOString()]);
+    `, [tableName, recordId, action, payloadString, new Date().toISOString()]);
   }
 
   async close(): Promise<void> { /* better-sqlite3 closes on process exit */ }

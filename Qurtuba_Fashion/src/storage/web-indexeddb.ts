@@ -113,8 +113,30 @@ export class WebIndexedDBStorage implements StoragePort {
 	}
 
 	async updateCustomer(id: string, updates: Partial<Customer>): Promise<Customer> {
-		const idx = this.customersArr.findIndex(c => String(c.id) === String(id));
-		if (idx === -1) throw new Error('Customer not found');
+		const trim = (v: any) => String(v ?? '').trim();
+		const digits = (v: any) => trim(v).replace(/[\u0660-\u0669]/g, (d) => String(d.charCodeAt(0) - 0x0660)).replace(/\D/g, '');
+		let idx = this.customersArr.findIndex(c => String(c.id) === String(id));
+		if (idx === -1) {
+			// Fallback: resolve by alias (name|phone) if id drifted at UI layer
+			const updName = trim((updates as any)?.name);
+			const updPhone = digits((updates as any)?.phone);
+			if (updName || updPhone) {
+				idx = this.customersArr.findIndex(c => {
+					const name = trim((c as any).name);
+					const phone = digits((c as any).phone);
+					// match by phone primarily, or by exact name when phone absent
+					return (updPhone && phone && phone === updPhone) || (!!updName && name === updName);
+				});
+			}
+		}
+		if (idx === -1) {
+			// As a last resort, create the customer to avoid breaking UX in offline mode
+			const now = new Date().toISOString();
+			const created: Customer = { id: id, name: trim((updates as any)?.name) || '', phone: trim((updates as any)?.phone) || '', address: (updates as any)?.address || '', label: (updates as any)?.label || 'جديد', totalSpent: (updates as any)?.totalSpent || 0, lastOrder: (updates as any)?.lastOrder, measurements: (updates as any)?.measurements, notes: (updates as any)?.notes, created_at: now } as any;
+			this.customersArr.unshift(created);
+			this.persistAll();
+			return created;
+		}
 		const updated = { ...this.customersArr[idx], ...updates } as Customer;
 		this.customersArr[idx] = updated;
 		this.persistAll();
