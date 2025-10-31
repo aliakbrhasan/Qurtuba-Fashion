@@ -445,11 +445,11 @@ export function CustomerDetailsPageWithDB({
             phone: (freshCustomer?.phone || customer.phone) as any,
             address: (freshCustomer?.address || customer.address) as any,
             measurements: {
-              length: String(((freshCustomer as any)?.measurements?.height ?? customer.measurements?.height ?? '')),
-              shoulder: String(((freshCustomer as any)?.measurements?.shoulder ?? customer.measurements?.shoulder ?? '')),
-              waist: String(((freshCustomer as any)?.measurements?.waist ?? customer.measurements?.waist ?? '')),
-              chest: String(((freshCustomer as any)?.measurements?.chest ?? customer.measurements?.chest ?? '')),
-              collar: String(((freshCustomer as any)?.measurements?.collar ?? (customer as any)?.measurements?.collar ?? '')),
+              length: String(((latestMeasurements as any)?.height ?? (freshCustomer as any)?.measurements?.height ?? customer.measurements?.height ?? '')),
+              shoulder: String(((latestMeasurements as any)?.shoulder ?? (freshCustomer as any)?.measurements?.shoulder ?? customer.measurements?.shoulder ?? '')),
+              waist: String(((latestMeasurements as any)?.waist ?? (freshCustomer as any)?.measurements?.waist ?? customer.measurements?.waist ?? '')),
+              chest: String(((latestMeasurements as any)?.chest ?? (freshCustomer as any)?.measurements?.chest ?? customer.measurements?.chest ?? '')),
+              collar: String(((latestMeasurements as any)?.collar ?? (freshCustomer as any)?.measurements?.collar ?? (customer as any)?.measurements?.collar ?? '')),
             }
           }}
         />

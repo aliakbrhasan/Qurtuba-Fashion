@@ -13,6 +13,35 @@ let tray = null;
 let localDB;
 // Sync and remote DB disabled in local-only mode
 let supabaseMain = null;
+// Enforce single instance of the application
+const gotTheLock = electron_1.app.requestSingleInstanceLock();
+if (!gotTheLock) {
+    electron_1.app.quit();
+}
+else {
+    electron_1.app.on('second-instance', () => {
+        // Someone tried to run a second instance, we should focus our window
+        if (mainWindow) {
+            try {
+                if (mainWindow.isMinimized())
+                    mainWindow.restore();
+            }
+            catch { }
+            try {
+                mainWindow.show();
+            }
+            catch { }
+            try {
+                mainWindow.focus();
+            }
+            catch { }
+        }
+        else {
+            // If for some reason window doesn't exist, create it
+            createWindow();
+        }
+    });
+}
 const createWindow = () => {
     // Create the browser window
     mainWindow = new electron_1.BrowserWindow({
@@ -128,55 +157,57 @@ const createWindow = () => {
     });
 };
 // This method will be called when Electron has finished initialization
-electron_1.app.whenReady().then(async () => {
-    // Initialize local database
-    try {
-        console.log('Starting database initialization...');
-        localDB = new local_database_1.LocalDatabase();
-        await localDB.initialize();
-        console.log('Database initialized successfully');
-    }
-    catch (error) {
-        console.error('Failed to initialize database:', error);
-        // Show error dialog to user
-        electron_1.dialog.showErrorBox('Database Error', 'Failed to initialize the local database. The application may not work correctly.\n\nError: ' + error.message);
-    }
-    // Local-only: disable sync and supabase initialization
-    // Copy bundled resources to userData on first run
-    try {
-        const bundledResources = electron_1.app.isPackaged ? (0, path_1.join)(process.resourcesPath, 'resources') : (0, path_1.join)(__dirname, '../resources');
-        const targetResources = (0, path_1.join)(electron_1.app.getPath('userData'), 'resources');
-        const ensure = (p) => { try {
-            (0, fs_1.mkdirSync)(p, { recursive: true });
+if (gotTheLock) {
+    electron_1.app.whenReady().then(async () => {
+        // Initialize local database
+        try {
+            console.log('Starting database initialization...');
+            localDB = new local_database_1.LocalDatabase();
+            await localDB.initialize();
+            console.log('Database initialized successfully');
         }
-        catch { } };
-        const copyRecursive = (src, dest) => {
-            if (!(0, fs_1.existsSync)(src))
-                return;
-            ensure(dest);
-            for (const name of (0, fs_1.readdirSync)(src)) {
-                const s = (0, path_1.join)(src, name);
-                const d = (0, path_1.join)(dest, name);
-                if ((0, fs_1.lstatSync)(s).isDirectory())
-                    copyRecursive(s, d);
-                else
-                    (0, fs_1.copyFileSync)(s, d);
+        catch (error) {
+            console.error('Failed to initialize database:', error);
+            // Show error dialog to user
+            electron_1.dialog.showErrorBox('Database Error', 'Failed to initialize the local database. The application may not work correctly.\n\nError: ' + error.message);
+        }
+        // Local-only: disable sync and supabase initialization
+        // Copy bundled resources to userData on first run
+        try {
+            const bundledResources = electron_1.app.isPackaged ? (0, path_1.join)(process.resourcesPath, 'resources') : (0, path_1.join)(__dirname, '../resources');
+            const targetResources = (0, path_1.join)(electron_1.app.getPath('userData'), 'resources');
+            const ensure = (p) => { try {
+                (0, fs_1.mkdirSync)(p, { recursive: true });
             }
-        };
-        if (!(0, fs_1.existsSync)(targetResources))
-            copyRecursive(bundledResources, targetResources);
-    }
-    catch { }
-    createWindow();
-    createTray();
-    createMenu();
-    electron_1.app.on('activate', () => {
-        // On macOS, re-create window when dock icon is clicked
-        if (electron_1.BrowserWindow.getAllWindows().length === 0) {
-            createWindow();
+            catch { } };
+            const copyRecursive = (src, dest) => {
+                if (!(0, fs_1.existsSync)(src))
+                    return;
+                ensure(dest);
+                for (const name of (0, fs_1.readdirSync)(src)) {
+                    const s = (0, path_1.join)(src, name);
+                    const d = (0, path_1.join)(dest, name);
+                    if ((0, fs_1.lstatSync)(s).isDirectory())
+                        copyRecursive(s, d);
+                    else
+                        (0, fs_1.copyFileSync)(s, d);
+                }
+            };
+            if (!(0, fs_1.existsSync)(targetResources))
+                copyRecursive(bundledResources, targetResources);
         }
+        catch { }
+        createWindow();
+        createTray();
+        createMenu();
+        electron_1.app.on('activate', () => {
+            // On macOS, re-create window when dock icon is clicked
+            if (electron_1.BrowserWindow.getAllWindows().length === 0) {
+                createWindow();
+            }
+        });
     });
-});
+}
 // Quit when all windows are closed
 electron_1.app.on('window-all-closed', () => {
     // On macOS, keep app running even when all windows are closed

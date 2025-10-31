@@ -1,5 +1,5 @@
 ﻿import { useState, useEffect } from 'react';
-import { Edit, Trash2, UserPlus, Shield, Users, Grid3X3, List, Key, Eye, EyeOff, AlertCircle, CheckCircle } from 'lucide-react';
+import { Edit, Trash2, UserPlus, Shield, Users, Grid3X3, List, Key, Eye, EyeOff, AlertCircle, CheckCircle, Download, Upload } from 'lucide-react';
 import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Input } from './ui/input';
@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { authService, User as AuthUser } from '../services/auth.service';
 import { rolesService, Role } from '../services/roles.service';
 import { toast } from 'sonner';
+import { ImportExportDialog } from './ImportExportDialog';
 
 
 
@@ -48,6 +49,7 @@ export function UsersManagementPage({ onNavigate }: UsersManagementPageProps) {
   const [isSavingUser, setIsSavingUser] = useState(false);
   const [isChangingPasswordSubmitting, setIsChangingPasswordSubmitting] = useState(false);
   const [roles, setRoles] = useState<Role[]>([]);
+  const [isImportExportOpen, setIsImportExportOpen] = useState(false);
 
   // Load users from auth service
   useEffect(() => {
@@ -298,8 +300,14 @@ export function UsersManagementPage({ onNavigate }: UsersManagementPageProps) {
     <div className="p-6 space-y-6">
       <div className="space-y-4">
         {/* Title */}
-        <div>
+        <div className="flex items-center justify-between">
           <h1 className="text-3xl font-bold text-[#13312A] arabic-text">إدارة المستخدمين</h1>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={()=>setIsImportExportOpen(true)} className="border-[#C69A72] text-[#13312A] hover:bg-[#C69A72]">
+              <Download className="w-4 h-4 mr-2" />
+              تصدير/استيراد
+            </Button>
+          </div>
         </div>
         
         {/* View Mode and Action Buttons */}
@@ -943,6 +951,7 @@ export function UsersManagementPage({ onNavigate }: UsersManagementPageProps) {
         </Dialog>
       )}
 
+      <ImportExportDialog open={isImportExportOpen} onOpenChange={setIsImportExportOpen} />
     </div>
   );
 }

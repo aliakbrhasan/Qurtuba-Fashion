@@ -23,6 +23,7 @@ interface DesignSettingsData {
 export class DesignSettingsService {
   private static instance: DesignSettingsService;
   private readonly STORAGE_KEY = 'qf_design_settings_v1';
+  private listeners = new Set<(payload: { type: 'options' | 'selected'; key: OptionGroupKey }) => void>();
 
   static getInstance(): DesignSettingsService {
     if (!DesignSettingsService.instance) {
@@ -62,6 +63,15 @@ export class DesignSettingsService {
     } catch {}
   }
 
+  private emit(payload: { type: 'options' | 'selected'; key: OptionGroupKey }) {
+    try { for (const l of Array.from(this.listeners)) { try { l(payload); } catch {} } } catch {}
+  }
+
+  onChange(listener: (payload: { type: 'options' | 'selected'; key: OptionGroupKey }) => void): () => void {
+    this.listeners.add(listener);
+    return () => { this.listeners.delete(listener); };
+  }
+
   getOptions(key: OptionGroupKey): DesignOption[] {
     const d = this.read();
     return (d.options[key] || []) as DesignOption[];
@@ -76,6 +86,7 @@ export class DesignSettingsService {
       delete d.selected[key];
     }
     this.write(d);
+    this.emit({ type: 'options', key });
   }
 
   getSelectedId(key: OptionGroupKey): string | undefined {
@@ -87,6 +98,7 @@ export class DesignSettingsService {
     const d = this.read();
     if (id) d.selected[key] = id; else delete d.selected[key];
     this.write(d);
+    this.emit({ type: 'selected', key });
   }
 }
 

@@ -637,6 +637,42 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated,
     } catch {}
   }, [isOpen, prefillCustomer]);
 
+  // Live-sync design option changes across all open dialogs/windows
+  useEffect(() => {
+    const unsubscribe = designSettings.onChange((_evt) => {
+      try {
+        const savedFabricOptions = designSettings.getOptions('fabricType');
+        setFabricOptions(savedFabricOptions?.length ? savedFabricOptions : []);
+        const savedSourceOptions = designSettings.getOptions('fabricSource');
+        setFabricSourceOptions(savedSourceOptions?.length ? savedSourceOptions : []);
+        const savedCollarOptions = designSettings.getOptions('collarType');
+        setCollarOptions(savedCollarOptions?.length ? savedCollarOptions : []);
+        const savedChestStyleOptions = designSettings.getOptions('chestStyle');
+        setChestStyleOptions(savedChestStyleOptions?.length ? savedChestStyleOptions : []);
+        const savedSleeveEndOptions = designSettings.getOptions('sleeveEnd');
+        setSleeveEndOptions(savedSleeveEndOptions?.length ? savedSleeveEndOptions : []);
+        const savedBunijaOptions = designSettings.getOptions('bunijaType');
+        setBunijaOptions(savedBunijaOptions?.length ? savedBunijaOptions : []);
+
+        // Ensure current selections remain valid; clear if removed
+        const ensureValid = (selId: string, opts: { id: string }[]) => (selId && opts.some(o => o.id === selId)) ? selId : '';
+        const nextSelFabric = ensureValid(selectedFabricOption, savedFabricOptions || []);
+        if (nextSelFabric !== selectedFabricOption) setSelectedFabricOption(nextSelFabric);
+        const nextSelSource = ensureValid(selectedFabricSource, savedSourceOptions || []);
+        if (nextSelSource !== selectedFabricSource) setSelectedFabricSource(nextSelSource);
+        const nextSelCollar = ensureValid(selectedCollarOption, savedCollarOptions || []);
+        if (nextSelCollar !== selectedCollarOption) setSelectedCollarOption(nextSelCollar);
+        const nextSelChest = ensureValid(selectedChestStyleOption, savedChestStyleOptions || []);
+        if (nextSelChest !== selectedChestStyleOption) setSelectedChestStyleOption(nextSelChest);
+        const nextSelSleeve = ensureValid(selectedSleeveEndOption, savedSleeveEndOptions || []);
+        if (nextSelSleeve !== selectedSleeveEndOption) setSelectedSleeveEndOption(nextSelSleeve);
+        const nextSelBunija = ensureValid(selectedBunijaOption, savedBunijaOptions || []);
+        if (nextSelBunija !== selectedBunijaOption) setSelectedBunijaOption(nextSelBunija);
+      } catch {}
+    });
+    return () => { try { unsubscribe(); } catch {} };
+  }, [selectedFabricOption, selectedFabricSource, selectedCollarOption, selectedChestStyleOption, selectedSleeveEndOption, selectedBunijaOption]);
+
   // Reset form when dialog opens/closes
   useEffect(() => {
     if (!isOpen) {

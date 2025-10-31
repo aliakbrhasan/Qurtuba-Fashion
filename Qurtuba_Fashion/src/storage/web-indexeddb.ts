@@ -1,5 +1,6 @@
 import type { StoragePort, UnsyncedBundle } from './StoragePort';
 import type { Customer, Invoice, InvoiceItem } from '@/db/database.service';
+import { DesignSettingsService } from '@/services/design-settings.service';
 import type { Order, NewOrder } from '@/ports/orders';
 import { toIQD } from '@/utils/money';
 
@@ -280,21 +281,60 @@ export class WebIndexedDBStorage implements StoragePort {
 
 	// Backup/restore
 	async exportAll() {
+		const design = (() => {
+			try {
+				const svc = DesignSettingsService.getInstance();
+				const keys: any = ['fabricType','fabricSource','collarType','chestStyle','sleeveEnd','bunijaType'];
+				const options: any = {};
+				const selected: any = {};
+				for (const k of keys) {
+					options[k] = svc.getOptions(k);
+					selected[k] = svc.getSelectedId(k);
+				}
+				return { options, selected };
+			} catch { return undefined; }
+		})();
 		return {
 			customers: [...this.customersArr],
 			invoices: [...this.invoicesArr],
 			orders: [...this.ordersArr],
 			items: [...this.itemsArr],
-			meta: { exportedAt: new Date().toISOString(), version: 1 }
+			users: [],
+			roles: [],
+			images: [],
+			adminLogs: [],
+			designSettings: design,
+			meta: { exportedAt: new Date().toISOString(), version: 2 }
 		};
 	}
 
-	async importAll(data: { customers?: Customer[]; invoices?: Invoice[]; orders?: Order[]; items?: InvoiceItem[] }) {
-		if (Array.isArray(data.customers)) this.customersArr = [...data.customers];
-		if (Array.isArray(data.invoices)) this.invoicesArr = [...data.invoices];
-		if (Array.isArray(data.orders)) this.ordersArr = [...data.orders];
-		if (Array.isArray(data.items)) this.itemsArr = [...data.items];
+	async importAll(data: { customers?: Customer[]; invoices?: Invoice[]; orders?: Order[]; items?: InvoiceItem[]; users?: any[]; roles?: any[]; images?: any[]; adminLogs?: any[]; designSettings?: any }, options?: { policy?: 'replace' | 'merge'; scope?: { customers?: boolean; invoices?: boolean; orders?: boolean; items?: boolean; designSettings?: boolean } }) {
+		const policy = options?.policy || 'replace';
+		const scope = Object.assign({ customers: true, invoices: true, orders: true, items: true, designSettings: true }, options?.scope || {});
+		const mergeArray = <T extends { id?: any }>(orig: T[], next: T[]): T[] => {
+			if (policy === 'replace') return [...next];
+			const map = new Map<string, T>();
+			for (const o of orig) map.set(String((o as any).id ?? Math.random()), o);
+			for (const n of next) map.set(String((n as any).id ?? Math.random()), { ...(map.get(String((n as any).id ?? Math.random())) as any), ...n } as T);
+			return Array.from(map.values());
+		};
+		if (scope.customers && Array.isArray(data.customers)) this.customersArr = mergeArray(this.customersArr, data.customers);
+		if (scope.invoices && Array.isArray(data.invoices)) this.invoicesArr = mergeArray(this.invoicesArr, data.invoices);
+		if (scope.orders && Array.isArray(data.orders)) this.ordersArr = mergeArray(this.ordersArr, data.orders);
+		if (scope.items && Array.isArray(data.items)) this.itemsArr = mergeArray(this.itemsArr, data.items);
 		this.persistAll();
+		if (scope.designSettings && data.designSettings && typeof data.designSettings === 'object') {
+			try {
+				const svc = DesignSettingsService.getInstance();
+				const opts = data.designSettings.options || {};
+				const sel = data.designSettings.selected || {};
+				const keys: any = ['fabricType','fabricSource','collarType','chestStyle','sleeveEnd','bunijaType'];
+				for (const k of keys) {
+					if (Array.isArray(opts[k])) svc.setOptions(k, opts[k]);
+					if (sel[k]) svc.setSelectedId(k, sel[k]);
+				}
+			} catch {}
+		}
 	}
 
 	// Admin logs (web fallback in localStorage)

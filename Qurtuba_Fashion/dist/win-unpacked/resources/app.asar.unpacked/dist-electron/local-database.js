@@ -518,11 +518,15 @@ class LocalDatabase {
         const setClause = columns.join(', ');
         const versionUpdate = options?.fromCloud ? '' : ', version = version + 1';
         await this.run(`UPDATE customers SET ${setClause}, updated_at = ?${versionUpdate} WHERE id = ?`, [...values, now, id]);
+        const row = await this.get('SELECT * FROM customers WHERE id = ?', [id]);
+        if (!row) {
+            // Ensure we don't enqueue an invalid payload causing NOT NULL constraint on outbox.payload
+            throw new Error('Customer not found');
+        }
         if (!options?.fromCloud) {
-            const row = await this.get('SELECT * FROM customers WHERE id = ?', [id]);
             await this.enqueueOutbox('customers', id, 'update', row);
         }
-        return await this.get('SELECT * FROM customers WHERE id = ?', [id]);
+        return row;
     }
     async deleteCustomer(id) {
         if (!this.db)
@@ -718,113 +722,235 @@ class LocalDatabase {
             customers: await this.all('SELECT * FROM customers'),
             invoices: await this.all('SELECT * FROM invoices'),
             orders: await this.all('SELECT * FROM orders'),
-            invoiceItems: await this.all('SELECT * FROM invoice_items')
+            invoiceItems: await this.all('SELECT * FROM invoice_items'),
+            users: await this.all('SELECT * FROM users'),
+            roles: await this.all('SELECT * FROM roles'),
+            images: await this.all('SELECT * FROM images'),
+            adminLogs: await this.all('SELECT * FROM admin_logs')
         };
     }
     // Export all tables as a JSON object
     async exportAll() {
         const data = await this.getAllOfflineData();
-        return {
+        const bundle = {
             customers: data.customers,
             invoices: data.invoices,
             orders: data.orders,
             invoiceItems: data.invoiceItems,
-            meta: { exportedAt: new Date().toISOString(), version: 1 }
+            users: data.users,
+            roles: data.roles,
+            images: data.images,
+            adminLogs: data.adminLogs,
+            meta: { exportedAt: new Date().toISOString(), version: 2 }
         };
+        // Try to include design settings if cached in app cache (renderer may provide API)
+        try {
+            const { readFileSync } = require('fs');
+            // No direct access to renderer cache here; leave designSettings undefined in Electron main export.
+            // It will be merged by renderer facade if available.
+        }
+        catch { }
+        return bundle;
     }
     // Import all tables from a JSON object (replace strategy)
-    async importAll(payload) {
+    async importAll(payload, options) {
         if (!this.db)
             throw new Error('Database not initialized');
-        const customers = Array.isArray(payload.customers) ? payload.customers : [];
-        const invoices = Array.isArray(payload.invoices) ? payload.invoices : [];
-        const orders = Array.isArray(payload.orders) ? payload.orders : [];
-        const items = Array.isArray(payload.invoiceItems) ? payload.invoiceItems : [];
-        // Simple replace-all strategy
-        await this.run('DELETE FROM invoice_items');
-        await this.run('DELETE FROM orders');
-        await this.run('DELETE FROM invoices');
-        await this.run('DELETE FROM customers');
-        for (const c of customers) {
-            await this.run(`
-        INSERT INTO customers (id, name, phone, address, total_spent, last_order, label, measurements, notes, version, deleted, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `, [
-                c.id,
-                c.name || '',
-                c.phone || null,
-                c.address || null,
-                (c.total_spent ?? c.totalSpent) || 0,
-                c.last_order || c.lastOrder || null,
-                c.label || null,
-                JSON.stringify(c.measurements ?? null),
-                c.notes || null,
-                (c.version ?? 1),
-                (c.deleted ?? 0),
-                c.created_at || new Date().toISOString(),
-                c.updated_at || new Date().toISOString(),
-            ]);
+        const policy = options?.policy || 'replace';
+        const scope = Object.assign({ customers: true, invoices: true, orders: true, invoiceItems: true, users: true, roles: true, images: true, adminLogs: true }, options?.scope || {});
+        const customers = scope.customers && Array.isArray(payload.customers) ? payload.customers : [];
+        const invoices = scope.invoices && Array.isArray(payload.invoices) ? payload.invoices : [];
+        const orders = scope.orders && Array.isArray(payload.orders) ? payload.orders : [];
+        const items = scope.invoiceItems && Array.isArray(payload.invoiceItems) ? payload.invoiceItems : [];
+        const users = scope.users && Array.isArray(payload.users) ? payload.users : [];
+        const roles = scope.roles && Array.isArray(payload.roles) ? payload.roles : [];
+        const images = scope.images && Array.isArray(payload.images) ? payload.images : [];
+        const adminLogs = scope.adminLogs && Array.isArray(payload.adminLogs) ? payload.adminLogs : [];
+        if (policy === 'replace') {
+            if (scope.invoiceItems)
+                await this.run('DELETE FROM invoice_items');
+            if (scope.orders)
+                await this.run('DELETE FROM orders');
+            if (scope.invoices)
+                await this.run('DELETE FROM invoices');
+            if (scope.customers)
+                await this.run('DELETE FROM customers');
+            if (scope.users)
+                await this.run('DELETE FROM users');
+            if (scope.roles)
+                await this.run('DELETE FROM roles');
+            if (scope.images)
+                await this.run('DELETE FROM images');
+            if (scope.adminLogs)
+                await this.run('DELETE FROM admin_logs');
         }
-        for (const inv of invoices) {
-            await this.run(`
-        INSERT INTO invoices (id, invoice_number, customer_id, customer_name, customer_phone, customer_address,
-                             total, paid_amount, status, invoice_date, due_date, notes, fabric_image_url, paid_at, version, deleted, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `, [
-                inv.id,
-                inv.invoice_number || `INV-${Date.now()}`,
-                inv.customer_id || null,
-                inv.customer_name || '',
-                inv.customer_phone || null,
-                inv.customer_address || null,
-                Number(inv.total || 0),
-                Number(inv.paid_amount || 0),
-                inv.status || 'معلق',
-                inv.invoice_date || new Date().toISOString(),
-                inv.due_date || null,
-                inv.notes || null,
-                inv.fabric_image_url || null,
-                inv.paid_at || null,
-                (inv.version ?? 1),
-                (inv.deleted ?? 0),
-                inv.created_at || new Date().toISOString(),
-                inv.updated_at || new Date().toISOString(),
-            ]);
+        const upsert = async (table, cols, rowVals) => {
+            if (policy === 'merge') {
+                const placeholders = cols.map(() => '?').join(', ');
+                const assignments = cols.filter(c => c !== 'id').map(c => `${c} = excluded.${c}`).join(', ');
+                await this.run(`INSERT INTO ${table} (${cols.join(', ')}) VALUES (${placeholders}) ON CONFLICT(id) DO UPDATE SET ${assignments}`, rowVals);
+            }
+            else {
+                await this.run(`INSERT INTO ${table} (${cols.join(', ')}) VALUES (${cols.map(() => '?').join(', ')})`, rowVals);
+            }
+        };
+        if (customers.length) {
+            for (const c of customers) {
+                await upsert('customers', ['id', 'name', 'phone', 'address', 'total_spent', 'last_order', 'label', 'label_auto', 'measurements', 'notes', 'version', 'deleted', 'created_at', 'updated_at'], [
+                    c.id,
+                    c.name || '',
+                    c.phone || null,
+                    c.address || null,
+                    (c.total_spent ?? c.totalSpent) || 0,
+                    c.last_order || c.lastOrder || null,
+                    c.label || null,
+                    (c.label_auto === false ? 0 : 1),
+                    JSON.stringify(c.measurements ?? null),
+                    c.notes || null,
+                    (c.version ?? 1),
+                    (c.deleted ?? 0),
+                    c.created_at || new Date().toISOString(),
+                    c.updated_at || new Date().toISOString(),
+                ]);
+            }
         }
-        for (const o of orders) {
-            await this.run(`
-        INSERT INTO orders (id, customer_id, order_date, delivery_date, status, total, notes, version, deleted, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `, [
-                o.id,
-                o.customer_id || null,
-                o.order_date || o.created_at || new Date().toISOString(),
-                o.delivery_date || o.order_date || o.created_at || new Date().toISOString(),
-                o.status || 'معلق',
-                Number(o.total || 0),
-                o.notes || null,
-                (o.version ?? 1),
-                (o.deleted ?? 0),
-                o.created_at || new Date().toISOString(),
-                o.updated_at || new Date().toISOString(),
-            ]);
+        if (invoices.length) {
+            for (const inv of invoices) {
+                await upsert('invoices', ['id', 'invoice_number', 'customer_id', 'customer_name', 'customer_phone', 'customer_address', 'total', 'paid_amount', 'status', 'invoice_date', 'due_date', 'notes', 'customer_measurements', 'fabric_type', 'fabric_source', 'collar_type', 'chest_style', 'sleeve_end', 'bunija_type', 'fabric_image_url', 'paid_at', 'version', 'deleted', 'created_at', 'updated_at', 'synced'], [
+                    inv.id,
+                    inv.invoice_number || `INV-${Date.now()}`,
+                    inv.customer_id || null,
+                    inv.customer_name || '',
+                    inv.customer_phone || null,
+                    inv.customer_address || null,
+                    Number(inv.total || 0),
+                    Number(inv.paid_amount || 0),
+                    inv.status || 'معلق',
+                    inv.invoice_date || new Date().toISOString(),
+                    inv.due_date || null,
+                    inv.notes || null,
+                    inv.customer_measurements ? JSON.stringify(inv.customer_measurements) : null,
+                    inv.fabric_type || null,
+                    inv.fabric_source || null,
+                    inv.collar_type || null,
+                    inv.chest_style || null,
+                    inv.sleeve_end || null,
+                    inv.bunija_type || null,
+                    inv.fabric_image_url || null,
+                    inv.paid_at || null,
+                    (inv.version ?? 1),
+                    (inv.deleted ?? 0),
+                    inv.created_at || new Date().toISOString(),
+                    inv.updated_at || new Date().toISOString(),
+                    (inv.synced ?? 0)
+                ]);
+            }
         }
-        for (const it of items) {
-            await this.run(`
-        INSERT INTO invoice_items (id, invoice_id, item_name, description, quantity, unit_price, total_price, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `, [
-                it.id || this.generateId(),
-                it.invoice_id,
-                it.item_name || '',
-                it.description || null,
-                Number(it.quantity || 1),
-                Number(it.unit_price || 0),
-                Number(it.total_price || (Number(it.quantity || 1) * Number(it.unit_price || 0))),
-                it.created_at || new Date().toISOString(),
-            ]);
+        if (orders.length) {
+            for (const o of orders) {
+                await upsert('orders', ['id', 'customer_id', 'order_date', 'delivery_date', 'status', 'total', 'notes', 'version', 'deleted', 'created_at', 'updated_at'], [
+                    o.id,
+                    o.customer_id || null,
+                    o.order_date || o.created_at || new Date().toISOString(),
+                    o.delivery_date || o.order_date || o.created_at || new Date().toISOString(),
+                    o.status || 'معلق',
+                    Number(o.total || 0),
+                    o.notes || null,
+                    (o.version ?? 1),
+                    (o.deleted ?? 0),
+                    o.created_at || new Date().toISOString(),
+                    o.updated_at || new Date().toISOString(),
+                ]);
+            }
         }
-        return { imported: { customers: customers.length, invoices: invoices.length, orders: orders.length, invoiceItems: items.length } };
+        if (items.length) {
+            for (const it of items) {
+                await upsert('invoice_items', ['id', 'invoice_id', 'item_name', 'description', 'quantity', 'unit_price', 'total_price', 'created_at'], [
+                    it.id || this.generateId(),
+                    it.invoice_id,
+                    it.item_name || '',
+                    it.description || null,
+                    Number(it.quantity || 1),
+                    Number(it.unit_price || 0),
+                    Number(it.total_price || (Number(it.quantity || 1) * Number(it.unit_price || 0))),
+                    it.created_at || new Date().toISOString(),
+                ]);
+            }
+        }
+        if (users.length) {
+            for (const u of users) {
+                await upsert('users', ['id', 'code', 'name', 'email', 'phone', 'password_hash', 'status', 'role', 'role_id', 'is_active', 'version', 'deleted', 'created_at', 'updated_at', 'last_login'], [
+                    u.id,
+                    u.code,
+                    u.name,
+                    u.email,
+                    u.phone ?? null,
+                    u.password_hash ?? null,
+                    u.status,
+                    u.role ?? null,
+                    u.role_id ?? null,
+                    (u.is_active === false ? 0 : 1),
+                    (u.version ?? 1),
+                    (u.deleted ?? 0),
+                    u.created_at || new Date().toISOString(),
+                    u.updated_at || new Date().toISOString(),
+                    u.last_login || null,
+                ]);
+            }
+        }
+        if (roles.length) {
+            for (const r of roles) {
+                await upsert('roles', ['id', 'name', 'description', 'permissions', 'allowed_pages', 'allowed_actions', 'is_active', 'version', 'deleted', 'created_at', 'updated_at'], [
+                    r.id,
+                    r.name,
+                    r.description || null,
+                    typeof r.permissions === 'string' ? r.permissions : JSON.stringify(r.permissions || []),
+                    typeof r.allowed_pages === 'string' ? r.allowed_pages : JSON.stringify(r.allowed_pages || []),
+                    typeof r.allowed_actions === 'string' ? r.allowed_actions : JSON.stringify(r.allowed_actions || []),
+                    (r.is_active === false ? 0 : 1),
+                    (r.version ?? 1),
+                    (r.deleted ?? 0),
+                    r.created_at || new Date().toISOString(),
+                    r.updated_at || new Date().toISOString(),
+                ]);
+            }
+        }
+        if (images.length) {
+            for (const im of images) {
+                await upsert('images', ['id', 'filename', 'original_name', 'mime_type', 'size', 'width', 'height', 'data_url', 'thumbnail_url', 'entity_type', 'entity_id', 'created_by', 'created_at', 'updated_at'], [
+                    im.id || this.generateId(),
+                    im.filename,
+                    im.original_name,
+                    im.mime_type,
+                    Number(im.size || 0),
+                    im.width || null,
+                    im.height || null,
+                    im.data_url,
+                    im.thumbnail_url || null,
+                    im.entity_type,
+                    im.entity_id,
+                    im.created_by || null,
+                    im.created_at || new Date().toISOString(),
+                    im.updated_at || new Date().toISOString(),
+                ]);
+            }
+        }
+        if (adminLogs.length) {
+            for (const lg of adminLogs) {
+                await upsert('admin_logs', ['id', 'action_type', 'entity_type', 'entity_id', 'changed_fields', 'action_date', 'action_time', 'user_name', 'created_at'], [
+                    lg.id || this.generateId(),
+                    lg.action_type,
+                    lg.entity_type,
+                    lg.entity_id,
+                    typeof lg.changed_fields === 'string' ? lg.changed_fields : (lg.changed_fields ? JSON.stringify(lg.changed_fields) : null),
+                    lg.action_date || (lg.created_at || new Date().toISOString()).slice(0, 10),
+                    lg.action_time || new Date().toTimeString().slice(0, 5),
+                    lg.user_name || null,
+                    lg.created_at || new Date().toISOString(),
+                ]);
+            }
+        }
+        return { imported: { customers: customers.length, invoices: invoices.length, orders: orders.length, invoiceItems: items.length, users: users.length, roles: roles.length, images: images.length, adminLogs: adminLogs.length } };
     }
     async clearAllData() {
         if (!this.db)
@@ -868,10 +994,20 @@ class LocalDatabase {
     async enqueueOutbox(tableName, recordId, action, payload) {
         if (!this.db)
             throw new Error('Database not initialized');
+        const payloadString = (() => {
+            try {
+                const json = JSON.stringify(payload ?? {});
+                // If JSON.stringify returns undefined (only for functions/undefined at top-level), fallback to '{}'
+                return json === undefined ? '{}' : json;
+            }
+            catch {
+                return '{}';
+            }
+        })();
         await this.run(`
       INSERT INTO outbox (table_name, record_id, action, payload, created_at)
       VALUES (?, ?, ?, ?, ?)
-    `, [tableName, recordId, action, JSON.stringify(payload), new Date().toISOString()]);
+    `, [tableName, recordId, action, payloadString, new Date().toISOString()]);
     }
     async close() { }
     // Upsert helpers for cloud -> local synchronization
