@@ -1,7 +1,10 @@
 import { app } from 'electron';
 import { join } from 'path';
+import { existsSync, readFileSync, mkdirSync, writeFileSync } from 'fs';
+import { pathToFileURL } from 'url';
 // Use better-sqlite3 for better Electron compatibility
 import Database from 'better-sqlite3';
+import { logger } from './utils';
 
 // Use better-sqlite3 directly - no wrapper needed
 
@@ -106,7 +109,7 @@ export class LocalDatabase {
 
   async initialize(): Promise<void> {
     try {
-      console.log('Initializing local database at:', this.dbPath);
+      logger.log('Initializing local database at:', this.dbPath);
       
       // Ensure the directory exists
       const { mkdirSync } = require('fs');
@@ -114,22 +117,22 @@ export class LocalDatabase {
       try {
         mkdirSync(dirname(this.dbPath), { recursive: true });
       } catch (e) {
-        console.warn('Could not create database directory:', e);
+        logger.warn('Could not create database directory:', e);
       }
       
       this.db = new Database(this.dbPath);
-      console.log('Database connection established');
+      logger.log('Database connection established');
       
       // Pragmas for durability and concurrency
       this.db.pragma('journal_mode = WAL');
       this.db.pragma('synchronous = NORMAL');
       this.db.pragma('foreign_keys = ON');
       this.createTables();
-      console.log('Database tables created successfully');
+      logger.log('Database tables created successfully');
       await this.seedInitialUsersIfEmpty();
     } catch (err) {
-      console.error('Error opening database:', err);
-      console.error('Database path:', this.dbPath);
+      logger.error('Error opening database:', err);
+      logger.error('Database path:', this.dbPath);
       throw err;
     }
   }
@@ -425,7 +428,7 @@ export class LocalDatabase {
       }
     } catch (e) {
       // Non-fatal
-      console.warn('Seed users failed:', e);
+      logger.warn('Seed users failed:', e);
     }
   }
 
@@ -571,10 +574,10 @@ export class LocalDatabase {
     
     try {
       const customers = await this.all<LocalCustomer>("SELECT * FROM customers WHERE deleted = 0 AND LOWER(name) NOT LIKE '%test customer%' ORDER BY created_at DESC");
-      console.log('Retrieved customers count:', customers.length);
+      logger.debug('Retrieved customers count:', customers.length);
       return customers;
     } catch (error) {
-      console.error('Error retrieving customers:', error);
+      logger.error('Error retrieving customers:', error);
       throw error;
     }
   }
@@ -670,10 +673,10 @@ export class LocalDatabase {
     
     try {
       const invoices = await this.all<LocalInvoice>('SELECT * FROM invoices WHERE deleted = 0 ORDER BY created_at DESC');
-      console.log('Retrieved invoices count:', invoices.length);
+      logger.debug('Retrieved invoices count:', invoices.length);
       return invoices;
     } catch (error) {
-      console.error('Error retrieving invoices:', error);
+      logger.error('Error retrieving invoices:', error);
       throw error;
     }
   }
@@ -685,13 +688,7 @@ export class LocalDatabase {
     const invoiceNumber = this.generateInvoiceNumber();
     const now = new Date().toISOString();
     
-    console.log('Creating invoice with data:', {
-      id,
-      invoiceNumber,
-      customer_name: invoice.customer_name,
-      total: invoice.total,
-      status: invoice.status
-    });
+    logger.debug('Creating invoice:', invoiceNumber);
     
     try {
       await this.run(`
@@ -707,9 +704,9 @@ export class LocalDatabase {
           (invoice as any).chest_style || null, (invoice as any).sleeve_end || null, (invoice as any).bunija_type || null,
           invoice.fabric_image_url, invoice.paid_at || null, 1, 0, now, now, 0]);
       
-      console.log('Invoice created successfully with ID:', id);
+      logger.debug('Invoice created successfully with ID:', id);
     } catch (error) {
-      console.error('Error creating invoice:', error);
+      logger.error('Error creating invoice:', error);
       throw error;
     }
 
@@ -874,16 +871,43 @@ export class LocalDatabase {
   // Export all tables as a JSON object
   async exportAll(): Promise<{ customers: any[]; invoices: any[]; orders: any[]; invoiceItems: any[]; users: any[]; roles: any[]; images: any[]; adminLogs: any[]; designSettings?: any; meta: any }> {
     const data = await this.getAllOfflineData();
+    // Normalize JSON fields (measurements on customers, customer_measurements on invoices)
+    const safeParse = (v: any) => {
+      try { return typeof v === 'string' ? JSON.parse(v) : v; } catch { return null; }
+    };
+    const customers = (data.customers || []).map((c: any) => ({
+      ...c,
+      measurements: safeParse(c.measurements)
+    }));
+    const invoices = (data.invoices || []).map((inv: any) => ({
+      ...inv,
+      customer_measurements: safeParse(inv.customer_measurements)
+    }));
+
+    // Embed image file data as base64 into export bundle
+    const images = (data.images || []).map((img: any) => {
+      try {
+        const baseDir = join(app.getPath('userData'), 'images');
+        const absPath = join(baseDir, img.filename);
+        if (existsSync(absPath)) {
+          const buf = readFileSync(absPath);
+          const b64 = buf.toString('base64');
+          return { ...img, file_data_base64: b64 };
+        }
+      } catch {}
+      return { ...img };
+    });
+
     const bundle: any = {
-      customers: data.customers,
-      invoices: data.invoices,
+      customers,
+      invoices,
       orders: data.orders,
       invoiceItems: data.invoiceItems,
       users: data.users,
       roles: data.roles,
-      images: data.images,
+      images,
       adminLogs: data.adminLogs,
-      meta: { exportedAt: new Date().toISOString(), version: 2 }
+      meta: { exportedAt: new Date().toISOString(), version: 3 }
     };
     // Try to include design settings if cached in app cache (renderer may provide API)
     try {
@@ -1057,16 +1081,31 @@ export class LocalDatabase {
     }
 
     if (images.length) {
+      const baseDir = join(app.getPath('userData'), 'images');
+      try { mkdirSync(baseDir, { recursive: true }); } catch {}
       for (const im of images) {
+        const imageId = im.id || this.generateId();
+        const filename = im.filename || `${imageId}.bin`;
+        // If file data provided, write it to disk and set data_url accordingly
+        let dataUrl = im.data_url || null;
+        try {
+          if (im.file_data_base64 && typeof im.file_data_base64 === 'string') {
+            const absPath = join(baseDir, filename);
+            const buf = Buffer.from(im.file_data_base64, 'base64');
+            try { mkdirSync(join(absPath, '..'), { recursive: true }); } catch {}
+            writeFileSync(absPath, buf);
+            dataUrl = pathToFileURL(absPath).toString();
+          }
+        } catch {}
         await upsert('images', ['id','filename','original_name','mime_type','size','width','height','data_url','thumbnail_url','entity_type','entity_id','created_by','created_at','updated_at'], [
-          im.id || this.generateId(),
-          im.filename,
+          imageId,
+          filename,
           im.original_name,
           im.mime_type,
           Number(im.size || 0),
           im.width || null,
           im.height || null,
-          im.data_url,
+          dataUrl,
           im.thumbnail_url || null,
           im.entity_type,
           im.entity_id,
@@ -1380,7 +1419,7 @@ export class LocalDatabase {
   async createImage(image: Omit<LocalImage, 'id' | 'created_at' | 'updated_at'>): Promise<LocalImage> {
     if (!this.db) throw new Error('Database not initialized');
     
-    console.log('LocalDatabase.createImage called with:', image);
+    logger.debug('LocalDatabase.createImage called');
     const id = this.generateId();
     const now = new Date().toISOString();
     
@@ -1407,23 +1446,22 @@ export class LocalDatabase {
       
       const row = await this.get<LocalImage>('SELECT * FROM images WHERE id = ?', [id]);
       await this.enqueueOutbox('images', id, 'insert', row);
-      console.log('LocalDatabase.createImage success:', row);
+      logger.debug('LocalDatabase.createImage success');
       return row;
     } catch (error) {
-      console.error('LocalDatabase.createImage error:', error);
+      logger.error('LocalDatabase.createImage error:', error);
       throw error;
     }
   }
 
   async getImagesByEntity(entityType: string, entityId: string): Promise<LocalImage[]> {
     if (!this.db) throw new Error('Database not initialized');
-    console.log('LocalDatabase.getImagesByEntity called with:', { entityType, entityId });
+    logger.debug('LocalDatabase.getImagesByEntity called');
     try {
       const result = await this.all<LocalImage>('SELECT * FROM images WHERE entity_type = ? AND entity_id = ? ORDER BY created_at DESC', [entityType, entityId]);
-      console.log('LocalDatabase.getImagesByEntity result:', result);
       return result;
     } catch (error) {
-      console.error('LocalDatabase.getImagesByEntity error:', error);
+      logger.error('LocalDatabase.getImagesByEntity error:', error);
       throw error;
     }
   }
@@ -1476,7 +1514,7 @@ export class LocalDatabase {
     const lines: string[] = [];
     const nowIso = new Date().toISOString();
     try {
-      console.log('Starting database self-test...');
+      logger.log('Starting database self-test...');
       lines.push('بدء اختبار قاعدة البيانات المحلية...');
 
       // 1) Create test customer
@@ -1552,10 +1590,10 @@ export class LocalDatabase {
       // Note: لا نحذف السجلات التجريبية لضمان تتبعها، وواجهة القائمة لا تعرض "Test Customer"
 
       lines.push('🎉 اكتمل الاختبار بنجاح. قاعدة البيانات المحلية تعمل وتخزن النصوص وروابط الصور.');
-      console.log('Database self-test completed successfully');
+      logger.log('Database self-test completed successfully');
       return { ok: true, report: lines.join('\n') };
     } catch (e: any) {
-      console.error('Database self-test failed:', e);
+      logger.error('Database self-test failed:', e);
       lines.push(`❌ حدث خطأ: ${String(e?.message || e)}`);
       return { ok: false, report: lines.join('\n') };
     }

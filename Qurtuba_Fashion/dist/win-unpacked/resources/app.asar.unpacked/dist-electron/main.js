@@ -81,13 +81,13 @@ const createWindow = () => {
         const found = candidates.find(p => (0, fs_1.existsSync)(p));
         if (found) {
             mainWindow.loadFile(found).catch((err) => {
-                console.error('Failed to load index.html:', err);
+                utils_1.logger.error('Failed to load index.html:', err);
                 electron_1.dialog.showErrorBox('خطأ في تشغيل التطبيق', 'تعذر تحميل واجهة التطبيق. تأكد من وجود مجلد build ثم أعد المحاولة.');
             });
         }
         else {
             const message = `تعذر العثور على build/index.html\nيرجى تشغيل: npm run build\nالمسارات التي تم البحث فيها:\n${candidates.join('\n')}`;
-            console.error(message);
+            utils_1.logger.error(message);
             electron_1.dialog.showErrorBox('الملفات غير موجودة', message);
         }
     }
@@ -161,13 +161,13 @@ if (gotTheLock) {
     electron_1.app.whenReady().then(async () => {
         // Initialize local database
         try {
-            console.log('Starting database initialization...');
+            utils_1.logger.log('Starting database initialization...');
             localDB = new local_database_1.LocalDatabase();
             await localDB.initialize();
-            console.log('Database initialized successfully');
+            utils_1.logger.log('Database initialized successfully');
         }
         catch (error) {
-            console.error('Failed to initialize database:', error);
+            utils_1.logger.error('Failed to initialize database:', error);
             // Show error dialog to user
             electron_1.dialog.showErrorBox('Database Error', 'Failed to initialize the local database. The application may not work correctly.\n\nError: ' + error.message);
         }
@@ -323,55 +323,53 @@ async function ok(fn) {
         return { ok: true, data };
     }
     catch (e) {
-        console.error('Database operation failed:', e);
+        utils_1.logger.error('Database operation failed:', e);
         return { ok: false, error: String(e?.message || e) };
     }
 }
 // Local database handlers
 electron_1.ipcMain.handle('local:getCustomers', async () => {
-    console.log('IPC: getCustomers called');
+    utils_1.logger.debug('IPC: getCustomers called');
     return ok(() => localDB.getCustomers());
 });
 electron_1.ipcMain.handle('local:createCustomer', async (_, customer) => {
-    console.log('IPC: createCustomer called with:', customer);
+    utils_1.logger.debug('IPC: createCustomer called');
     return ok(() => localDB.createCustomer(customer));
 });
 electron_1.ipcMain.handle('local:updateCustomer', async (_, id, updates) => {
-    console.log('IPC: updateCustomer called with ID:', id);
+    utils_1.logger.debug('IPC: updateCustomer called with ID:', id);
     return ok(() => localDB.updateCustomer(id, updates));
 });
 electron_1.ipcMain.handle('local:deleteCustomer', async (_, id) => {
-    console.log('IPC: deleteCustomer called with ID:', id, 'Type:', typeof id);
+    utils_1.logger.debug('IPC: deleteCustomer called with ID:', id);
     // Ensure ID is a string
     const idString = String(id || '');
     if (!idString || idString === 'undefined' || idString === 'null') {
-        console.error('Invalid customer ID received:', id);
+        utils_1.logger.error('Invalid customer ID received:', id);
         return { ok: false, error: 'Invalid customer ID' };
     }
-    console.log('Calling localDB.deleteCustomer with string ID:', idString);
     return ok(() => localDB.deleteCustomer(idString));
 });
 electron_1.ipcMain.handle('local:getInvoices', async () => {
-    console.log('IPC: getInvoices called');
+    utils_1.logger.debug('IPC: getInvoices called');
     return ok(() => localDB.getInvoices());
 });
 electron_1.ipcMain.handle('local:createInvoice', async (_, invoice) => {
-    console.log('IPC: createInvoice called with:', invoice);
+    utils_1.logger.debug('IPC: createInvoice called');
     return ok(() => localDB.createInvoice(invoice));
 });
 electron_1.ipcMain.handle('local:updateInvoice', async (_, id, updates) => {
-    console.log('IPC: updateInvoice called with ID:', id);
+    utils_1.logger.debug('IPC: updateInvoice called with ID:', id);
     return ok(() => localDB.updateInvoice(id, updates));
 });
 electron_1.ipcMain.handle('local:deleteInvoice', async (_, id) => {
-    console.log('IPC: deleteInvoice called with ID:', id, 'Type:', typeof id);
+    utils_1.logger.debug('IPC: deleteInvoice called with ID:', id);
     // Ensure ID is a string
     const idString = String(id || '');
     if (!idString || idString === 'undefined' || idString === 'null') {
-        console.error('Invalid invoice ID received:', id);
+        utils_1.logger.error('Invalid invoice ID received:', id);
         return { ok: false, error: 'Invalid invoice ID' };
     }
-    console.log('Calling localDB.deleteInvoice with string ID:', idString);
     return ok(() => localDB.deleteInvoice(idString));
 });
 electron_1.ipcMain.handle('local:getOrders', async () => ok(() => localDB.getOrders()));
@@ -383,7 +381,7 @@ electron_1.ipcMain.handle('local:getAdminLogs', async () => ok(() => localDB.get
 electron_1.ipcMain.handle('local:createAdminLog', async (_evt, entry) => ok(() => localDB.createAdminLog(entry)));
 // Local database self-test
 electron_1.ipcMain.handle('local:selfTest', async () => {
-    console.log('IPC: selfTest called');
+    utils_1.logger.debug('IPC: selfTest called');
     return ok(() => localDB.selfTest());
 });
 // Roles handlers
@@ -402,7 +400,7 @@ electron_1.ipcMain.handle('local:importAll', async (_evt, data) => ok(async () =
 }));
 // Clear all data handler (for testing)
 electron_1.ipcMain.handle('local:clearAllData', async () => {
-    console.log('IPC: clearAllData called');
+    utils_1.logger.warn('IPC: clearAllData called - This action will delete all data!');
     return ok(() => localDB.clearAllData());
 });
 // Sync handlers (no-op in local-only mode)
@@ -446,11 +444,7 @@ electron_1.ipcMain.handle('image:upload', async (_evt, args) => ok(async () => {
     const fileUrl = (0, url_1.pathToFileURL)(targetPath).toString();
     // If entity info provided, save to database
     if (args.entityType && args.entityId) {
-        console.log('Main process - Saving image to database:', {
-            entityType: args.entityType,
-            entityId: args.entityId,
-            fileName: args.fileName
-        });
+        utils_1.logger.debug('Main process - Saving image to database');
         try {
             const imageRecord = await localDB.createImage({
                 filename: args.fileName,
@@ -463,16 +457,13 @@ electron_1.ipcMain.handle('image:upload', async (_evt, args) => ok(async () => {
                 entity_type: args.entityType,
                 entity_id: args.entityId
             });
-            console.log('Main process - Image saved to database with ID:', imageRecord.id);
+            utils_1.logger.debug('Main process - Image saved to database with ID:', imageRecord.id);
             return { url: targetPath, path: args.fileName, publicUrl: fileUrl, imageId: imageRecord.id };
         }
         catch (dbError) {
-            console.error('Main process - Failed to save image record to database:', dbError);
+            utils_1.logger.error('Main process - Failed to save image record to database:', dbError);
             // Continue with file upload even if DB save fails
         }
-    }
-    else {
-        console.log('Main process - No entity info provided, skipping database save');
     }
     return { url: targetPath, path: args.fileName, publicUrl: fileUrl };
 }));
@@ -495,14 +486,13 @@ electron_1.ipcMain.handle('image:getPublicUrl', async (_evt, path) => ok(async (
     return (0, url_1.pathToFileURL)(targetPath).toString();
 }));
 electron_1.ipcMain.handle('image:getByEntity', async (_evt, entityType, entityId) => ok(async () => {
-    console.log('Main process - image:getByEntity called with:', { entityType, entityId });
+    utils_1.logger.debug('Main process - image:getByEntity called');
     try {
         const result = await localDB.getImagesByEntity(entityType, entityId);
-        console.log('Main process - getImagesByEntity result:', result);
         return result;
     }
     catch (error) {
-        console.error('Main process - getImagesByEntity error:', error);
+        utils_1.logger.error('Main process - getImagesByEntity error:', error);
         throw error;
     }
 }));
@@ -518,7 +508,7 @@ electron_1.ipcMain.handle('image:deleteById', async (_evt, imageId) => ok(async 
                 (0, fs_1.unlinkSync)(targetPath);
         }
         catch (e) {
-            console.warn('Failed to delete image file:', e);
+            utils_1.logger.warn('Failed to delete image file:', e);
         }
     }
     // Delete from database
@@ -567,7 +557,7 @@ electron_1.ipcMain.handle('app:getLogoPath', async () => ok(async () => {
             return `data:${mimeType};base64,${base64}`;
         }
         catch (error) {
-            console.error('Failed to read logo file:', error);
+            utils_1.logger.error('Failed to read logo file:', error);
             // Fallback to file URL
             return (0, url_1.pathToFileURL)(logoPath).toString();
         }
@@ -651,7 +641,7 @@ electron_1.ipcMain.handle('print:document', async (_evt, args) => {
                 });
             }
             catch (err) {
-                console.error('Print pipeline error:', err);
+                utils_1.logger.error('Print pipeline error:', err);
             }
             finally {
                 setTimeout(() => { try {
@@ -665,7 +655,7 @@ electron_1.ipcMain.handle('print:document', async (_evt, args) => {
         return { ok: true };
     }
     catch (e) {
-        console.error('Print error:', e);
+        utils_1.logger.error('Print error:', e);
         return { ok: false, error: String(e?.message || e) };
     }
 });
@@ -767,7 +757,7 @@ electron_1.ipcMain.handle('print:preview', async (_evt, args) => {
         return { ok: true };
     }
     catch (e) {
-        console.error('Print preview error:', e);
+        utils_1.logger.error('Print preview error:', e);
         return { ok: false, error: String(e?.message || e) };
     }
 });
@@ -823,7 +813,7 @@ electron_1.ipcMain.handle('print:pdfPreview', async (_evt, args) => {
         return { ok: true, path: file };
     }
     catch (e) {
-        console.error('PDF preview error:', e);
+        utils_1.logger.error('PDF preview error:', e);
         return { ok: false, error: String(e?.message || e) };
     }
 });

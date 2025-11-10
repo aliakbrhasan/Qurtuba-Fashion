@@ -52,8 +52,23 @@ export default defineConfig({
   build: {
     target: 'esnext',
     outDir: 'build',
+    // Remove source maps in secure builds for security
+    sourcemap: process.env.VITE_SECURE_BUILD === 'true' ? false : 'hidden',
+    minify: 'terser',
+    terserOptions: {
+      compress: {
+        drop_console: false, // Keep console for debugging
+        drop_debugger: true,
+        passes: 3, // More aggressive minification
+      },
+      format: {
+        comments: false, // Remove all comments
+      },
+    },
     rollupOptions: {
       output: {
+        // Remove comments from output
+        comments: false,
         manualChunks: {
           vendor: ['react', 'react-dom'],
           ui: ['@radix-ui/react-dialog', '@radix-ui/react-dropdown-menu', '@radix-ui/react-select'],

@@ -47,15 +47,15 @@ export class SyncService {
   }
 
   private initializeSupabase(): void {
-    // Fallbacks allow sync even if env vars are missing in Electron
-    const fallbackSupabaseUrl = 'https://dbjaogpesmyrqjwtzzwr.supabase.co';
-    const fallbackSupabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRiamFvZ3Blc215cnFqd3R6endyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg0Nzk1MzksImV4cCI6MjA3NDA1NTUzOX0.mioc1bAd_RYxcKS546MuBB3-DpLdyxxJiumJW4zv6Rw';
-
-    const supabaseUrl = process.env.VITE_SUPABASE_URL || fallbackSupabaseUrl;
-    const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY || fallbackSupabaseAnonKey;
+    // Security: Only use environment variables, no hardcoded credentials
+    const supabaseUrl = process.env.VITE_SUPABASE_URL;
+    const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY;
     
     if (supabaseUrl && supabaseKey) {
       this.supabase = createClient(supabaseUrl, supabaseKey);
+    } else {
+      // Log warning if credentials are missing (but don't expose values)
+      this.logError('Supabase credentials not configured. Sync will be disabled.');
     }
   }
 
@@ -181,7 +181,7 @@ export class SyncService {
       };
 
     } catch (error) {
-      console.error('Sync error:', error);
+      this.logError(`Sync error: ${String(error)}`);
       return {
         success: false,
         message: 'حدث خطأ أثناء المزامنة',
@@ -252,7 +252,7 @@ export class SyncService {
         message: 'تم المزامنة القسرية بنجاح'
       };
     } catch (error) {
-      console.error('Force sync error:', error);
+      this.logError(`Force sync error: ${String(error)}`);
       return {
         success: false,
         message: 'حدث خطأ أثناء المزامنة القسرية'
@@ -278,7 +278,7 @@ export class SyncService {
       (this as any)._lastPendingCount = count;
       return count;
     } catch (error) {
-      console.error('Error getting pending changes count:', error);
+      this.logError(`Error getting pending changes count: ${String(error)}`);
       return 0;
     }
   }

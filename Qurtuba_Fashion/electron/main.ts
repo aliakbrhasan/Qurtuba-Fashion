@@ -3,7 +3,7 @@ import { app, BrowserWindow, ipcMain, dialog, shell, Menu, Tray, nativeImage, se
 import { existsSync, mkdirSync, readdirSync, copyFileSync, lstatSync, writeFileSync, unlinkSync, readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { pathToFileURL } from 'url';
-import { isDev } from './utils';
+import { isDev, logger } from './utils';
 import { LocalDatabase } from './local-database';
 
 // Keep a global reference of the window object
@@ -79,12 +79,12 @@ const createWindow = (): void => {
     const found = candidates.find(p => existsSync(p));
     if (found) {
       mainWindow.loadFile(found).catch((err) => {
-        console.error('Failed to load index.html:', err);
+        logger.error('Failed to load index.html:', err);
         dialog.showErrorBox('خطأ في تشغيل التطبيق', 'تعذر تحميل واجهة التطبيق. تأكد من وجود مجلد build ثم أعد المحاولة.');
       });
     } else {
       const message = `تعذر العثور على build/index.html\nيرجى تشغيل: npm run build\nالمسارات التي تم البحث فيها:\n${candidates.join('\n')}`;
-      console.error(message);
+      logger.error(message);
       dialog.showErrorBox('الملفات غير موجودة', message);
     }
   }
@@ -158,12 +158,12 @@ if (gotTheLock) {
 app.whenReady().then(async () => {
   // Initialize local database
   try {
-    console.log('Starting database initialization...');
+    logger.log('Starting database initialization...');
     localDB = new LocalDatabase();
     await localDB.initialize();
-    console.log('Database initialized successfully');
+    logger.log('Database initialized successfully');
   } catch (error) {
-    console.error('Failed to initialize database:', error);
+    logger.error('Failed to initialize database:', error);
     // Show error dialog to user
     dialog.showErrorBox(
       'Database Error',
@@ -318,67 +318,65 @@ async function ok<T>(fn: () => Promise<T> | T): Promise<{ ok: boolean; data?: T;
     const data = await Promise.resolve(fn());
     return { ok: true, data };
   } catch (e: any) {
-    console.error('Database operation failed:', e);
+    logger.error('Database operation failed:', e);
     return { ok: false, error: String(e?.message || e) };
   }
 }
 
 // Local database handlers
 ipcMain.handle('local:getCustomers', async () => {
-  console.log('IPC: getCustomers called');
+  logger.debug('IPC: getCustomers called');
   return ok(() => localDB.getCustomers());
 });
 
 ipcMain.handle('local:createCustomer', async (_, customer) => {
-  console.log('IPC: createCustomer called with:', customer);
+  logger.debug('IPC: createCustomer called');
   return ok(() => localDB.createCustomer(customer));
 });
 
 ipcMain.handle('local:updateCustomer', async (_, id, updates) => {
-  console.log('IPC: updateCustomer called with ID:', id);
+  logger.debug('IPC: updateCustomer called with ID:', id);
   return ok(() => localDB.updateCustomer(id, updates));
 });
 
 ipcMain.handle('local:deleteCustomer', async (_, id) => {
-  console.log('IPC: deleteCustomer called with ID:', id, 'Type:', typeof id);
+  logger.debug('IPC: deleteCustomer called with ID:', id);
   
   // Ensure ID is a string
   const idString = String(id || '');
   if (!idString || idString === 'undefined' || idString === 'null') {
-    console.error('Invalid customer ID received:', id);
+    logger.error('Invalid customer ID received:', id);
     return { ok: false, error: 'Invalid customer ID' };
   }
   
-  console.log('Calling localDB.deleteCustomer with string ID:', idString);
   return ok(() => localDB.deleteCustomer(idString));
 });
 
 ipcMain.handle('local:getInvoices', async () => {
-  console.log('IPC: getInvoices called');
+  logger.debug('IPC: getInvoices called');
   return ok(() => localDB.getInvoices());
 });
 
 ipcMain.handle('local:createInvoice', async (_, invoice) => {
-  console.log('IPC: createInvoice called with:', invoice);
+  logger.debug('IPC: createInvoice called');
   return ok(() => localDB.createInvoice(invoice));
 });
 
 ipcMain.handle('local:updateInvoice', async (_, id, updates) => {
-  console.log('IPC: updateInvoice called with ID:', id);
+  logger.debug('IPC: updateInvoice called with ID:', id);
   return ok(() => localDB.updateInvoice(id, updates));
 });
 
 ipcMain.handle('local:deleteInvoice', async (_, id) => {
-  console.log('IPC: deleteInvoice called with ID:', id, 'Type:', typeof id);
+  logger.debug('IPC: deleteInvoice called with ID:', id);
   
   // Ensure ID is a string
   const idString = String(id || '');
   if (!idString || idString === 'undefined' || idString === 'null') {
-    console.error('Invalid invoice ID received:', id);
+    logger.error('Invalid invoice ID received:', id);
     return { ok: false, error: 'Invalid invoice ID' };
   }
   
-  console.log('Calling localDB.deleteInvoice with string ID:', idString);
   return ok(() => localDB.deleteInvoice(idString));
 });
 
@@ -396,7 +394,7 @@ ipcMain.handle('local:createAdminLog', async (_evt, entry) => ok(() => (localDB 
 
 // Local database self-test
 ipcMain.handle('local:selfTest', async () => {
-  console.log('IPC: selfTest called');
+  logger.debug('IPC: selfTest called');
   return ok(() => localDB.selfTest());
 });
 
@@ -422,7 +420,7 @@ ipcMain.handle('local:importAll', async (_evt, data) => ok(async () => {
 
 // Clear all data handler (for testing)
 ipcMain.handle('local:clearAllData', async () => {
-  console.log('IPC: clearAllData called');
+  logger.warn('IPC: clearAllData called - This action will delete all data!');
   return ok(() => localDB.clearAllData());
 });
 
@@ -469,11 +467,7 @@ ipcMain.handle('image:upload', async (_evt, args: { buffer: number[]; contentTyp
   
   // If entity info provided, save to database
   if (args.entityType && args.entityId) {
-    console.log('Main process - Saving image to database:', { 
-      entityType: args.entityType, 
-      entityId: args.entityId, 
-      fileName: args.fileName 
-    });
+    logger.debug('Main process - Saving image to database');
     try {
       const imageRecord = await (localDB as any).createImage({
         filename: args.fileName,
@@ -486,14 +480,12 @@ ipcMain.handle('image:upload', async (_evt, args: { buffer: number[]; contentTyp
         entity_type: args.entityType,
         entity_id: args.entityId
       });
-      console.log('Main process - Image saved to database with ID:', imageRecord.id);
+      logger.debug('Main process - Image saved to database with ID:', imageRecord.id);
       return { url: targetPath, path: args.fileName, publicUrl: fileUrl, imageId: imageRecord.id };
     } catch (dbError) {
-      console.error('Main process - Failed to save image record to database:', dbError);
+      logger.error('Main process - Failed to save image record to database:', dbError);
       // Continue with file upload even if DB save fails
     }
-  } else {
-    console.log('Main process - No entity info provided, skipping database save');
   }
   
   return { url: targetPath, path: args.fileName, publicUrl: fileUrl };
@@ -518,13 +510,12 @@ ipcMain.handle('image:getPublicUrl', async (_evt, path: string) => ok(async () =
 }));
 
 ipcMain.handle('image:getByEntity', async (_evt, entityType: string, entityId: string) => ok(async () => {
-  console.log('Main process - image:getByEntity called with:', { entityType, entityId });
+  logger.debug('Main process - image:getByEntity called');
   try {
     const result = await (localDB as any).getImagesByEntity(entityType, entityId);
-    console.log('Main process - getImagesByEntity result:', result);
     return result;
   } catch (error) {
-    console.error('Main process - getImagesByEntity error:', error);
+    logger.error('Main process - getImagesByEntity error:', error);
     throw error;
   }
 }));
@@ -536,12 +527,12 @@ ipcMain.handle('image:deleteById', async (_evt, imageId: string) => ok(async () 
     // Delete the file
     const baseDir = join(app.getPath('userData'), 'images');
     const targetPath = join(baseDir, image.filename);
-    try {
-      if (existsSync(targetPath)) unlinkSync(targetPath);
-    } catch (e) {
-      console.warn('Failed to delete image file:', e);
+      try {
+        if (existsSync(targetPath)) unlinkSync(targetPath);
+      } catch (e) {
+        logger.warn('Failed to delete image file:', e);
+      }
     }
-  }
   // Delete from database
   await (localDB as any).deleteImage(imageId);
   return true;
@@ -590,7 +581,7 @@ ipcMain.handle('app:getLogoPath', async () => ok(async () => {
                        'image/png';
       return `data:${mimeType};base64,${base64}`;
     } catch (error) {
-      console.error('Failed to read logo file:', error);
+      logger.error('Failed to read logo file:', error);
       // Fallback to file URL
       return pathToFileURL(logoPath).toString();
     }
@@ -681,7 +672,7 @@ ipcMain.handle('print:document', async (_evt, args: PrintDocumentArgs) => {
           printWindow.webContents.print(printOptions, () => resolve());
         });
       } catch (err) {
-        console.error('Print pipeline error:', err);
+        logger.error('Print pipeline error:', err);
       } finally {
         setTimeout(() => { try { printWindow.close(); } catch {} }, 300);
       }
@@ -692,7 +683,7 @@ ipcMain.handle('print:document', async (_evt, args: PrintDocumentArgs) => {
 
     return { ok: true };
   } catch (e: any) {
-    console.error('Print error:', e);
+    logger.error('Print error:', e);
     return { ok: false, error: String(e?.message || e) };
   }
 });
@@ -797,7 +788,7 @@ ipcMain.handle('print:preview', async (_evt, args: { title: string; content: str
     
     return { ok: true };
   } catch (e: any) {
-    console.error('Print preview error:', e);
+    logger.error('Print preview error:', e);
     return { ok: false, error: String(e?.message || e) };
   }
 });
@@ -856,7 +847,7 @@ ipcMain.handle('print:pdfPreview', async (_evt, args: { title: string; content: 
     await shell.openPath(file);
     return { ok: true, path: file };
   } catch (e: any) {
-    console.error('PDF preview error:', e);
+    logger.error('PDF preview error:', e);
     return { ok: false, error: String(e?.message || e) };
   }
 });

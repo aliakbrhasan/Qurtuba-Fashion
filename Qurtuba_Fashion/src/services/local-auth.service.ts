@@ -8,6 +8,11 @@ class LocalAuthService {
   private readonly REMEMBER_KEY = 'qurtuba_remember';
   private readonly USERS_STORAGE_KEY = 'qurtuba_users_store_v1';
   private readonly USERS_CACHE_FILE_KEY = 'users_store_v1';
+  private readonly PASSWORDS_STORAGE_KEY = 'qurtuba_passwords_store_v1';
+  private readonly PASSWORDS_CACHE_FILE_KEY = 'passwords_store_v1';
+  
+  // Store password hashes: key is user code or id, value is password hash
+  private passwordHashes: Map<string, string> = new Map();
 
   // Mock users for local testing
   private mockUsers: User[] = [
@@ -52,6 +57,8 @@ class LocalAuthService {
   private constructor() {
     this.initializeAuth();
     this.loadUsersFromStorage();
+    this.loadPasswordsFromStorage();
+    this.initializeDefaultPasswords();
   }
 
   public static getInstance(): LocalAuthService {
@@ -124,6 +131,73 @@ class LocalAuthService {
     try {
       localStorage.setItem(this.USERS_STORAGE_KEY, JSON.stringify(this.mockUsers));
     } catch {}
+  }
+
+  private loadPasswordsFromStorage(): void {
+    try {
+      // Prefer Electron persistent cache file when available
+      const api = (window as any).electronAPI;
+      if (api?.cache?.readJson) {
+        // Note: readJson is async but we're calling it synchronously
+        // In practice, this should be wrapped in async/await, but for now we'll handle it as a promise
+        Promise.resolve(api.cache.readJson(this.PASSWORDS_CACHE_FILE_KEY)).then((res: any) => {
+          if (res && res.ok && res.data) {
+            try {
+              const passwords = typeof res.data === 'string' ? JSON.parse(res.data) : res.data;
+              if (passwords && typeof passwords === 'object') {
+                this.passwordHashes = new Map(Object.entries(passwords));
+              }
+            } catch {}
+          }
+        }).catch(() => {});
+      }
+    } catch {}
+    try {
+      const raw = localStorage.getItem(this.PASSWORDS_STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object') {
+          this.passwordHashes = new Map(Object.entries(parsed));
+        }
+      }
+    } catch (e) {
+      // If storage is corrupted, start with empty map
+      this.passwordHashes = new Map();
+    }
+  }
+
+  private savePasswordsToStorage(): void {
+    try {
+      const passwordsObj = Object.fromEntries(this.passwordHashes);
+      const api = (window as any).electronAPI;
+      if (api?.cache?.writeJson) {
+        void api.cache.writeJson(this.PASSWORDS_CACHE_FILE_KEY, passwordsObj);
+      }
+    } catch {}
+    try {
+      const passwordsObj = Object.fromEntries(this.passwordHashes);
+      localStorage.setItem(this.PASSWORDS_STORAGE_KEY, JSON.stringify(passwordsObj));
+    } catch {}
+  }
+
+  private initializeDefaultPasswords(): void {
+    // Initialize default passwords for mock users if they don't exist in storage
+    const defaultPasswords: { [key: string]: string } = {
+      'ADMIN001': 'admin123',
+      'EMP001': 'ahmed123',
+      'ACC001': 'fatima123'
+    };
+
+    // Only set defaults if passwordHashes is empty
+    if (this.passwordHashes.size === 0) {
+      for (const [code, password] of Object.entries(defaultPasswords)) {
+        // Store as plain text for demo (in production, should be hashed)
+        // This is just for local testing
+        this.passwordHashes.set(code, password);
+      }
+      // Save default passwords to storage
+      this.savePasswordsToStorage();
+    }
   }
 
   // Hash password using Web Crypto API (currently unused in local auth)

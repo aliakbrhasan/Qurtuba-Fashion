@@ -130,10 +130,16 @@ export function PrintableInvoice({ invoice }: PrintableInvoiceProps) {
 
           {/* Logo and invoice title row */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12mm', marginBottom: '4mm' }}>
-            {/* Logo on the left */}
-            <img src={logoUrl} alt="Qurtuba Logo" style={{ flex: '0 0 auto', maxHeight: 64, maxWidth: 220, objectFit: 'contain' }} />
+            {/* Logo and center contact */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6mm', flex: '0 0 auto', direction: 'ltr' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', fontSize: 14, color: '#13312A', textAlign: 'left', lineHeight: 1.4, fontWeight: 600 }}>
+                <span>07707984448</span>
+                <span>07901354519</span>
+              </div>
+              <img src={logoUrl} alt="Qurtuba Logo" style={{ maxHeight: 64, maxWidth: 220, objectFit: 'contain' }} />
+            </div>
 
-            {/* Invoice title and number on the right */}
+            {/* Invoice title and number */}
             <div style={{ textAlign: 'right', flex: '0 0 auto' }}>
               <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: '#13312A' }}>فاتورة</h1>
               <p style={{ margin: '4px 0 0', color: '#155446', fontSize: 12 }}>
@@ -310,27 +316,6 @@ export function PrintableInvoice({ invoice }: PrintableInvoiceProps) {
             ) : null}
           </div>
         </div>
-
-        {/* Notes */}
-        {invoice.notes ? (
-          <div style={{ marginTop: '4mm', pageBreakInside: 'avoid' }}>
-            <div style={{ color: '#13312A', marginBottom: 4, fontWeight: 600, fontSize: 12 }}>الملاحظات:</div>
-            <div
-              style={{
-                padding: '6px 8px',
-                background: '#F6E9CA',
-                border: '1px solid #C69A72',
-                borderRadius: 6,
-                fontSize: 12,
-                minHeight: 28,
-                display: 'flex',
-                alignItems: 'center',
-              }}
-            >
-              {invoice.notes}
-            </div>
-          </div>
-        ) : null}
 
         {/* Print button (hidden on print) */}
         <div style={{ paddingTop: '4mm', textAlign: 'center', pageBreakInside: 'avoid' }}>
