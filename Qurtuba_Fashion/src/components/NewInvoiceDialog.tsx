@@ -3,6 +3,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Label } from './ui/label';
 import { Input } from './ui/input';
+import { DateField } from './ui/date-field';
 import { Textarea } from './ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Button } from './ui/button';
@@ -1094,11 +1095,10 @@ export function NewInvoiceDialog({ isOpen, onOpenChange }: NewInvoiceDialogProps
                   <Label className="text-[#13312A] arabic-text">تاريخ التسليم</Label>
                   <div className="relative">
                     <CalendarIcon className="absolute right-3 top-1/2 -translate-y-1/2 text-[#155446] w-4 h-4" />
-                    <Input
-                      type="date"
+                    <DateField
                       value={deliveryDate}
                       onChange={(event) => setDeliveryDate(event.target.value)}
-                      className="pr-10 bg-white border-[#C69A72] text-right"
+                      className="pr-10 bg-white border-[#C69A72] text-left"
                     />
                   </div>
                 </div>

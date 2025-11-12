@@ -4,6 +4,7 @@ import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from './ui/dialog';
 import { Input } from './ui/input';
+import { DateField } from './ui/date-field';
 import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
@@ -356,7 +357,7 @@ export function CustomerDetailsPage({ customer, onBack }: CustomerDetailsPagePro
                 </div>
                 <div>
                   <Label className="text-[#13312A] arabic-text">تاريخ التسليم</Label>
-                  <Input type="date" className="bg-white border-[#C69A72] text-right" />
+                  <DateField className="bg-white border-[#C69A72] text-left" />
                 </div>
                 <div>
                   <Label className="text-[#13312A] arabic-text">التكلفة المتوقعة</Label>

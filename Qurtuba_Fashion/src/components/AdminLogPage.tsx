@@ -3,6 +3,7 @@ import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '.
 import { storage } from '@/storage'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card'
 import { Input } from './ui/input'
+import { DateField } from './ui/date-field'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select'
 import { Button } from './ui/button'
 import { Badge } from './ui/badge'
@@ -131,9 +132,8 @@ export function AdminLogPage() {
             </div>
             <div className="flex items-center gap-2">
               <span className="arabic-text text-[#13312A]">التاريخ</span>
-              <Input
-                type="date"
-                className="bg-white border-[#C69A72] text-right"
+              <DateField
+                className="bg-white border-[#C69A72] text-left"
                 value={dateFilter}
                 onChange={(e) => setDateFilter(e.target.value)}
               />

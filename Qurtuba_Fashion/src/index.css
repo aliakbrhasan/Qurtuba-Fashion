@@ -364,6 +364,105 @@ body { font-family: var(--app-font); }
     padding-block: 0;
   }
 
+  .date-input {
+    direction: ltr;
+    unicode-bidi: plaintext;
+    text-align: left;
+    font-feature-settings: "tnum";
+  }
+
+  .date-field-wrapper {
+    position: relative;
+    display: block;
+    width: 100%;
+  }
+
+  .date-field-input {
+    width: 100%;
+  }
+
+  .date-input::-webkit-datetime-edit {
+    display: inline-flex;
+    flex-direction: row;
+    justify-content: flex-start;
+    width: 100%;
+    text-align: left;
+  }
+
+  .date-input::-webkit-datetime-edit-fields-wrapper {
+    display: flex;
+  }
+
+  .date-input::-webkit-datetime-edit-day-field,
+  .date-input::-webkit-datetime-edit-month-field,
+  .date-input::-webkit-datetime-edit-year-field {
+    padding-block: 0;
+  }
+
+  .date-input::placeholder {
+    text-align: left;
+  }
+
+  .date-input::-webkit-calendar-picker-indicator {
+    margin-inline-end: 0.375rem;
+  }
+
+  .date-field-placeholder {
+    position: absolute;
+    inset-block: 0;
+    inset-inline-start: var(--date-field-padding-inline-start, 0.75rem);
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    pointer-events: none;
+    font-size: inherit;
+    color: var(--muted-foreground);
+    direction: ltr;
+    unicode-bidi: isolate;
+    transition: opacity 0.2s ease-in-out;
+    opacity: 0;
+    max-inline-size: calc(
+      100% - var(--date-field-padding-inline-start, 0.75rem) -
+      var(--date-field-padding-inline-end, 0.75rem)
+    );
+    text-align: left;
+  }
+
+  .date-field-placeholder-content {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 0.35rem;
+    direction: ltr;
+  }
+
+  .date-field-placeholder-part {
+    white-space: nowrap;
+  }
+
+  .date-field-placeholder-separator {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .date-field-placeholder--visible {
+    opacity: 0.7;
+  }
+
+  .date-field-placeholder--hidden {
+    opacity: 0;
+  }
+
+  .date-field-input--empty::-webkit-datetime-edit,
+  .date-field-input--empty::-webkit-datetime-edit-fields-wrapper,
+  .date-field-input--empty::-webkit-datetime-edit-text,
+  .date-field-input--empty::-webkit-datetime-edit-day-field,
+  .date-field-input--empty::-webkit-datetime-edit-month-field,
+  .date-field-input--empty::-webkit-datetime-edit-year-field {
+    color: transparent;
+  }
+
   ::-webkit-datetime-edit-millisecond-field {
     padding-block: 0;
   }

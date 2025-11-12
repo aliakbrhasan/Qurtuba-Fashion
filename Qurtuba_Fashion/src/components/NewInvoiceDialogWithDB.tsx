@@ -3,6 +3,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Label } from './ui/label';
 import { Input } from './ui/input';
+import { DateField } from './ui/date-field';
 import { Textarea } from './ui/textarea';
 import { Button } from './ui/button';
 import { X, Plus, Pencil, Trash2, Check, ChevronDown, Camera, AlertCircle } from 'lucide-react';
@@ -1545,9 +1546,8 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated,
                 </div>
                 <div>
                   <Label className="text-[#13312A] arabic-text text-xs">تاريخ التسليم</Label>
-                  <Input 
-                    type="date"
-                    className="bg-white border-[#C69A72] text-right h-7 text-xs w-full min-w-0"
+                  <DateField
+                    className="bg-white border-[#C69A72] text-left h-7 text-xs w-full min-w-0"
                     value={formData.deliveryDate}
                     onChange={(e) => setFormData(prev => ({ ...prev, deliveryDate: e.target.value }))}
                   />
@@ -2086,9 +2086,8 @@ export function NewInvoiceDialogWithDB({ isOpen, onOpenChange, onInvoiceCreated,
                 <div className="measurements-grid-2 gap-2 min-w-0">
                   <div className="space-y-1 min-w-[120px] flex-shrink-0">
                     <Label className="text-[#13312A] arabic-text text-xs">تاريخ الدفع</Label>
-                    <Input 
-                      type="date"
-                      className="bg-white border-[#C69A72] text-right h-7 text-xs w-full"
+                    <DateField
+                      className="bg-white border-[#C69A72] text-left h-7 text-xs w-full"
                       value={paymentDate}
                       onChange={(e) => setPaymentDate(e.target.value)}
                     />
