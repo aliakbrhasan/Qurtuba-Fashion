@@ -1,14 +1,13 @@
 import React, { useState, useMemo } from 'react';
-import { renderToStaticMarkup } from 'react-dom/server';
 import { Card, CardContent } from './ui/card';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
 import { Badge } from './ui/badge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from './ui/dialog';
 import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { PrintInvoicesDialog } from './PrintInvoicesDialog';
 // import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { useInvoices } from '@/hooks/useInvoices';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -47,23 +46,6 @@ import {
   PrintableInvoiceData,
 } from './PrintableInvoice';
 import { openPrintWindow, openPrintInvoiceWindow, openPdfPreviewWindow, formatPrintDateTime } from './print/PrintUtils.tsx';
-
-const RECEIPT_A5_STYLES = `
-  @page { 
-    size: A5 landscape; 
-    margin: 6mm; 
-  }
-  @media print { 
-    * { 
-      -webkit-print-color-adjust: exact; 
-      print-color-adjust: exact; 
-    }
-    body { 
-      margin: 0; 
-      padding: 0; 
-    }
-  }
-`;
 // import { InvoiceDetailsPage } from './InvoiceDetailsPage';
 import { InvoiceDetailsDialog } from './InvoiceDetailsDialog';
 import { NewInvoiceDialogWithDB } from './NewInvoiceDialogWithDB';
@@ -450,177 +432,185 @@ export function InvoicesPage({ onCreateInvoice, onViewInvoiceDetails, onMarkAsPa
     return { total, paid, pending, partial, totalAmount, paidAmount };
   }, [filteredAndSortedInvoices]);
 
-  const handlePrintInvoices = (rangeStart: Date, rangeEnd: Date) => {
-    const invoicesInRange = filteredAndSortedInvoices.filter((invoice) => {
-      const invoiceDate = new Date(invoice.receivedDate);
-      return invoiceDate >= rangeStart && invoiceDate <= rangeEnd;
-    });
+  const handlePrintInvoices = (rangeStart: Date, rangeEnd: Date): boolean => {
+    try {
+      const invoicesInRange = filteredAndSortedInvoices.filter((invoice) => {
+        const invoiceDate = new Date(invoice.receivedDate);
+        return invoiceDate >= rangeStart && invoiceDate <= rangeEnd;
+      });
 
-    const totalAmount = invoicesInRange.reduce((sum, invoice) => sum + invoice.total, 0);
-    const totalPaid = invoicesInRange.reduce((sum, invoice) => sum + invoice.paid, 0);
-    const totalRemaining = invoicesInRange.reduce((sum, invoice) => sum + Math.max(invoice.total - invoice.paid, 0), 0);
-    const statusCounts = invoicesInRange.reduce<Record<string, number>>((acc, invoice) => {
-      acc[invoice.status] = (acc[invoice.status] || 0) + 1;
-      return acc;
-    }, {});
-    const now = new Date();
-    const rangeLabel = `${formatRangeDate(rangeStart)} إلى ${formatRangeDate(rangeEnd)}`;
+      const totalAmount = invoicesInRange.reduce((sum, invoice) => sum + invoice.total, 0);
+      const totalPaid = invoicesInRange.reduce((sum, invoice) => sum + invoice.paid, 0);
+      const totalRemaining = invoicesInRange.reduce((sum, invoice) => sum + Math.max(invoice.total - invoice.paid, 0), 0);
+      const statusCounts = invoicesInRange.reduce<Record<string, number>>((acc, invoice) => {
+        acc[invoice.status] = (acc[invoice.status] || 0) + 1;
+        return acc;
+      }, {});
+      const now = new Date();
+      const rangeLabel = `${formatRangeDate(rangeStart)} إلى ${formatRangeDate(rangeEnd)}`;
 
-    openPrintWindow('قائمة الفواتير', (
-      <>
-        <header className="print-header">
-          <h1 className="print-title">سجل الفواتير</h1>
-          <p className="print-subtitle">قائمة تفصيلية بالفواتير المسجلة في نظام أزياء قرطبة</p>
-          <div className="print-meta">
-            <span>تاريخ الطباعة: {formatPrintDateTime(now)}</span>
-            <span>عدد الفواتير: {invoicesInRange.length}</span>
-            <span>الفترة المختارة: {rangeLabel}</span>
-          </div>
-        </header>
+      openPrintWindow('قائمة الفواتير', (
+        <>
+          <header className="print-header">
+            <h1 className="print-title">سجل الفواتير</h1>
+            <p className="print-subtitle">قائمة تفصيلية بالفواتير المسجلة في نظام أزياء قرطبة</p>
+            <div className="print-meta">
+              <span>تاريخ الطباعة: {formatPrintDateTime(now)}</span>
+              <span>عدد الفواتير: {invoicesInRange.length}</span>
+              <span>الفترة المختارة: {rangeLabel}</span>
+            </div>
+          </header>
 
-        <section className="print-section">
-          <h2 className="section-title">ملخص الأرقام</h2>
-          <div className="metrics-grid">
-            <div className="metric-card accent">
-              <span className="metric-label">إجمالي قيمة الفواتير</span>
-              <span className="metric-value">{formatCurrency(totalAmount)}</span>
-            </div>
-            <div className="metric-card">
-              <span className="metric-label">المبالغ المستلمة</span>
-              <span className="metric-value">{formatCurrency(totalPaid)}</span>
-            </div>
-            <div className="metric-card">
-              <span className="metric-label">المبالغ المتبقية</span>
-              <span className="metric-value">{formatCurrency(totalRemaining)}</span>
-            </div>
-            {Object.entries(statusCounts).map(([status, count]) => (
-              <div className="metric-card" key={status}>
-                <span className="metric-label">فواتير {getStatusLabel(status)}</span>
-                <span className="metric-value">{count}</span>
+          <section className="print-section">
+            <h2 className="section-title">ملخص الأرقام</h2>
+            <div className="metrics-grid">
+              <div className="metric-card accent">
+                <span className="metric-label">إجمالي قيمة الفواتير</span>
+                <span className="metric-value">{formatCurrency(totalAmount)}</span>
               </div>
-            ))}
-          </div>
-        </section>
+              <div className="metric-card">
+                <span className="metric-label">المبالغ المستلمة</span>
+                <span className="metric-value">{formatCurrency(totalPaid)}</span>
+              </div>
+              <div className="metric-card">
+                <span className="metric-label">المبالغ المتبقية</span>
+                <span className="metric-value">{formatCurrency(totalRemaining)}</span>
+              </div>
+              {Object.entries(statusCounts).map(([status, count]) => (
+                <div className="metric-card" key={status}>
+                  <span className="metric-label">فواتير {getStatusLabel(status)}</span>
+                  <span className="metric-value">{count}</span>
+                </div>
+              ))}
+            </div>
+          </section>
 
-        <section className="print-section">
-          <h2 className="section-title">جدول الفواتير</h2>
-          <p className="section-description">
-            يتضمن الجدول التفاصيل الأساسية لكل فاتورة بما في ذلك حالة السداد ومواعيد التسليم.
-            {invoicesInRange.length === 0 && ' لا توجد فواتير ضمن الفترة المحددة حالياً.'}
-          </p>
-          <div className="print-table-wrapper">
-            <table className="print-table">
-              <thead>
-                <tr>
-                  <th>رقم الفاتورة</th>
-                  <th>الزبون</th>
-                  <th>الهاتف</th>
-                  <th>تاريخ الاستلام</th>
-                  <th>تاريخ التسليم</th>
-                  <th>المبلغ الكلي</th>
-                  <th>المبلغ الواصل</th>
-                  <th>المتبقي</th>
-                  <th>الحالة</th>
-                </tr>
-              </thead>
-              <tbody>
-                {invoicesInRange.map((invoice) => {
-                  const remaining = Math.max(invoice.total - invoice.paid, 0);
-                  return (
-                    <tr key={invoice.id}>
-                      <td>{invoice.id}</td>
-                      <td>{invoice.customerName}</td>
-                      <td>{invoice.phone}</td>
-                      <td>{formatDate(invoice.receivedDate)}</td>
-                      <td>{formatDate(invoice.deliveryDate)}</td>
-                      <td>{formatCurrency(invoice.total)}</td>
-                      <td>{formatCurrency(invoice.paid)}</td>
-                      <td>{formatCurrency(remaining)}</td>
-                      <td>
-                        <span className="status-pill" style={getStatusPrintStyle(invoice.status)}>
-                          {getStatusLabel(invoice.status)}
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </section>
+          <section className="print-section">
+            <h2 className="section-title">جدول الفواتير</h2>
+            <p className="section-description">
+              يتضمن الجدول التفاصيل الأساسية لكل فاتورة بما في ذلك حالة السداد ومواعيد التسليم.
+              {invoicesInRange.length === 0 && ' لا توجد فواتير ضمن الفترة المحددة حالياً.'}
+            </p>
+            <div className="print-table-wrapper">
+              <table className="print-table">
+                <thead>
+                  <tr>
+                    <th>رقم الفاتورة</th>
+                    <th>الزبون</th>
+                    <th>الهاتف</th>
+                    <th>تاريخ الاستلام</th>
+                    <th>تاريخ التسليم</th>
+                    <th>المبلغ الكلي</th>
+                    <th>المبلغ الواصل</th>
+                    <th>المتبقي</th>
+                    <th>الحالة</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {invoicesInRange.map((invoice) => {
+                    const remaining = Math.max(invoice.total - invoice.paid, 0);
+                    return (
+                      <tr key={invoice.id}>
+                        <td>{invoice.id}</td>
+                        <td>{invoice.customerName}</td>
+                        <td>{invoice.phone}</td>
+                        <td>{formatDate(invoice.receivedDate)}</td>
+                        <td>{formatDate(invoice.deliveryDate)}</td>
+                        <td>{formatCurrency(invoice.total)}</td>
+                        <td>{formatCurrency(invoice.paid)}</td>
+                        <td>{formatCurrency(remaining)}</td>
+                        <td>
+                          <span className="status-pill" style={getStatusPrintStyle(invoice.status)}>
+                            {getStatusLabel(invoice.status)}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </section>
 
-        <section className="print-section">
-          <h2 className="section-title">تفاصيل الفواتير</h2>
-          <p className="section-description">
-            تم تجهيز هذه البطاقات لتعرض بيانات الزبون والملاحظات المرتبطة بكل فاتورة.
-            {invoicesInRange.length === 0 && ' لا توجد فواتير ضمن الفترة المحددة حالياً.'}
-          </p>
-          <div className="detail-cards">
-            {invoicesInRange.map((invoice) => {
-              const remaining = Math.max(invoice.total - invoice.paid, 0);
-              return (
-                <article className="detail-card" key={`${invoice.id}-details`}>
-                  <div className="detail-card-header">
-                    <h3 className="detail-title">{invoice.customerName}</h3>
-                    <span className="status-pill" style={getStatusPrintStyle(invoice.status)}>
-                      {getStatusLabel(invoice.status)}
-                    </span>
-                  </div>
-                  <div className="detail-grid two-column">
-                    <div className="detail-item">
-                      <span className="item-label">رقم الفاتورة</span>
-                      <span className="item-value">{invoice.id}</span>
+          <section className="print-section">
+            <h2 className="section-title">تفاصيل الفواتير</h2>
+            <p className="section-description">
+              تم تجهيز هذه البطاقات لتعرض بيانات الزبون والملاحظات المرتبطة بكل فاتورة.
+              {invoicesInRange.length === 0 && ' لا توجد فواتير ضمن الفترة المحددة حالياً.'}
+            </p>
+            <div className="detail-cards">
+              {invoicesInRange.map((invoice) => {
+                const remaining = Math.max(invoice.total - invoice.paid, 0);
+                return (
+                  <article className="detail-card" key={`${invoice.id}-details`}>
+                    <div className="detail-card-header">
+                      <h3 className="detail-title">{invoice.customerName}</h3>
+                      <span className="status-pill" style={getStatusPrintStyle(invoice.status)}>
+                        {getStatusLabel(invoice.status)}
+                      </span>
                     </div>
-                    <div className="detail-item">
-                      <span className="item-label">الهاتف</span>
-                      <span className="item-value">{invoice.phone}</span>
-                    </div>
-                    <div className="detail-item">
-                      <span className="item-label">تاريخ الاستلام</span>
-                      <span className="item-value">{formatDate(invoice.receivedDate)}</span>
-                    </div>
-                    <div className="detail-item">
-                      <span className="item-label">تاريخ التسليم</span>
-                      <span className="item-value">{formatDate(invoice.deliveryDate)}</span>
-                    </div>
-                  </div>
-                  <div className="detail-grid two-column">
-                    <div className="detail-item">
-                      <span className="item-label">المبلغ الكلي</span>
-                      <span className="item-value">{formatCurrency(invoice.total)}</span>
-                    </div>
-                    <div className="detail-item">
-                      <span className="item-label">المبلغ الواصل</span>
-                      <span className="item-value">{formatCurrency(invoice.paid)}</span>
-                    </div>
-                    <div className="detail-item">
-                      <span className="item-label">المبلغ المتبقي</span>
-                      <span className="item-value">{formatCurrency(remaining)}</span>
-                    </div>
-                  </div>
-                  {invoice.address && (
-                    <div className="detail-grid">
+                    <div className="detail-grid two-column">
                       <div className="detail-item">
-                        <span className="item-label">العنوان</span>
-                        <span className="item-value">{invoice.address}</span>
+                        <span className="item-label">رقم الفاتورة</span>
+                        <span className="item-value">{invoice.id}</span>
+                      </div>
+                      <div className="detail-item">
+                        <span className="item-label">الهاتف</span>
+                        <span className="item-value">{invoice.phone}</span>
+                      </div>
+                      <div className="detail-item">
+                        <span className="item-label">تاريخ الاستلام</span>
+                        <span className="item-value">{formatDate(invoice.receivedDate)}</span>
+                      </div>
+                      <div className="detail-item">
+                        <span className="item-label">تاريخ التسليم</span>
+                        <span className="item-value">{formatDate(invoice.deliveryDate)}</span>
                       </div>
                     </div>
-                  )}
-                  {invoice.notes && (
-                    <div className="detail-grid">
+                    <div className="detail-grid two-column">
                       <div className="detail-item">
-                        <span className="item-label">ملاحظات</span>
-                        <span className="item-value">{invoice.notes}</span>
+                        <span className="item-label">المبلغ الكلي</span>
+                        <span className="item-value">{formatCurrency(invoice.total)}</span>
+                      </div>
+                      <div className="detail-item">
+                        <span className="item-label">المبلغ الواصل</span>
+                        <span className="item-value">{formatCurrency(invoice.paid)}</span>
+                      </div>
+                      <div className="detail-item">
+                        <span className="item-label">المبلغ المتبقي</span>
+                        <span className="item-value">{formatCurrency(remaining)}</span>
                       </div>
                     </div>
-                  )}
-                </article>
-              );
-            })}
-          </div>
-        </section>
-      </>
-    ), { pageSize: 'A4', landscape: false });
+                    {invoice.address && (
+                      <div className="detail-grid">
+                        <div className="detail-item">
+                          <span className="item-label">العنوان</span>
+                          <span className="item-value">{invoice.address}</span>
+                        </div>
+                      </div>
+                    )}
+                    {invoice.notes && (
+                      <div className="detail-grid">
+                        <div className="detail-item">
+                          <span className="item-label">ملاحظات</span>
+                          <span className="item-value">{invoice.notes}</span>
+                        </div>
+                      </div>
+                    )}
+                  </article>
+                );
+              })}
+            </div>
+          </section>
+        </>
+      ), { pageSize: 'A4', landscape: false });
+
+      return true;
+    } catch (error) {
+      console.error('Failed to prepare invoice list for printing:', error);
+      setPrintError('حدث خطأ غير متوقع أثناء تجهيز الطباعة. يرجى المحاولة مرة أخرى أو التواصل مع الدعم.');
+      return false;
+    }
   };
 
   const handleConfirmPrintRange = () => {
@@ -639,45 +629,14 @@ export function InvoicesPage({ onCreateInvoice, onViewInvoiceDetails, onMarkAsPa
       return;
     }
 
-    setIsPrintDialogOpen(false);
-    handlePrintInvoices(startDate, endDate);
+    const success = handlePrintInvoices(startDate, endDate);
+    if (success) {
+      setIsPrintDialogOpen(false);
+    }
   };
 
   const handlePrintInvoice = (invoice: Invoice) => {
     openPrintInvoiceWindow(`فاتورة ${invoice.id}`, <PrintableInvoice invoice={invoice} />);
-  };
-
-  const handleExportPDF = (invoice: Invoice) => {
-    const receiptWindow = window.open('', '_blank', 'width=900,height=700');
-
-    if (!receiptWindow) {
-      return;
-    }
-
-    const markup = renderToStaticMarkup(<PrintableInvoice invoice={invoice} />);
-
-    receiptWindow.document.write(`<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-  <head>
-    <meta charSet="utf-8" />
-    <title>فاتورة ${invoice.id}</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet" />
-    <style>${RECEIPT_A5_STYLES}</style>
-  </head>
-  <body>
-    ${markup}
-    <script>
-      window.onload = () => {
-        window.focus();
-        setTimeout(() => window.print(), 300);
-      };
-    <\/script>
-  </body>
-</html>`);
-    receiptWindow.document.close();
-    receiptWindow.focus();
   };
 
   // Native PDF preview using Electron IPC (opens in system PDF viewer)
@@ -1358,144 +1317,22 @@ export function InvoicesPage({ onCreateInvoice, onViewInvoiceDetails, onMarkAsPa
       </div>
     </div>
 
-      <Dialog open={isPrintDialogOpen} onOpenChange={handlePrintDialogOpenChange}>
-        <DialogContent className="max-w-3xl bg-[#F6E9CA] border-[#C69A72]">
-          <DialogHeader>
-            <DialogTitle className="text-[#13312A] arabic-text">تحديد فترة الطباعة</DialogTitle>
-            <DialogDescription className="text-[#155446] arabic-text">
-              اختر تاريخ البداية والنهاية قبل طباعة قائمة الفواتير، ويمكنك توسيع الفترة أو تقليصها حسب الحاجة.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-6">
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-4 rounded-xl border border-[#C69A72] bg-[#FDFBF7] p-4">
-                <h3 className="text-lg font-semibold text-[#13312A] arabic-text">بداية الفترة (من)</h3>
-                <div className="grid gap-3 sm:grid-cols-3">
-                  <div className="flex flex-col gap-1">
-                    <Label className="text-[#13312A] arabic-text">السنة</Label>
-                    <Input
-                      type="number"
-                      min={2000}
-                      max={2100}
-                      value={fromDateParts.year}
-                      onChange={(e) => handleFromYearChange(e.target.value)}
-                      placeholder="مثال: 2024"
-                      className="border-[#C69A72] text-right arabic-text touch-target"
-                    />
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <Label className="text-[#13312A] arabic-text">الشهر</Label>
-                    <select
-                      value={fromDateParts.month}
-                      onChange={(e) => handleFromMonthChange(e.target.value)}
-                      className="px-3 py-2 border border-[#C69A72] rounded-md bg-white text-[#13312A] arabic-text touch-target focus:border-[#155446] focus:ring-1 focus:ring-[#155446]"
-                    >
-                      <option value="">من بداية السنة</option>
-                      {monthOptions.map((month) => (
-                        <option key={`from-month-${month.value}`} value={month.value}>
-                          {month.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <Label className="text-[#13312A] arabic-text">اليوم</Label>
-                    <select
-                      value={fromDateParts.day}
-                      onChange={(e) => handleFromDayChange(e.target.value)}
-                      disabled={!fromDateParts.month}
-                      className="px-3 py-2 border border-[#C69A72] rounded-md bg-white text-[#13312A] arabic-text touch-target focus:border-[#155446] focus:ring-1 focus:ring-[#155446] disabled:cursor-not-allowed disabled:bg-[#E2D4BD] disabled:text-[#7A6A58]"
-                    >
-                      <option value="">من بداية الشهر</option>
-                      {dayOptions.map((day) => (
-                        <option key={`from-day-${day}`} value={day}>
-                          {day}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-4 rounded-xl border border-[#C69A72] bg-[#FDFBF7] p-4">
-                <h3 className="text-lg font-semibold text-[#13312A] arabic-text">نهاية الفترة (إلى)</h3>
-                <div className="grid gap-3 sm:grid-cols-3">
-                  <div className="flex flex-col gap-1">
-                    <Label className="text-[#13312A] arabic-text">السنة</Label>
-                    <Input
-                      type="number"
-                      min={2000}
-                      max={2100}
-                      value={toDateParts.year}
-                      onChange={(e) => handleToYearChange(e.target.value)}
-                      placeholder="مثال: 2024"
-                      className="border-[#C69A72] text-right arabic-text touch-target"
-                    />
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <Label className="text-[#13312A] arabic-text">الشهر</Label>
-                    <select
-                      value={toDateParts.month}
-                      onChange={(e) => handleToMonthChange(e.target.value)}
-                      className="px-3 py-2 border border-[#C69A72] rounded-md bg-white text-[#13312A] arabic-text touch-target focus:border-[#155446] focus:ring-1 focus:ring-[#155446]"
-                    >
-                      <option value="">حتى نهاية السنة</option>
-                      {monthOptions.map((month) => (
-                        <option key={`to-month-${month.value}`} value={month.value}>
-                          {month.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <Label className="text-[#13312A] arabic-text">اليوم</Label>
-                    <select
-                      value={toDateParts.day}
-                      onChange={(e) => handleToDayChange(e.target.value)}
-                      disabled={!toDateParts.month}
-                      className="px-3 py-2 border border-[#C69A72] rounded-md bg-white text-[#13312A] arabic-text touch-target focus:border-[#155446] focus:ring-1 focus:ring-[#155446] disabled:cursor-not-allowed disabled:bg-[#E2D4BD] disabled:text-[#7A6A58]"
-                    >
-                      <option value="">حتى نهاية الشهر</option>
-                      {dayOptions.map((day) => (
-                        <option key={`to-day-${day}`} value={day}>
-                          {day}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <p className="text-sm text-[#155446] arabic-text">
-              ترك حقل الشهر أو اليوم فارغاً يعني طباعة الفترة الكاملة للسنة أو الشهر المحدد. سيتم استخدام تاريخ الاستلام لكل فاتورة لتحديد مدى الطباعة.
-            </p>
-
-            {printError && (
-              <p className="text-sm text-red-600 arabic-text">{printError}</p>
-            )}
-          </div>
-
-          <DialogFooter className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => handlePrintDialogOpenChange(false)}
-              className="border-[#C69A72] text-[#13312A] hover:bg-[#C69A72] touch-target"
-            >
-              إلغاء
-            </Button>
-            <Button
-              type="button"
-              onClick={handleConfirmPrintRange}
-              className="bg-[#155446] hover:bg-[#13312A] text-[#F6E9CA] touch-target"
-            >
-              بدء الطباعة
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <PrintInvoicesDialog
+        isOpen={isPrintDialogOpen}
+        fromDateParts={fromDateParts}
+        toDateParts={toDateParts}
+        monthOptions={monthOptions}
+        dayOptions={dayOptions}
+        printError={printError}
+        onClose={() => handlePrintDialogOpenChange(false)}
+        onConfirm={handleConfirmPrintRange}
+        onFromYearChange={handleFromYearChange}
+        onFromMonthChange={handleFromMonthChange}
+        onFromDayChange={handleFromDayChange}
+        onToYearChange={handleToYearChange}
+        onToMonthChange={handleToMonthChange}
+        onToDayChange={handleToDayChange}
+      />
 
       {/* Invoice Details Dialog - Fallback for when onViewInvoiceDetails is not provided */}
       {selectedInvoice && !onViewInvoiceDetails && (

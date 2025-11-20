@@ -3,15 +3,14 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Label } from './ui/label';
 import { Input } from './ui/input';
-import { DateField } from './ui/date-field';
+import { DateInput } from './ui/date-input';
 import { Textarea } from './ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Button } from './ui/button';
-import { Upload, Calendar as CalendarIcon, Check, ChevronDown, Pencil, Plus, Trash2 } from 'lucide-react';
+import { Calendar as CalendarIcon, Check, ChevronDown, Pencil, Plus, Trash2 } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { Command, CommandEmpty, CommandInput, CommandItem, CommandList, CommandSeparator } from './ui/command';
 import { cn } from './ui/utils';
-import { InvoiceService, InvoiceFormData } from '@/services/invoice.service';
+import { InvoiceFormData } from '@/services/invoice.service';
 import { useInvoices } from '@/hooks/useInvoices';
 import { ImageUploadWithCrop } from './ui/ImageUploadWithCrop';
 import { ImageService } from '@/services/image.service';
@@ -679,347 +678,350 @@ export function NewInvoiceDialog({ isOpen, onOpenChange }: NewInvoiceDialogProps
                 <CardTitle className="text-[#13312A] arabic-text text-lg">تفاصيل التصميم</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                {/* الصف الأول: نوع القماش، مصدر القماش، نوع الياقة - 3 أعمدة */}
-                <div className="measurements-grid-3 gap-4 min-w-0">
+                {/* الصف الأول: نوع القماش، مصدر القماش، نوع الياقة */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 min-w-0">
+                  {/* نوع القماش */}
                   <div className="min-w-[120px]">
-                  <Label className="text-[#13312A] arabic-text">نوع القماش</Label>
-                  <Popover open={isFabricPopoverOpen} onOpenChange={setIsFabricPopoverOpen}>
-                    <PopoverTrigger asChild>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className={cn(
-                          'w-full justify-between bg-white border-[#C69A72] text-[#155446] arabic-text',
-                          selectedFabricLabels.length === 0 && 'text-muted-foreground',
-                        )}
-                      >
-                        <span className="flex-1 text-right truncate">
-                          {selectedFabricLabels.length > 0
-                            ? selectedFabricLabels.join('، ')
-                            : 'اختر نوع القماش'}
-                        </span>
-                        <ChevronDown className="ml-2 h-4 w-4 shrink-0" />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-72 p-0 bg-[#F6E9CA] border-[#C69A72]">
-                      <Command className="arabic-text text-right">
-                        <CommandInput placeholder="ابحث عن نوع القماش..." className="text-right" />
-                        <CommandList className="text-right">
-                          <CommandEmpty>لا توجد أنواع مطابقة</CommandEmpty>
-                          <CommandItem
-                            value="add-new"
-                            onSelect={() => {
-                              setIsFabricPopoverOpen(false);
-                              handleQuickAddDialogOpenChange(true);
-                            }}
-                            className="flex flex-row-reverse items-center justify-end gap-2 text-[#155446]"
-                          >
-                            <Plus className="h-4 w-4" />
-                            <span>إضافة نوع جديد</span>
-                          </CommandItem>
-                          <CommandSeparator className="bg-[#C69A72]/50" />
-                          {fabricOptions.map((option) => {
-                            const isSelected = selectedFabricOptions.includes(option.id);
-                            return (
-                              <CommandItem
-                                key={option.id}
-                                value={option.label}
-                                onSelect={() => toggleFabricOption(option.id)}
-                                className="flex items-center justify-between gap-2"
-                              >
-                                <span className="flex-1 text-right">{option.label}</span>
-                                <Check
-                                  className={cn(
-                                    'h-4 w-4 text-[#155446] transition-opacity',
-                                    isSelected ? 'opacity-100' : 'opacity-0',
-                                  )}
-                                />
-                              </CommandItem>
-                            );
-                          })}
-                        </CommandList>
-                        <div className="border-t border-[#C69A72]/50 px-2 py-2">
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            onClick={() => {
-                              setIsFabricPopoverOpen(false);
-                              handleFabricManagerOpenChange(true);
-                            }}
-                            className="w-full flex-row-reverse justify-center text-[#155446]"
-                          >
-                            <Pencil className="h-4 w-4" />
-                            تعديل الأنواع
-                          </Button>
-                        </div>
-                      </Command>
-                    </PopoverContent>
-                  </Popover>
+                    <Label className="text-[#13312A] arabic-text">نوع القماش</Label>
+                    <Popover open={isFabricPopoverOpen} onOpenChange={setIsFabricPopoverOpen}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className={cn(
+                            'w-full justify-between bg-white border-[#C69A72] text-[#155446] arabic-text',
+                            selectedFabricLabels.length === 0 && 'text-muted-foreground',
+                          )}
+                        >
+                          <span className="flex-1 text-right truncate">
+                            {selectedFabricLabels.length > 0 ? selectedFabricLabels.join('، ') : 'اختر نوع القماش'}
+                          </span>
+                          <ChevronDown className="ml-2 h-4 w-4 shrink-0" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-72 p-0 bg-[#F6E9CA] border-[#C69A72]">
+                        <Command className="arabic-text text-right">
+                          <CommandInput placeholder="ابحث عن نوع القماش..." className="text-right" />
+                          <CommandList className="text-right">
+                            <CommandEmpty>لا توجد أنواع مطابقة</CommandEmpty>
+                            <CommandItem
+                              value="add-new"
+                              onSelect={() => {
+                                setIsFabricPopoverOpen(false);
+                                handleQuickAddDialogOpenChange(true);
+                              }}
+                              className="flex flex-row-reverse items-center justify-end gap-2 text-[#155446]"
+                            >
+                              <Plus className="h-4 w-4" />
+                              <span>إضافة نوع جديد</span>
+                            </CommandItem>
+                            <CommandSeparator className="bg-[#C69A72]/50" />
+                            {fabricOptions.map((option) => {
+                              const isSelected = selectedFabricOptions.includes(option.id);
+                              return (
+                                <CommandItem
+                                  key={option.id}
+                                  value={option.label}
+                                  onSelect={() => toggleFabricOption(option.id)}
+                                  className="flex items-center justify-between gap-2"
+                                >
+                                  <span className="flex-1 text-right">{option.label}</span>
+                                  <Check className={cn('h-4 w-4 text-[#155446] transition-opacity', isSelected ? 'opacity-100' : 'opacity-0')} />
+                                </CommandItem>
+                              );
+                            })}
+                          </CommandList>
+                          <div className="border-t border-[#C69A72]/50 px-2 py-2">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              onClick={() => {
+                                setIsFabricPopoverOpen(false);
+                                handleFabricManagerOpenChange(true);
+                              }}
+                              className="w-full flex-row-reverse justify-center text-[#155446]"
+                            >
+                              <Pencil className="h-4 w-4" />
+                              تعديل الأنواع
+                            </Button>
+                          </div>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+
+                  {/* مصدر القماش */}
+                  <div className="min-w-[120px]">
+                    <Label className="text-[#13312A] arabic-text">مصدر القماش</Label>
+                    <Popover open={isSourcePopoverOpen} onOpenChange={setIsSourcePopoverOpen}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className={cn(
+                            'w-full justify-between bg-white border-[#C69A72] text-[#155446] arabic-text',
+                            selectedFabricSources.length === 0 && 'text-muted-foreground',
+                          )}
+                        >
+                          <span className="flex-1 text-right truncate">
+                            {selectedFabricSources.length > 0
+                              ? fabricSourceOptions
+                                  .filter((o) => selectedFabricSources.includes(o.id))
+                                  .map((o) => o.label)
+                                  .join('، ')
+                              : 'اختر مصدر القماش'}
+                          </span>
+                          <ChevronDown className="ml-2 h-4 w-4 shrink-0" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-72 p-0 bg-[#F6E9CA] border-[#C69A72]">
+                        <Command className="arabic-text text-right">
+                          <CommandList className="text-right">
+                            {fabricSourceOptions.map((option) => {
+                              const isSelected = selectedFabricSources.includes(option.id);
+                              return (
+                                <CommandItem
+                                  key={option.id}
+                                  value={option.label}
+                                  onSelect={() => toggleFabricSource(option.id)}
+                                  className="flex items-center justify-between gap-2"
+                                >
+                                  <span className="flex-1 text-right">{option.label}</span>
+                                  <Check className={cn('h-4 w-4 text-[#155446] transition-opacity', isSelected ? 'opacity-100' : 'opacity-0')} />
+                                </CommandItem>
+                              );
+                            })}
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+
+                  {/* نوع الياقة */}
+                  <div className="min-w-[120px]">
+                    <Label className="text-[#13312A] arabic-text">نوع الياقة</Label>
+                    <Popover open={isCollarPopoverOpen} onOpenChange={setIsCollarPopoverOpen}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className={cn(
+                            'w-full justify-between bg-white border-[#C69A72] text-[#155446] arabic-text',
+                            selectedCollarOptions.length === 0 && 'text-muted-foreground',
+                          )}
+                        >
+                          <span className="flex-1 text-right truncate">
+                            {selectedCollarOptions.length > 0
+                              ? collarOptions
+                                  .filter((o) => selectedCollarOptions.includes(o.id))
+                                  .map((o) => o.label)
+                                  .join('، ')
+                              : 'اختر نوع الياقة'}
+                          </span>
+                          <ChevronDown className="ml-2 h-4 w-4 shrink-0" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-72 p-0 bg-[#F6E9CA] border-[#C69A72]">
+                        <Command className="arabic-text text-right">
+                          <CommandList className="text-right">
+                            <CommandItem
+                              value="add-new"
+                              onSelect={() => {
+                                setIsCollarPopoverOpen(false);
+                                openCollarQuickAdd(true);
+                              }}
+                              className="flex flex-row-reverse items-center justify-end gap-2 text-[#155446]"
+                            >
+                              <Plus className="h-4 w-4" />
+                              <span>إضافة خيار جديد</span>
+                            </CommandItem>
+                            <CommandSeparator className="bg-[#C69A72]/50" />
+                            {collarOptions.map((option) => {
+                              const isSelected = selectedCollarOptions.includes(option.id);
+                              return (
+                                <CommandItem
+                                  key={option.id}
+                                  value={option.label}
+                                  onSelect={() => toggleCollarOption(option.id)}
+                                  className="flex items-center justify-between gap-2"
+                                >
+                                  <span className="flex-1 text-right">{option.label}</span>
+                                  <Check className={cn('h-4 w-4 text-[#155446] transition-opacity', isSelected ? 'opacity-100' : 'opacity-0')} />
+                                </CommandItem>
+                              );
+                            })}
+                          </CommandList>
+                          <div className="border-t border-[#C69A72]/50 px-2 py-2">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              onClick={() => {
+                                setIsCollarPopoverOpen(false);
+                                openCollarManager(true);
+                              }}
+                              className="w-full flex-row-reverse justify-center text-[#155446]"
+                            >
+                              <Pencil className="h-4 w-4" />
+                              تعديل الخيارات
+                            </Button>
+                          </div>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
                 </div>
+
+                {/* الصف الثاني: أسلوب الصدر ونهاية الكم */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 min-w-0">
+                  {/* أسلوب الصدر */}
                   <div className="min-w-[120px]">
-                  <Label className="text-[#13312A] arabic-text">مصدر القماش</Label>
-                  <Popover open={isSourcePopoverOpen} onOpenChange={setIsSourcePopoverOpen}>
-                    <PopoverTrigger asChild>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className={cn(
-                          'w-full justify-between bg-white border-[#C69A72] text-[#155446] arabic-text',
-                          selectedFabricSources.length === 0 && 'text-muted-foreground',
-                        )}
-                     >
-                        <span className="flex-1 text-right truncate">
-                          {selectedFabricSources.length > 0
-                            ? fabricSourceOptions
-                                .filter((o) => selectedFabricSources.includes(o.id))
-                                .map((o) => o.label)
-                                .join('، ')
-                            : 'اختر مصدر القماش'}
-                        </span>
-                        <ChevronDown className="ml-2 h-4 w-4 shrink-0" />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-72 p-0 bg-[#F6E9CA] border-[#C69A72]">
-                      <Command className="arabic-text text-right">
-                        <CommandList className="text-right">
-                          {fabricSourceOptions.map((option) => {
-                            const isSelected = selectedFabricSources.includes(option.id);
-                            return (
-                              <CommandItem
-                                key={option.id}
-                                value={option.label}
-                                onSelect={() => toggleFabricSource(option.id)}
-                                className="flex items-center justify-between gap-2"
-                              >
-                                <span className="flex-1 text-right">{option.label}</span>
-                                <Check
-                                  className={cn(
-                                    'h-4 w-4 text-[#155446] transition-opacity',
-                                    isSelected ? 'opacity-100' : 'opacity-0',
-                                  )}
-                                />
-                              </CommandItem>
-                            );
-                          })}
-                        </CommandList>
-                      </Command>
-                    </PopoverContent>
-                  </Popover>
+                    <Label className="text-[#13312A] arabic-text">أسلوب الصدر</Label>
+                    <Popover open={isChestStylePopoverOpen} onOpenChange={setIsChestStylePopoverOpen}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className={cn(
+                            'w-full justify-between bg-white border-[#C69A72] text-[#155446] arabic-text',
+                            selectedChestStyleOptions.length === 0 && 'text-muted-foreground',
+                          )}
+                        >
+                          <span className="flex-1 text-right truncate">
+                            {selectedChestStyleOptions.length > 0
+                              ? chestStyleOptions
+                                  .filter((o) => selectedChestStyleOptions.includes(o.id))
+                                  .map((o) => o.label)
+                                  .join('، ')
+                              : 'اختر أسلوب الصدر'}
+                          </span>
+                          <ChevronDown className="ml-2 h-4 w-4 shrink-0" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-72 p-0 bg-[#F6E9CA] border-[#C69A72]">
+                        <Command className="arabic-text text-right">
+                          <CommandList className="text-right">
+                            <CommandItem
+                              value="add-new"
+                              onSelect={() => {
+                                setIsChestStylePopoverOpen(false);
+                                openChestStyleQuickAdd(true);
+                              }}
+                              className="flex flex-row-reverse items-center justify-end gap-2 text-[#155446]"
+                            >
+                              <Plus className="h-4 w-4" />
+                              <span>إضافة خيار جديد</span>
+                            </CommandItem>
+                            <CommandSeparator className="bg-[#C69A72]/50" />
+                            {chestStyleOptions.map((option) => {
+                              const isSelected = selectedChestStyleOptions.includes(option.id);
+                              return (
+                                <CommandItem
+                                  key={option.id}
+                                  value={option.label}
+                                  onSelect={() => toggleChestStyleOption(option.id)}
+                                  className="flex items-center justify-between gap-2"
+                                >
+                                  <span className="flex-1 text-right">{option.label}</span>
+                                  <Check className={cn('h-4 w-4 text-[#155446] transition-opacity', isSelected ? 'opacity-100' : 'opacity-0')} />
+                                </CommandItem>
+                              );
+                            })}
+                          </CommandList>
+                          <div className="border-t border-[#C69A72]/50 px-2 py-2">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              onClick={() => {
+                                setIsChestStylePopoverOpen(false);
+                                openChestStyleManager(true);
+                              }}
+                              className="w-full flex-row-reverse justify-center text-[#155446]"
+                            >
+                              <Pencil className="h-4 w-4" />
+                              تعديل الخيارات
+                            </Button>
+                          </div>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+
+                  {/* نهاية الكم */}
                   <div className="min-w-[120px]">
-                  <Label className="text-[#13312A] arabic-text">نوع الياقة</Label>
-                  <Popover open={isCollarPopoverOpen} onOpenChange={setIsCollarPopoverOpen}>
-                    <PopoverTrigger asChild>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className={cn(
-                          'w-full justify-between bg-white border-[#C69A72] text-[#155446] arabic-text',
-                          selectedCollarOptions.length === 0 && 'text-muted-foreground',
-                        )}
-                      >
-                        <span className="flex-1 text-right truncate">
-                          {selectedCollarOptions.length > 0
-                            ? collarOptions
-                                .filter((o) => selectedCollarOptions.includes(o.id))
-                                .map((o) => o.label)
-                                .join('، ')
-                            : 'اختر نوع الياقة'}
-                        </span>
-                        <ChevronDown className="ml-2 h-4 w-4 shrink-0" />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-72 p-0 bg-[#F6E9CA] border-[#C69A72]">
-                      <Command className="arabic-text text-right">
-                        <CommandList className="text-right">
-                          <CommandItem
-                            value="add-new"
-                            onSelect={() => {
-                              setIsCollarPopoverOpen(false);
-                              openCollarQuickAdd(true);
-                            }}
-                            className="flex flex-row-reverse items-center justify-end gap-2 text-[#155446]"
-                          >
-                            <Plus className="h-4 w-4" />
-                            <span>إضافة خيار جديد</span>
-                          </CommandItem>
-                          <CommandSeparator className="bg-[#C69A72]/50" />
-                          {collarOptions.map((option) => {
-                            const isSelected = selectedCollarOptions.includes(option.id);
-                            return (
-                              <CommandItem
-                                key={option.id}
-                                value={option.label}
-                                onSelect={() => toggleCollarOption(option.id)}
-                                className="flex items-center justify-between gap-2"
-                              >
-                                <span className="flex-1 text-right">{option.label}</span>
-                                <Check className={cn('h-4 w-4 text-[#155446] transition-opacity', isSelected ? 'opacity-100' : 'opacity-0')} />
-                              </CommandItem>
-                            );
-                          })}
-                        </CommandList>
-                        <div className="border-t border-[#C69A72]/50 px-2 py-2">
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            onClick={() => {
-                              setIsCollarPopoverOpen(false);
-                              openCollarManager(true);
-                            }}
-                            className="w-full flex-row-reverse justify-center text-[#155446]"
-                          >
-                            <Pencil className="h-4 w-4" />
-                            تعديل الخيارات
-                          </Button>
-                        </div>
-                      </Command>
-                    </PopoverContent>
-                  </Popover>
+                    <Label className="text-[#13312A] arabic-text">نهاية الكم</Label>
+                    <Popover open={isSleeveEndPopoverOpen} onOpenChange={setIsSleeveEndPopoverOpen}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className={cn(
+                            'w-full justify-between bg-white border-[#C69A72] text-[#155446] arabic-text',
+                            selectedSleeveEndOptions.length === 0 && 'text-muted-foreground',
+                          )}
+                        >
+                          <span className="flex-1 text-right truncate">
+                            {selectedSleeveEndOptions.length > 0
+                              ? sleeveEndOptions
+                                  .filter((o) => selectedSleeveEndOptions.includes(o.id))
+                                  .map((o) => o.label)
+                                  .join('، ')
+                              : 'اختر نهاية الكم'}
+                          </span>
+                          <ChevronDown className="ml-2 h-4 w-4 shrink-0" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-72 p-0 bg-[#F6E9CA] border-[#C69A72]">
+                        <Command className="arabic-text text-right">
+                          <CommandList className="text-right">
+                            <CommandItem
+                              value="add-new"
+                              onSelect={() => {
+                                setIsSleeveEndPopoverOpen(false);
+                                openSleeveEndQuickAdd(true);
+                              }}
+                              className="flex flex-row-reverse items-center justify-end gap-2 text-[#155446]"
+                            >
+                              <Plus className="h-4 w-4" />
+                              <span>إضافة خيار جديد</span>
+                            </CommandItem>
+                            <CommandSeparator className="bg-[#C69A72]/50" />
+                            {sleeveEndOptions.map((option) => {
+                              const isSelected = selectedSleeveEndOptions.includes(option.id);
+                              return (
+                                <CommandItem
+                                  key={option.id}
+                                  value={option.label}
+                                  onSelect={() => toggleSleeveEndOption(option.id)}
+                                  className="flex items-center justify-between gap-2"
+                                >
+                                  <span className="flex-1 text-right">{option.label}</span>
+                                  <Check className={cn('h-4 w-4 text-[#155446] transition-opacity', isSelected ? 'opacity-100' : 'opacity-0')} />
+                                </CommandItem>
+                              );
+                            })}
+                          </CommandList>
+                          <div className="border-t border-[#C69A72]/50 px-2 py-2">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              onClick={() => {
+                                setIsSleeveEndPopoverOpen(false);
+                                openSleeveEndManager(true);
+                              }}
+                              className="w-full flex-row-reverse justify-center text-[#155446]"
+                            >
+                              <Pencil className="h-4 w-4" />
+                              تعديل الخيارات
+                            </Button>
+                          </div>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
                 </div>
-                {/* الصف الثاني: أسلوب الصدر، نهاية الكم - 2 أعمدة */}
-                <div className="measurements-grid-2 gap-4 min-w-0">
-                  <div className="min-w-[120px]">
-                  <Label className="text-[#13312A] arabic-text">أسلوب الصدر</Label>
-                  <Popover open={isChestStylePopoverOpen} onOpenChange={setIsChestStylePopoverOpen}>
-                    <PopoverTrigger asChild>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className={cn(
-                          'w-full justify-between bg-white border-[#C69A72] text-[#155446] arabic-text',
-                          selectedChestStyleOptions.length === 0 && 'text-muted-foreground',
-                        )}
-                      >
-                        <span className="flex-1 text-right truncate">
-                          {selectedChestStyleOptions.length > 0
-                            ? chestStyleOptions
-                                .filter((o) => selectedChestStyleOptions.includes(o.id))
-                                .map((o) => o.label)
-                                .join('، ')
-                            : 'اختر أسلوب الصدر'}
-                        </span>
-                        <ChevronDown className="ml-2 h-4 w-4 shrink-0" />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-72 p-0 bg-[#F6E9CA] border-[#C69A72]">
-                      <Command className="arabic-text text-right">
-                        <CommandList className="text-right">
-                          <CommandItem
-                            value="add-new"
-                            onSelect={() => {
-                              setIsChestStylePopoverOpen(false);
-                              openChestStyleQuickAdd(true);
-                            }}
-                            className="flex flex-row-reverse items-center justify-end gap-2 text-[#155446]"
-                          >
-                            <Plus className="h-4 w-4" />
-                            <span>إضافة خيار جديد</span>
-                          </CommandItem>
-                          <CommandSeparator className="bg-[#C69A72]/50" />
-                          {chestStyleOptions.map((option) => {
-                            const isSelected = selectedChestStyleOptions.includes(option.id);
-                            return (
-                              <CommandItem
-                                key={option.id}
-                                value={option.label}
-                                onSelect={() => toggleChestStyleOption(option.id)}
-                                className="flex items-center justify-between gap-2"
-                              >
-                                <span className="flex-1 text-right">{option.label}</span>
-                                <Check className={cn('h-4 w-4 text-[#155446] transition-opacity', isSelected ? 'opacity-100' : 'opacity-0')} />
-                              </CommandItem>
-                            );
-                          })}
-                        </CommandList>
-                        <div className="border-t border-[#C69A72]/50 px-2 py-2">
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            onClick={() => {
-                              setIsChestStylePopoverOpen(false);
-                              openChestStyleManager(true);
-                            }}
-                            className="w-full flex-row-reverse justify-center text-[#155446]"
-                          >
-                            <Pencil className="h-4 w-4" />
-                            تعديل الخيارات
-                          </Button>
-                        </div>
-                      </Command>
-                    </PopoverContent>
-                  </Popover>
-                </div>
-                <div>
-                  <Label className="text-[#13312A] arabic-text">نهاية الكم</Label>
-                  <Popover open={isSleeveEndPopoverOpen} onOpenChange={setIsSleeveEndPopoverOpen}>
-                    <PopoverTrigger asChild>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className={cn(
-                          'w-full justify-between bg-white border-[#C69A72] text-[#155446] arabic-text',
-                          selectedSleeveEndOptions.length === 0 && 'text-muted-foreground',
-                        )}
-                      >
-                        <span className="flex-1 text-right truncate">
-                          {selectedSleeveEndOptions.length > 0
-                            ? sleeveEndOptions
-                                .filter((o) => selectedSleeveEndOptions.includes(o.id))
-                                .map((o) => o.label)
-                                .join('، ')
-                            : 'اختر نهاية الكم'}
-                        </span>
-                        <ChevronDown className="ml-2 h-4 w-4 shrink-0" />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-72 p-0 bg-[#F6E9CA] border-[#C69A72]">
-                      <Command className="arabic-text text-right">
-                        <CommandList className="text-right">
-                          <CommandItem
-                            value="add-new"
-                            onSelect={() => {
-                              setIsSleeveEndPopoverOpen(false);
-                              openSleeveEndQuickAdd(true);
-                            }}
-                            className="flex flex-row-reverse items-center justify-end gap-2 text-[#155446]"
-                          >
-                            <Plus className="h-4 w-4" />
-                            <span>إضافة خيار جديد</span>
-                          </CommandItem>
-                          <CommandSeparator className="bg-[#C69A72]/50" />
-                          {sleeveEndOptions.map((option) => {
-                            const isSelected = selectedSleeveEndOptions.includes(option.id);
-                            return (
-                              <CommandItem
-                                key={option.id}
-                                value={option.label}
-                                onSelect={() => toggleSleeveEndOption(option.id)}
-                                className="flex items-center justify-between gap-2"
-                              >
-                                <span className="flex-1 text-right">{option.label}</span>
-                                <Check className={cn('h-4 w-4 text-[#155446] transition-opacity', isSelected ? 'opacity-100' : 'opacity-0')} />
-                              </CommandItem>
-                            );
-                          })}
-                        </CommandList>
-                        <div className="border-t border-[#C69A72]/50 px-2 py-2">
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            onClick={() => {
-                              setIsSleeveEndPopoverOpen(false);
-                              openSleeveEndManager(true);
-                            }}
-                            className="w-full flex-row-reverse justify-center text-[#155446]"
-                          >
-                            <Pencil className="h-4 w-4" />
-                            تعديل الخيارات
-                          </Button>
-                        </div>
-                      </Command>
-                    </PopoverContent>
-                  </Popover>
-                  <div className="min-w-[120px]">
+
+                {/* نوع البنيجة */}
+                <div className="min-w-[120px]">
                   <Label className="text-[#13312A] arabic-text">نوع البنيجة</Label>
                   <Popover open={isBunijaPopoverOpen} onOpenChange={setIsBunijaPopoverOpen}>
                     <PopoverTrigger asChild>
@@ -1095,10 +1097,10 @@ export function NewInvoiceDialog({ isOpen, onOpenChange }: NewInvoiceDialogProps
                   <Label className="text-[#13312A] arabic-text">تاريخ التسليم</Label>
                   <div className="relative">
                     <CalendarIcon className="absolute right-3 top-1/2 -translate-y-1/2 text-[#155446] w-4 h-4" />
-                    <DateField
+                    <DateInput
                       value={deliveryDate}
                       onChange={(event) => setDeliveryDate(event.target.value)}
-                      className="pr-10 bg-white border-[#C69A72] text-left"
+                      className="pr-10 bg-white border-[#C69A72] text-right"
                     />
                   </div>
                 </div>

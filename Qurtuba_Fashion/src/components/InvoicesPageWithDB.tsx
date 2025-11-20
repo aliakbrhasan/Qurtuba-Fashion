@@ -6,7 +6,6 @@ import { Input } from './ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
 import { Badge } from './ui/badge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from './ui/dialog';
 import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { useInvoices } from '@/hooks/useInvoices';
@@ -41,6 +40,7 @@ import {
   PrintableInvoiceData,
 } from './PrintableInvoice';
 import { openPrintWindow, openPrintInvoiceWindow, formatPrintDateTime } from './print/PrintUtils.tsx';
+import { PrintInvoicesDialog } from './PrintInvoicesDialog';
 
 
 type DateParts = {
@@ -1216,145 +1216,22 @@ export function InvoicesPageWithDB({ onCreateInvoice, onViewInvoiceDetails, onMa
           </Card>
         )}
 
-        {/* Print Dialog */}
-        <Dialog open={isPrintDialogOpen} onOpenChange={handlePrintDialogOpenChange}>
-          <DialogContent className="max-w-3xl bg-[#F6E9CA] border-[#C69A72]">
-            <DialogHeader>
-              <DialogTitle className="text-[#13312A] arabic-text">تحديد فترة الطباعة</DialogTitle>
-              <DialogDescription className="text-[#155446] arabic-text">
-                اختر تاريخ البداية والنهاية قبل طباعة قائمة الفواتير، ويمكنك توسيع الفترة أو تقليصها حسب الحاجة.
-              </DialogDescription>
-            </DialogHeader>
-
-            <div className="space-y-6">
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="space-y-4 rounded-xl border border-[#C69A72] bg-[#FDFBF7] p-4">
-                  <h3 className="text-lg font-semibold text-[#13312A] arabic-text">بداية الفترة (من)</h3>
-                  <div className="grid gap-3 sm:grid-cols-3">
-                    <div className="flex flex-col gap-1">
-                      <Label className="text-black arabic-text">السنة</Label>
-                      <Input
-                        type="number"
-                        min={2000}
-                        max={2100}
-                        value={fromDateParts.year}
-                        onChange={(e) => handleFromYearChange(e.target.value)}
-                        placeholder="مثال: 2024"
-                        className="border-[#C69A72] text-right arabic-text touch-target"
-                      />
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <Label className="text-black arabic-text">الشهر</Label>
-                      <select
-                        value={fromDateParts.month}
-                        onChange={(e) => handleFromMonthChange(e.target.value)}
-                        className="px-3 py-2 border border-[#C69A72] rounded-md bg-white text-[#13312A] arabic-text touch-target focus:border-[#155446] focus:ring-1 focus:ring-[#155446]"
-                      >
-                        <option value="">من بداية السنة</option>
-                        {monthOptions.map((month) => (
-                          <option key={`from-month-${month.value}`} value={month.value}>
-                            {month.label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <Label className="text-black arabic-text">اليوم</Label>
-                      <select
-                        value={fromDateParts.day}
-                        onChange={(e) => handleFromDayChange(e.target.value)}
-                        disabled={!fromDateParts.month}
-                        className="px-3 py-2 border border-[#C69A72] rounded-md bg-white text-[#13312A] arabic-text touch-target focus:border-[#155446] focus:ring-1 focus:ring-[#155446] disabled:cursor-not-allowed disabled:bg-[#E2D4BD] disabled:text-[#7A6A58]"
-                      >
-                        <option value="">من بداية الشهر</option>
-                        {dayOptions.map((day) => (
-                          <option key={`from-day-${day}`} value={day}>
-                            {day}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="space-y-4 rounded-xl border border-[#C69A72] bg-[#FDFBF7] p-4">
-                  <h3 className="text-lg font-semibold text-[#13312A] arabic-text">نهاية الفترة (إلى)</h3>
-                  <div className="grid gap-3 sm:grid-cols-3">
-                    <div className="flex flex-col gap-1">
-                      <Label className="text-black arabic-text">السنة</Label>
-                      <Input
-                        type="number"
-                        min={2000}
-                        max={2100}
-                        value={toDateParts.year}
-                        onChange={(e) => handleToYearChange(e.target.value)}
-                        placeholder="مثال: 2024"
-                        className="border-[#C69A72] text-right arabic-text touch-target"
-                      />
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <Label className="text-black arabic-text">الشهر</Label>
-                      <select
-                        value={toDateParts.month}
-                        onChange={(e) => handleToMonthChange(e.target.value)}
-                        className="px-3 py-2 border border-[#C69A72] rounded-md bg-white text-[#13312A] arabic-text touch-target focus:border-[#155446] focus:ring-1 focus:ring-[#155446]"
-                      >
-                        <option value="">حتى نهاية السنة</option>
-                        {monthOptions.map((month) => (
-                          <option key={`to-month-${month.value}`} value={month.value}>
-                            {month.label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <Label className="text-black arabic-text">اليوم</Label>
-                      <select
-                        value={toDateParts.day}
-                        onChange={(e) => handleToDayChange(e.target.value)}
-                        disabled={!toDateParts.month}
-                        className="px-3 py-2 border border-[#C69A72] rounded-md bg-white text-[#13312A] arabic-text touch-target focus:border-[#155446] focus:ring-1 focus:ring-[#155446] disabled:cursor-not-allowed disabled:bg-[#E2D4BD] disabled:text-[#7A6A58]"
-                      >
-                        <option value="">حتى نهاية الشهر</option>
-                        {dayOptions.map((day) => (
-                          <option key={`to-day-${day}`} value={day}>
-                            {day}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <p className="text-sm text-[#155446] arabic-text">
-                ترك حقل الشهر أو اليوم فارغاً يعني طباعة الفترة الكاملة للسنة أو الشهر المحدد. سيتم استخدام تاريخ الاستلام لكل فاتورة لتحديد مدى الطباعة.
-              </p>
-
-              {printError && (
-                <p className="text-sm text-red-600 arabic-text">{printError}</p>
-              )}
-            </div>
-
-            <DialogFooter className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => handlePrintDialogOpenChange(false)}
-                className="border-[#C69A72] text-[#13312A] hover:bg-[#C69A72] touch-target"
-              >
-                إلغاء
-              </Button>
-              <Button
-                type="button"
-                onClick={handleConfirmPrintRange}
-                className="bg-[#155446] hover:bg-[#13312A] text-[#F6E9CA] touch-target"
-              >
-                بدء الطباعة
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        <PrintInvoicesDialog
+          isOpen={isPrintDialogOpen}
+          fromDateParts={fromDateParts}
+          toDateParts={toDateParts}
+          monthOptions={monthOptions}
+          dayOptions={dayOptions}
+          printError={printError}
+          onClose={() => handlePrintDialogOpenChange(false)}
+          onConfirm={handleConfirmPrintRange}
+          onFromYearChange={handleFromYearChange}
+          onFromMonthChange={handleFromMonthChange}
+          onFromDayChange={handleFromDayChange}
+          onToYearChange={handleToYearChange}
+          onToMonthChange={handleToMonthChange}
+          onToDayChange={handleToDayChange}
+        />
 
       {/* Invoice Details Dialog */}
       {selectedInvoice && (

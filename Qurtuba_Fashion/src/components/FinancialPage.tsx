@@ -3,7 +3,7 @@ import { Card, CardContent } from './ui/card';
 import { Skeleton } from './ui/skeleton';
 import { TrendingUp, AlertCircle, RefreshCw } from 'lucide-react';
 import { Button } from './ui/button';
-import { DateField } from './ui/date-field';
+import { DateInput } from './ui/date-input';
 import { useDashboardStats } from '@/hooks/useDashboardStats';
 import { StatCard } from './dashboard/StatCard';
 import { DashboardGrids } from './dashboard/ResponsiveGrid';
@@ -81,20 +81,20 @@ export function FinancialPage() {
     <div className="container mx-auto p-4 space-y-6">
       {/* Filters */}
       <div className="flex flex-col md:flex-row items-start md:items-end gap-3">
-        <div>
+        <div className="w-full max-w-xs">
           <label className="block text-sm text-[#13312A] arabic-text mb-1">تاريخ البداية</label>
-          <DateField
+          <DateInput
             value={startDate}
             onChange={(e) => setStartDate(e.target.value)}
-            className="border rounded px-3 py-2"
+            className="bg-white border-[#C69A72]"
           />
         </div>
-        <div>
+        <div className="w-full max-w-xs">
           <label className="block text-sm text-[#13312A] arabic-text mb-1">تاريخ النهاية</label>
-          <DateField
+          <DateInput
             value={endDate}
             onChange={(e) => setEndDate(e.target.value)}
-            className="border rounded px-3 py-2"
+            className="bg-white border-[#C69A72]"
           />
         </div>
         <div className="flex gap-2">

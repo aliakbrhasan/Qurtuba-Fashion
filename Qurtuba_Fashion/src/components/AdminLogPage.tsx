@@ -1,11 +1,10 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from './ui/table'
 import { storage } from '@/storage'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card'
 import { Input } from './ui/input'
-import { DateField } from './ui/date-field'
+import { DateInput } from './ui/date-input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select'
-import { Button } from './ui/button'
 import { Badge } from './ui/badge'
 
 type AdminLog = {
@@ -132,8 +131,8 @@ export function AdminLogPage() {
             </div>
             <div className="flex items-center gap-2">
               <span className="arabic-text text-[#13312A]">التاريخ</span>
-              <DateField
-                className="bg-white border-[#C69A72] text-left"
+              <DateInput
+                className="bg-white border-[#C69A72] text-right"
                 value={dateFilter}
                 onChange={(e) => setDateFilter(e.target.value)}
               />

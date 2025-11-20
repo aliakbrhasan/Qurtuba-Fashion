@@ -250,6 +250,8 @@ export function Layout({ children, currentPage, onNavigate, isLoggedIn, onLogout
                 variant="ghost"
                 onClick={() => setIsNotificationOpen(true)}
                 className="text-[#C69A72] hover:text-[#F6E9CA] hover:bg-[#155446] p-2 touch-target relative"
+                aria-label="مركز التنبيهات"
+                title="مركز التنبيهات"
               >
                 <Bell size={18} />
                 {unreadCount > 0 && (
@@ -286,6 +288,8 @@ export function Layout({ children, currentPage, onNavigate, isLoggedIn, onLogout
                 variant="ghost"
                 onClick={() => onNavigate('users')}
                 className="text-[#C69A72] hover:text-[#F6E9CA] hover:bg-[#155446] p-2 touch-target"
+                aria-label="إعدادات المستخدمين"
+                title="إدارة المستخدمين"
               >
                 <Settings size={18} />
               </Button>
@@ -294,6 +298,8 @@ export function Layout({ children, currentPage, onNavigate, isLoggedIn, onLogout
               variant="ghost"
               onClick={onLogout}
               className="text-[#C69A72] hover:text-[#F6E9CA] hover:bg-destructive p-2 touch-target"
+              aria-label="تسجيل الخروج"
+              title="تسجيل الخروج"
             >
               <LogOut size={18} />
             </Button>

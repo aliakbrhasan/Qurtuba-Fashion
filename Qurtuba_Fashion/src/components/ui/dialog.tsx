@@ -8,49 +8,31 @@ import { cn } from "./utils";
 // Hook to manage body scroll lock
 function useBodyScrollLock(isLocked: boolean) {
   React.useEffect(() => {
-    if (isLocked) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
+    if (typeof document === "undefined") {
+      return;
     }
-    
+
+    const body = document.body;
+    if (!body) {
+      return;
+    }
+
+    const previousOverflow = body.style.overflow;
+
+    body.style.overflow = isLocked ? "hidden" : "";
+
     return () => {
-      document.body.style.overflow = '';
+      body.style.overflow = previousOverflow;
     };
   }, [isLocked]);
 }
 
-// Hook to replace aria-hidden with inert on background siblings while dialog is open
-function useInertSiblings(isActive: boolean) {
-  React.useEffect(() => {
-    try {
-      const children = Array.from(document.body.children);
-      for (const el of children) {
-        // Keep dialog overlay/content elements interactive
-        const isDialogElement = el.matches('[data-slot^="dialog-"]') ||
-          el.querySelector('[data-slot^="dialog-"]');
-        if (isDialogElement) continue;
-        if (isActive) {
-          el.setAttribute('inert', '');
-        } else {
-          el.removeAttribute('inert');
-        }
-      }
-    } catch {}
-    return () => {
-      try {
-        const children = Array.from(document.body.children);
-        for (const el of children) el.removeAttribute('inert');
-      } catch {}
-    };
-  }, [isActive]);
-}
-
 function Dialog({
+  children,
   open: openProp,
   defaultOpen,
   onOpenChange,
-  modal = false,
+  modal = true,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Root>) {
   const [uncontrolledOpen, setUncontrolledOpen] = React.useState(
@@ -60,7 +42,6 @@ function Dialog({
   const open = isControlled ? openProp : uncontrolledOpen;
 
   useBodyScrollLock(open);
-  useInertSiblings(open);
 
   return (
     <DialogPrimitive.Root
@@ -74,7 +55,9 @@ function Dialog({
         onOpenChange?.(nextOpen);
       }}
       {...props}
-    />
+    >
+      {children}
+    </DialogPrimitive.Root>
   );
 }
 
