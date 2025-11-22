@@ -322,6 +322,8 @@ body { font-family: var(--app-font); }
 
   html, :host {
     -webkit-text-size-adjust: 100%;
+    -moz-text-size-adjust: 100%;
+    -ms-text-size-adjust: 100%;
     text-size-adjust: 100%;
     tab-size: 4;
     line-height: 1.5;
@@ -1010,7 +1012,13 @@ body { font-family: var(--app-font); }
   }
 
   .field-sizing-content {
-    field-sizing: content;
+    height: auto;
+  }
+
+  @supports (field-sizing: content) {
+    .field-sizing-content {
+      field-sizing: content;
+    }
   }
 
   .aspect-square {
@@ -2237,7 +2245,13 @@ body { font-family: var(--app-font); }
   }
 
   .text-balance {
-    text-wrap: balance;
+    overflow-wrap: anywhere;
+  }
+
+  @supports (text-wrap: balance) {
+    .text-balance {
+      text-wrap: balance;
+    }
   }
 
   .break-words {

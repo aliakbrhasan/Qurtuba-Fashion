@@ -26,6 +26,8 @@ export const brandPrintStyles = `
     direction: rtl;
     color: #13312A;
     -webkit-text-size-adjust: 100%;
+    -moz-text-size-adjust: 100%;
+    -ms-text-size-adjust: 100%;
     text-size-adjust: 100%;
     -webkit-user-select: none;
     -moz-user-select: none;

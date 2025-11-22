@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Card, CardContent } from './ui/card';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -72,6 +72,8 @@ const monthOptions = [
 ];
 
 const dayOptions = Array.from({ length: 31 }, (_, index) => (index + 1).toString());
+const TABLE_PAGE_SIZE = 20;
+const GRID_PAGE_SIZE = 12;
 
 const getLastDayOfMonth = (year: number, month: number) => new Date(year, month, 0).getDate();
 
@@ -160,6 +162,7 @@ export function InvoicesPage({ onCreateInvoice, onViewInvoiceDetails, onMarkAsPa
   const [sortField, setSortField] = useState<string>('receivedDate');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('table');
+  const [currentPage, setCurrentPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [dateFilter, setDateFilter] = useState<string>('all');
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
@@ -419,6 +422,48 @@ export function InvoicesPage({ onCreateInvoice, onViewInvoiceDetails, onMarkAsPa
       }
     });
   }, [invoices, searchTerm, statusFilter, dateFilter, sortField, sortDirection]);
+
+  const pageSize = viewMode === 'grid' ? GRID_PAGE_SIZE : TABLE_PAGE_SIZE;
+  const totalPages = Math.max(1, Math.ceil(filteredAndSortedInvoices.length / pageSize));
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, statusFilter, dateFilter, viewMode, sortField, sortDirection]);
+
+  useEffect(() => {
+    setCurrentPage((prev) => Math.min(prev, totalPages));
+  }, [totalPages]);
+
+  const paginatedInvoices = useMemo(() => {
+    const startIndex = (currentPage - 1) * pageSize;
+    return filteredAndSortedInvoices.slice(startIndex, startIndex + pageSize);
+  }, [filteredAndSortedInvoices, currentPage, pageSize]);
+
+  const pageStartIndex = filteredAndSortedInvoices.length === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+  const pageEndIndex = filteredAndSortedInvoices.length === 0 ? 0 : Math.min(pageStartIndex + paginatedInvoices.length - 1, filteredAndSortedInvoices.length);
+  const hasMultiplePages = totalPages > 1;
+
+  const visiblePageNumbers = useMemo(() => {
+    const maxButtons = 5;
+    if (totalPages <= maxButtons) {
+      return Array.from({ length: totalPages }, (_, idx) => idx + 1);
+    }
+    let start = Math.max(1, currentPage - 2);
+    let end = Math.min(totalPages, start + maxButtons - 1);
+    if (end - start < maxButtons - 1) {
+      start = Math.max(1, end - maxButtons + 1);
+    }
+    return Array.from({ length: end - start + 1 }, (_, idx) => start + idx);
+  }, [currentPage, totalPages]);
+
+  const goToPage = (page: number) => {
+    setCurrentPage(Math.min(Math.max(page, 1), totalPages));
+  };
+
+  const showLeadingEllipsis = visiblePageNumbers.length > 0 && visiblePageNumbers[0] > 1;
+  const showTrailingEllipsis = visiblePageNumbers.length > 0 && visiblePageNumbers[visiblePageNumbers.length - 1] < totalPages;
+  const handlePrevPage = () => goToPage(currentPage - 1);
+  const handleNextPage = () => goToPage(currentPage + 1);
 
   // Statistics
   const stats = useMemo(() => {
@@ -1069,7 +1114,7 @@ export function InvoicesPage({ onCreateInvoice, onViewInvoiceDetails, onMarkAsPa
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {filteredAndSortedInvoices.map((invoice) => (
+                          {paginatedInvoices.map((invoice) => (
                             <TableRow 
                               key={invoice.id} 
                               className="hover:bg-gradient-to-r hover:from-[#F6E9CA]/50 hover:to-[#FDFBF7] cursor-pointer transition-all duration-300 border-b border-[#C69A72]/20"
@@ -1175,7 +1220,7 @@ export function InvoicesPage({ onCreateInvoice, onViewInvoiceDetails, onMarkAsPa
                 {/* Grid View */}
                 {viewMode === 'grid' && (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                    {filteredAndSortedInvoices.map((invoice) => (
+                    {paginatedInvoices.map((invoice) => (
                       <Card 
                         key={invoice.id} 
                         className="bg-white rounded-xl shadow-lg border border-[#C69A72]/20 hover:shadow-xl transition-all duration-300 cursor-pointer group"
@@ -1307,6 +1352,61 @@ export function InvoicesPage({ onCreateInvoice, onViewInvoiceDetails, onMarkAsPa
                         </CardContent>
                       </Card>
                     ))}
+                  </div>
+                )}
+
+                {hasMultiplePages && (
+                  <div className="mt-8 bg-white rounded-xl border border-[#C69A72]/20 shadow-sm p-4 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                    <div className="text-sm text-[#155446] arabic-text">
+                      عرض {pageStartIndex}-{pageEndIndex} من {filteredAndSortedInvoices.length} فاتورة
+                    </div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={currentPage === 1}
+                        onClick={handlePrevPage}
+                        className="min-w-[90px]"
+                      >
+                        السابق
+                      </Button>
+                      {showLeadingEllipsis && (
+                        <>
+                          <Button variant="outline" size="sm" onClick={() => goToPage(1)}>
+                            1
+                          </Button>
+                          <span className="px-2 text-[#155446]">...</span>
+                        </>
+                      )}
+                      {visiblePageNumbers.map((page) => (
+                        <Button
+                          key={page}
+                          variant={page === currentPage ? 'default' : 'outline'}
+                          size="sm"
+                          onClick={() => goToPage(page)}
+                          aria-current={page === currentPage ? 'page' : undefined}
+                        >
+                          {page}
+                        </Button>
+                      ))}
+                      {showTrailingEllipsis && (
+                        <>
+                          <span className="px-2 text-[#155446]">...</span>
+                          <Button variant="outline" size="sm" onClick={() => goToPage(totalPages)}>
+                            {totalPages}
+                          </Button>
+                        </>
+                      )}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={currentPage === totalPages}
+                        onClick={handleNextPage}
+                        className="min-w-[90px]"
+                      >
+                        التالي
+                      </Button>
+                    </div>
                   </div>
                 )}
               </>
