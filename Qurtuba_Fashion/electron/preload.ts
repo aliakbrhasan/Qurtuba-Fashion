@@ -1,9 +1,28 @@
 import { contextBridge, ipcRenderer } from 'electron';
 
 // Define the API that will be exposed to the renderer process
+const wrap = async <T>(fn: () => Promise<T>): Promise<{ ok: boolean; data?: T; error?: string }> => {
+  try {
+    const data = await fn();
+    return { ok: true, data };
+  } catch (e: any) {
+    return { ok: false, error: String(e?.message || e) };
+  }
+};
+
+type RendererPrintPayload = {
+  title: string;
+  content: string;
+  styles?: string;
+  pageSize?: string | { width: number; height: number };
+  landscape?: boolean;
+  printBackground?: boolean;
+};
+
 const electronAPI = {
   // App information
   getVersion: () => ipcRenderer.invoke('app:getVersion'),
+  getLogoPath: () => ipcRenderer.invoke('app:getLogoPath'),
   
   // Dialog functions
   showMessageBox: (options: any) => ipcRenderer.invoke('app:showMessageBox', options),
@@ -20,9 +39,18 @@ const electronAPI = {
     return ipcRenderer.invoke('export:pdf', data);
   },
   
-  // Print functionality (for future use)
-  print: (data: any) => {
+  // Print functionality
+  print: (data: RendererPrintPayload) => {
     return ipcRenderer.invoke('print:document', data);
+  },
+  
+  printPreview: (data: RendererPrintPayload) => {
+    return ipcRenderer.invoke('print:preview', data);
+  },
+  
+  // PDF preview via OS default viewer
+  pdfPreview: (data: { title: string; content: string; styles?: string; pageSize?: string; landscape?: boolean }) => {
+    return ipcRenderer.invoke('print:pdfPreview', data);
   },
 
   // Local database functions
@@ -44,13 +72,35 @@ const electronAPI = {
     createOrder: (order: any) => ipcRenderer.invoke('local:createOrder', order),
     updateOrder: (id: string, updates: any) => ipcRenderer.invoke('local:updateOrder', id, updates),
     deleteOrder: (id: string) => ipcRenderer.invoke('local:deleteOrder', id),
+
+    // Admin logs
+    getAdminLogs: () => ipcRenderer.invoke('local:getAdminLogs'),
+    createAdminLog: (entry: any) => ipcRenderer.invoke('local:createAdminLog', entry),
+
+    // Self-test
+    selfTest: () => ipcRenderer.invoke('local:selfTest'),
+
+    // Roles
+    getRoles: () => ipcRenderer.invoke('local:getRoles'),
+    createRole: (role: any) => ipcRenderer.invoke('local:createRole', role),
+    updateRole: (id: string, updates: any) => ipcRenderer.invoke('local:updateRole', id, updates),
+    deleteRole: (id: string) => ipcRenderer.invoke('local:deleteRole', id),
+
+    // Backup/export
+    exportAll: () => ipcRenderer.invoke('local:exportAll'),
+    importAll: (data: any) => ipcRenderer.invoke('local:importAll', data),
+    
+    // Clear all data (for testing)
+    clearAllData: () => ipcRenderer.invoke('local:clearAllData'),
   },
 
   // Sync functions
   sync: {
+    // Local-only: return no-op results
     start: () => ipcRenderer.invoke('sync:start'),
     getStatus: () => ipcRenderer.invoke('sync:getStatus'),
     forceSync: () => ipcRenderer.invoke('sync:forceSync'),
+    runOnce: () => ipcRenderer.invoke('sync:runOnce'),
   },
 
   // Offline functions
@@ -66,6 +116,35 @@ const electronAPI = {
 
   onSyncError: (callback: (error: any) => void) => {
     ipcRenderer.on('sync-error', callback);
+  },
+  
+  // Auth (proxied to main)
+  auth: {
+    getRoleIdByName: (name: string) => ipcRenderer.invoke('auth:getRoleIdByName', name),
+    findUserByEmail: (email: string) => ipcRenderer.invoke('auth:findUserByEmail', email),
+    updateLastLogin: (id: string) => ipcRenderer.invoke('auth:updateLastLogin', id),
+    checkEmailExists: (email: string) => ipcRenderer.invoke('auth:checkEmailExists', email),
+    checkCodeExists: (code: string) => ipcRenderer.invoke('auth:checkCodeExists', code),
+    createUser: (payload: any) => ipcRenderer.invoke('auth:createUser', payload),
+    updatePassword: (id: string, password_hash: string) => ipcRenderer.invoke('auth:updatePassword', id, password_hash),
+    listUsers: () => ipcRenderer.invoke('auth:listUsers'),
+    updateUser: (id: string, updates: any) => ipcRenderer.invoke('auth:updateUser', id, updates),
+    deleteUser: (id: string) => ipcRenderer.invoke('auth:deleteUser', id),
+  },
+
+  // Images
+  images: {
+    upload: (buffer: number[], contentType: string, fileName: string, entityType?: string, entityId?: string, originalName?: string, width?: number, height?: number) => ipcRenderer.invoke('image:upload', { buffer, contentType, fileName, entityType, entityId, originalName, width, height }),
+    delete: (path: string) => ipcRenderer.invoke('image:delete', path),
+    deleteById: (imageId: string) => ipcRenderer.invoke('image:deleteById', imageId),
+    getPublicUrl: (path: string) => ipcRenderer.invoke('image:getPublicUrl', path),
+    getByEntity: (entityType: string, entityId: string) => ipcRenderer.invoke('image:getByEntity', entityType, entityId),
+  },
+
+  // Persistent JSON cache
+  cache: {
+    readJson: (key: string) => ipcRenderer.invoke('cache:readJson', key),
+    writeJson: (key: string, data: any) => ipcRenderer.invoke('cache:writeJson', { key, data }),
   },
 };
 

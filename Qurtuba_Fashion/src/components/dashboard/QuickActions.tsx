@@ -13,7 +13,7 @@ interface QuickAction {
 
 interface QuickActionsProps {
   onCreateInvoice: () => void;
-  onNavigate: (page: string) => void;
+  onNavigate: (page: string, itemId?: string) => void;
 }
 
 export function QuickActions({ onCreateInvoice, onNavigate }: QuickActionsProps) {

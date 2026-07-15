@@ -4,10 +4,12 @@ import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from './ui/dialog';
 import { Input } from './ui/input';
+import { DateInput } from './ui/date-input';
 import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Customer } from '../types/customer';
+import { formatArabicNumber, formatStringNumber } from '../utils/arabicNumbers';
 import {
   Phone,
   MapPin,
@@ -82,7 +84,7 @@ export function CustomerDetailsPage({ customer, onBack }: CustomerDetailsPagePro
   const measurementItems = [
     { label: 'الطول', value: `${customer.measurements.height} سم` },
     { label: 'الكتف', value: `${customer.measurements.shoulder} سم` },
-    { label: 'الخصر', value: `${customer.measurements.waist} سم` },
+    { label: 'الردن', value: `${customer.measurements.waist} سم` },
     { label: 'الصدر', value: `${customer.measurements.chest} سم` },
   ];
 
@@ -127,7 +129,7 @@ export function CustomerDetailsPage({ customer, onBack }: CustomerDetailsPagePro
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-[#155446]">
             <div className="flex items-center gap-2">
               <Phone className="w-4 h-4" />
-              <span>{customer.phone}</span>
+              <span>{formatStringNumber(customer.phone)}</span>
             </div>
             <div className="flex items-center gap-2">
               <Calendar className="w-4 h-4" />
@@ -139,11 +141,11 @@ export function CustomerDetailsPage({ customer, onBack }: CustomerDetailsPagePro
             </div>
             <div className="flex items-center gap-2">
               <CreditCard className="w-4 h-4" />
-              <span className="arabic-text">إجمالي المصروف: {customer.totalSpent} دينار عراقي</span>
+              <span className="arabic-text">إجمالي المصروف: {formatArabicNumber(customer.totalSpent)} دينار عراقي</span>
             </div>
             <div className="flex items-center gap-2">
               <ClipboardList className="w-4 h-4" />
-              <span className="arabic-text">عدد الطلبات: {customer.orders.length}</span>
+              <span className="arabic-text">عدد الطلبات: {formatArabicNumber(customer.orders.length)}</span>
             </div>
           </div>
           {customer.notes && (
@@ -270,38 +272,52 @@ export function CustomerDetailsPage({ customer, onBack }: CustomerDetailsPagePro
               <CardHeader>
                 <CardTitle className="text-[#13312A] arabic-text text-lg">القياسات</CardTitle>
               </CardHeader>
-              <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div>
-                  <Label className="text-[#13312A] arabic-text">الطول</Label>
-                  <Input
-                    type="number"
-                    defaultValue={customer.measurements.height}
-                    className="bg-white border-[#C69A72] text-right"
-                  />
+              <CardContent className="space-y-4">
+                {/* الصف الأول: الطول، الكتف، الردن - 3 أعمدة */}
+                <div className="grid grid-cols-3 gap-4 min-w-0">
+                  <div className="min-w-[120px]">
+                    <Label className="text-[#13312A] arabic-text">الطول</Label>
+                    <Input
+                      type="number"
+                      defaultValue={customer.measurements.height}
+                      className="bg-white border-[#C69A72] text-right min-w-0"
+                    />
+                  </div>
+                  <div className="min-w-[120px]">
+                    <Label className="text-[#13312A] arabic-text">الكتف</Label>
+                    <Input
+                      type="number"
+                      defaultValue={customer.measurements.shoulder}
+                      className="bg-white border-[#C69A72] text-right min-w-0"
+                    />
+                  </div>
+                  <div className="min-w-[120px]">
+                    <Label className="text-[#13312A] arabic-text">الردن</Label>
+                    <Input
+                      type="number"
+                      defaultValue={customer.measurements.waist}
+                      className="bg-white border-[#C69A72] text-right min-w-0"
+                    />
+                  </div>
                 </div>
-                <div>
-                  <Label className="text-[#13312A] arabic-text">الكتف</Label>
-                  <Input
-                    type="number"
-                    defaultValue={customer.measurements.shoulder}
-                    className="bg-white border-[#C69A72] text-right"
-                  />
-                </div>
-                <div>
-                  <Label className="text-[#13312A] arabic-text">الخصر</Label>
-                  <Input
-                    type="number"
-                    defaultValue={customer.measurements.waist}
-                    className="bg-white border-[#C69A72] text-right"
-                  />
-                </div>
-                <div>
-                  <Label className="text-[#13312A] arabic-text">الصدر</Label>
-                  <Input
-                    type="number"
-                    defaultValue={customer.measurements.chest}
-                    className="bg-white border-[#C69A72] text-right"
-                  />
+                {/* الصف الثاني: الصدر، الياقة - 2 أعمدة */}
+                <div className="grid grid-cols-2 gap-4 min-w-0">
+                  <div className="min-w-[120px]">
+                    <Label className="text-[#13312A] arabic-text">الصدر</Label>
+                    <Input
+                      type="number"
+                      defaultValue={customer.measurements.chest}
+                      className="bg-white border-[#C69A72] text-right min-w-0"
+                    />
+                  </div>
+                  <div className="min-w-[120px]">
+                    <Label className="text-[#13312A] arabic-text">الياقة</Label>
+                    <Input
+                      type="number"
+                      defaultValue={customer.measurements.collar}
+                      className="bg-white border-[#C69A72] text-right min-w-0"
+                    />
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -314,7 +330,7 @@ export function CustomerDetailsPage({ customer, onBack }: CustomerDetailsPagePro
                 <div>
                   <Label className="text-[#13312A] arabic-text">نوع التصميم</Label>
                   <Select>
-                    <SelectTrigger className="bg-white border-[#C69A72] text-right">
+                    <SelectTrigger className="bg-white border-[#C69A72] text-right" aria-label="تصنيف الزبون" title="تصنيف الزبون">
                       <SelectValue placeholder="اختر نوع التصميم" />
                     </SelectTrigger>
                     <SelectContent>
@@ -328,7 +344,7 @@ export function CustomerDetailsPage({ customer, onBack }: CustomerDetailsPagePro
                 <div>
                   <Label className="text-[#13312A] arabic-text">نوع القماش</Label>
                   <Select>
-                    <SelectTrigger className="bg-white border-[#C69A72] text-right">
+                    <SelectTrigger className="bg-white border-[#C69A72] text-right" aria-label="تصنيف الزبون" title="تصنيف الزبون">
                       <SelectValue placeholder="اختر نوع القماش" />
                     </SelectTrigger>
                     <SelectContent>
@@ -341,7 +357,9 @@ export function CustomerDetailsPage({ customer, onBack }: CustomerDetailsPagePro
                 </div>
                 <div>
                   <Label className="text-[#13312A] arabic-text">تاريخ التسليم</Label>
-                  <Input type="date" className="bg-white border-[#C69A72] text-right" />
+                  <DateInput
+                    className="bg-white border-[#C69A72] text-right"
+                  />
                 </div>
                 <div>
                   <Label className="text-[#13312A] arabic-text">التكلفة المتوقعة</Label>

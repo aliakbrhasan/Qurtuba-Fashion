@@ -3,6 +3,7 @@ export interface CustomerMeasurements {
   shoulder: number;
   waist: number;
   chest: number;
+  collar: number;
 }
 
 export interface CustomerOrder {
@@ -23,6 +24,9 @@ export interface Customer {
   totalSpent: number;
   lastOrder: string;
   label: string;
+  // When true, the system assigns label automatically based on activity
+  // When false, the user-selected manual label is preserved
+  label_auto?: boolean;
   measurements: CustomerMeasurements;
   orders: CustomerOrder[];
   notes?: string;

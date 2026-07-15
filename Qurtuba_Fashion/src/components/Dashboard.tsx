@@ -1,20 +1,18 @@
-import { useState } from 'react';
 import { Card, CardContent } from './ui/card';
 import { Button } from './ui/button';
-import { Bell, AlertCircle, RefreshCw } from 'lucide-react';
+import { AlertCircle, RefreshCw } from 'lucide-react';
+import { SyncStatus } from './SyncStatus';
 import { useDashboardStats } from '@/hooks/useDashboardStats';
 import { QuickActions } from './dashboard/QuickActions';
 import { RecentActivities } from './dashboard/RecentActivities';
-import { NotificationCenter } from './dashboard/NotificationCenter';
 
 interface DashboardProps {
-  onNavigate: (page: string) => void;
+  onNavigate: (page: string, itemId?: string) => void;
   onCreateInvoice: () => void;
 }
 
 export function Dashboard({ onNavigate, onCreateInvoice }: DashboardProps) {
   const { stats, error } = useDashboardStats();
-  const [isNotificationOpen, setIsNotificationOpen] = useState(false);
 
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -60,14 +58,10 @@ export function Dashboard({ onNavigate, onCreateInvoice }: DashboardProps) {
             مرحباً بك في نظام إدارة أزياء قرطبة
           </p>
         </div>
-        <div className="flex gap-2">
-          <Button 
-            className="bg-[#155446] hover:bg-[#13312A] text-[#F6E9CA] touch-target"
-            onClick={() => setIsNotificationOpen(true)}
-          >
-            <Bell className="w-4 h-4 ml-2" />
-            <span className="arabic-text">الإشعارات</span>
-          </Button>
+        <div className="flex gap-2 items-center">
+          <div className="relative hidden md:block">
+            <SyncStatus />
+          </div>
         </div>
       </div>
 
@@ -83,13 +77,6 @@ export function Dashboard({ onNavigate, onCreateInvoice }: DashboardProps) {
         recentInvoices={stats.recentInvoices}
         recentCustomers={stats.recentCustomers}
         upcomingDeliveries={stats.upcomingDeliveries}
-      />
-
-      {/* Notification Center */}
-      <NotificationCenter
-        isOpen={isNotificationOpen}
-        onClose={() => setIsNotificationOpen(false)}
-        onNavigate={onNavigate}
       />
     </div>
   );

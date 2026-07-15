@@ -1,4 +1,168 @@
 /*! tailwindcss v4.1.3 | MIT License | https://tailwindcss.com */
+@import './styles/arabic-numbers.css';
+
+/* Custom CSS for measurements grid layout */
+.measurements-grid-3 {
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(120px, 1fr)) !important;
+  gap: 1rem;
+}
+
+.measurements-grid-2 {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(120px, 1fr)) !important;
+  gap: 1rem;
+}
+
+/* RTL-friendly date inputs */
+.arabic-date-input {
+  direction: rtl;
+  text-align: right;
+  unicode-bidi: plaintext;
+  font-family: var(--app-font, 'Cairo', 'Tahoma', 'Arial', sans-serif);
+  letter-spacing: 0.02em;
+  caret-color: currentColor;
+}
+
+.arabic-date-input::-webkit-date-and-time-value {
+  text-align: right;
+}
+
+.arabic-date-input::-webkit-datetime-edit {
+  display: inline-flex;
+  flex-direction: row-reverse;
+  align-items: center;
+  padding: 0;
+}
+
+.arabic-date-input::-webkit-datetime-edit-year-field,
+.arabic-date-input::-webkit-datetime-edit-month-field,
+.arabic-date-input::-webkit-datetime-edit-day-field,
+.arabic-date-input::-webkit-datetime-edit-text {
+  padding: 0 2px;
+}
+
+.arabic-date-input::-webkit-datetime-edit-day-field {
+  order: 1;
+}
+
+.arabic-date-input::-webkit-datetime-edit-month-field {
+  order: 2;
+}
+
+.arabic-date-input::-webkit-datetime-edit-year-field {
+  order: 3;
+}
+
+.arabic-date-input::-webkit-calendar-picker-indicator {
+  margin-left: 0;
+  margin-right: 0;
+}
+
+.date-input-shell {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: var(--radius, 0.5rem);
+  background-color: var(--color-input-background, var(--input-background, #fff));
+  min-height: 2.6rem;
+  padding-inline: 0.75rem;
+  padding-block: 0.35rem;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.date-input-shell:focus-within {
+  border-color: var(--ring);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 35%, transparent);
+}
+
+.date-input-shell[data-filled="true"] .date-input-segment::placeholder {
+  opacity: 0.3;
+}
+
+.date-input-content {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex: 1;
+}
+
+.date-input-shell input.date-input-segment {
+  background: transparent;
+  border: none;
+  width: 3.2ch;
+  font: inherit;
+  color: inherit;
+  text-align: right;
+  direction: rtl;
+  caret-color: currentColor;
+  font-variant-numeric: tabular-nums;
+}
+
+.date-input-segment-year {
+  width: 5.5ch !important;
+}
+
+.date-input-segment:focus {
+  outline: none;
+}
+
+.date-input-segment::placeholder {
+  color: var(--muted-foreground, rgba(19, 49, 42, 0.6));
+  opacity: 0.85;
+  transition: opacity 0.2s ease;
+}
+
+.date-input-shell:focus-within .date-input-segment::placeholder {
+  opacity: 0.4;
+}
+
+.date-input-divider {
+  color: var(--muted-foreground, rgba(19, 49, 42, 0.7));
+  font-weight: 600;
+  user-select: none;
+}
+
+.date-input-calendar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.35rem;
+  height: 2.35rem;
+  border-radius: 9999px;
+  border: 1px solid var(--border);
+  background: color-mix(in oklab, var(--tailor-cream, #F6E9CA) 85%, white);
+  color: var(--tailor-medium-green, #155446);
+  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+.date-input-calendar:hover:not(:disabled) {
+  background: color-mix(in oklab, var(--tailor-medium-green, #155446) 15%, white);
+  border-color: var(--tailor-medium-green, #155446);
+}
+
+.date-input-calendar:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.date-input-calendar-icon {
+  width: 1rem;
+  height: 1rem;
+}
+
+.date-input-native {
+  position: absolute;
+  inset-inline-start: 0;
+  inset-block-start: 0;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
 @layer properties {
   @supports (((-webkit-hyphens: none)) and (not (margin-trim: inline))) or ((-moz-orient: inline) and (not (color: rgb(from red r g b)))) {
     *, :before, :after, ::backdrop {
@@ -130,6 +294,17 @@
   }
 }
 
+/* Private fonts packaged with the app */
+@font-face {
+  font-family: 'Cairo';
+  src: url('../fonts/Cairo-VariableFont_slnt,wght.ttf') format('truetype');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+:root { --app-font: 'Cairo', system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+body { font-family: var(--app-font); }
+
 @layer base {
   *, :after, :before, ::backdrop {
     box-sizing: border-box;
@@ -147,6 +322,8 @@
 
   html, :host {
     -webkit-text-size-adjust: 100%;
+    -moz-text-size-adjust: 100%;
+    -ms-text-size-adjust: 100%;
     text-size-adjust: 100%;
     tab-size: 4;
     line-height: 1.5;
@@ -835,7 +1012,13 @@
   }
 
   .field-sizing-content {
-    field-sizing: content;
+    height: auto;
+  }
+
+  @supports (field-sizing: content) {
+    .field-sizing-content {
+      field-sizing: content;
+    }
   }
 
   .aspect-square {
@@ -2062,7 +2245,13 @@
   }
 
   .text-balance {
-    text-wrap: balance;
+    overflow-wrap: anywhere;
+  }
+
+  @supports (text-wrap: balance) {
+    .text-balance {
+      text-wrap: balance;
+    }
   }
 
   .break-words {

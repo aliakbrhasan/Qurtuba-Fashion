@@ -1,8 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from './ui/button';
-import { Badge } from './ui/badge';
-import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
-import { RefreshCw, Wifi, WifiOff, Clock, CheckCircle, AlertCircle } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
+import { RefreshCw, Wifi, WifiOff, Cloud } from 'lucide-react';
 import { LocalAppService } from '@/services/local-app.service';
 
 interface SyncStatusProps {
@@ -60,157 +59,51 @@ export function SyncStatus({ className = "" }: SyncStatusProps) {
     }
   };
 
-  const handleForceSync = async () => {
-    if (!isElectron) return;
-    
-    setSyncStatus(prev => ({ ...prev, isSyncing: true }));
-    
-    try {
-      const result = await localAppService.forceSync();
-      if (result.success) {
-        await loadSyncStatus();
-      }
-    } catch (error) {
-      console.error('Force sync error:', error);
-    } finally {
-      setSyncStatus(prev => ({ ...prev, isSyncing: false }));
-    }
-  };
+  // Force sync kept in service for future use; not used in compact view
 
-  const formatLastSync = (lastSync: string | null) => {
-    if (!lastSync) return 'لم يتم المزامنة';
-    
-    const date = new Date(lastSync);
-    const now = new Date();
-    const diff = now.getTime() - date.getTime();
-    
-    const minutes = Math.floor(diff / 60000);
-    const hours = Math.floor(diff / 3600000);
-    const days = Math.floor(diff / 86400000);
-    
-    if (minutes < 1) return 'الآن';
-    if (minutes < 60) return `منذ ${minutes} دقيقة`;
-    if (hours < 24) return `منذ ${hours} ساعة`;
-    return `منذ ${days} يوم`;
-  };
+  // formatting helper removed in compact mode
 
-  if (!isElectron) {
-    return (
-      <Card className={`bg-white border-[#C69A72] ${className}`}>
-        <CardHeader>
-          <CardTitle className="text-[#13312A] arabic-text text-sm flex items-center gap-2">
-            <Wifi className="h-4 w-4" />
-            وضع الويب
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-[#155446] arabic-text text-sm">
-            التطبيق يعمل في وضع الويب - البيانات محفوظة في السحابة
-          </p>
-        </CardContent>
-      </Card>
-    );
-  }
+  // Compact icon-only indicator with tooltip
+  const icon = !isElectron
+    ? <Cloud className="h-4 w-4 text-[#13312A]" />
+    : syncStatus.isSyncing
+      ? <RefreshCw className="h-4 w-4 text-blue-600 animate-spin" />
+      : syncStatus.isOnline
+        ? <Wifi className="h-4 w-4 text-green-600" />
+        : <WifiOff className="h-4 w-4 text-red-600" />;
+
+  const tooltip = !isElectron
+    ? 'وضع الويب - البيانات محفوظة في السحابة'
+    : syncStatus.isSyncing
+      ? 'جاري المزامنة'
+      : syncStatus.isOnline
+        ? (syncStatus.pendingChanges > 0 ? `متصل - تغييرات معلقة: ${syncStatus.pendingChanges}` : 'متصل - محدث')
+        : 'غير متصل - سيتم المزامنة عند الاتصال';
 
   return (
-    <Card className={`bg-white border-[#C69A72] ${className}`}>
-      <CardHeader>
-        <CardTitle className="text-[#13312A] arabic-text text-sm flex items-center gap-2">
-          {syncStatus.isOnline ? (
-            <Wifi className="h-4 w-4 text-green-600" />
-          ) : (
-            <WifiOff className="h-4 w-4 text-red-600" />
-          )}
-          حالة المزامنة
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        {/* Online Status */}
-        <div className="flex items-center justify-between">
-          <span className="text-[#155446] arabic-text text-sm">الاتصال:</span>
-          <Badge variant={syncStatus.isOnline ? "default" : "destructive"}>
-            {syncStatus.isOnline ? 'متصل' : 'غير متصل'}
-          </Badge>
-        </div>
-
-        {/* Last Sync */}
-        <div className="flex items-center justify-between">
-          <span className="text-[#155446] arabic-text text-sm">آخر مزامنة:</span>
-          <div className="flex items-center gap-2">
-            <Clock className="h-3 w-3 text-[#155446]" />
-            <span className="text-[#155446] arabic-text text-xs">
-              {formatLastSync(syncStatus.lastSync)}
-            </span>
-          </div>
-        </div>
-
-        {/* Pending Changes */}
-        {syncStatus.pendingChanges > 0 && (
-          <div className="flex items-center justify-between">
-            <span className="text-[#155446] arabic-text text-sm">تغييرات معلقة:</span>
-            <Badge variant="outline" className="text-orange-600 border-orange-300">
-              {syncStatus.pendingChanges}
-            </Badge>
-          </div>
-        )}
-
-        {/* Sync Status */}
-        <div className="flex items-center justify-between">
-          <span className="text-[#155446] arabic-text text-sm">الحالة:</span>
-          <div className="flex items-center gap-2">
-            {syncStatus.isSyncing ? (
-              <>
-                <RefreshCw className="h-3 w-3 text-blue-600 animate-spin" />
-                <span className="text-blue-600 arabic-text text-xs">جاري المزامنة...</span>
-              </>
-            ) : syncStatus.pendingChanges > 0 ? (
-              <>
-                <AlertCircle className="h-3 w-3 text-orange-600" />
-                <span className="text-orange-600 arabic-text text-xs">يوجد تغييرات</span>
-              </>
-            ) : (
-              <>
-                <CheckCircle className="h-3 w-3 text-green-600" />
-                <span className="text-green-600 arabic-text text-xs">محدث</span>
-              </>
-            )}
-          </div>
-        </div>
-
-        {/* Action Buttons */}
-        <div className="flex gap-2 pt-2">
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
           <Button
-            size="sm"
-            onClick={handleSync}
-            disabled={!syncStatus.isOnline || syncStatus.isSyncing}
-            className="flex-1 bg-[#155446] hover:bg-[#13312A] text-[#F6E9CA] text-xs"
+            variant="ghost"
+            size="icon"
+            className={`p-2 ${className}`}
+            onClick={async () => {
+              if (!isElectron) return;
+              if (!syncStatus.isOnline || syncStatus.isSyncing) return;
+              await handleSync();
+            }}
+            disabled={isElectron ? (!syncStatus.isOnline || syncStatus.isSyncing) : false}
+            aria-label={tooltip}
+            title={tooltip}
           >
-            <RefreshCw className={`h-3 w-3 ml-1 ${syncStatus.isSyncing ? 'animate-spin' : ''}`} />
-            مزامنة
+            {icon}
           </Button>
-          
-          {syncStatus.pendingChanges > 0 && (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={handleForceSync}
-              disabled={!syncStatus.isOnline || syncStatus.isSyncing}
-              className="border-[#C69A72] text-[#13312A] hover:bg-[#C69A72] text-xs"
-            >
-              مزامنة قسرية
-            </Button>
-          )}
-        </div>
-
-        {/* Offline Notice */}
-        {!syncStatus.isOnline && (
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-2 mt-2">
-            <p className="text-yellow-800 arabic-text text-xs text-center">
-              التطبيق يعمل في وضع عدم الاتصال - سيتم المزامنة عند الاتصال بالإنترنت
-            </p>
-          </div>
-        )}
-      </CardContent>
-    </Card>
+        </TooltipTrigger>
+        <TooltipContent side="bottom" className="arabic-text text-xs">
+          {tooltip}
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 }

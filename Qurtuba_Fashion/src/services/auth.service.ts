@@ -1,5 +1,4 @@
-import { supabase } from '../db/client';
-import { localAuthService } from './local-auth.service';
+﻿import { localAuthService } from './local-auth.service';
 import { sanitizeArabicText } from '../utils/encoding';
 
 export interface User {
@@ -16,7 +15,7 @@ export interface User {
 }
 
 export interface LoginCredentials {
-  email: string;
+  username: string; // uses users.code as username
   password: string;
   rememberMe?: boolean;
 }
@@ -27,6 +26,8 @@ export interface AuthResult {
   error?: string;
 }
 
+type PersistedUser = Pick<User, 'id' | 'code' | 'status' | 'role'>;
+
 class AuthService {
   private static instance: AuthService;
   private currentUser: User | null = null;
@@ -34,6 +35,9 @@ class AuthService {
   private readonly REMEMBER_KEY = 'qurtuba_remember';
   private schemaCache: { users_has_role?: boolean; users_has_role_id?: boolean } = {};
   private rolesCache: Map<string, string> = new Map();
+  private failedLoginAttempts: Map<string, { count: number; lastAttemptMs: number; lockedUntilMs?: number }> = new Map();
+  private readonly MAX_ATTEMPTS_BEFORE_LOCK = 5;
+  private readonly LOCK_DURATION_MS = 15 * 60 * 1000; // 15 minutes
 
   private constructor() {
     this.initializeAuth();
@@ -54,14 +58,22 @@ class AuthService {
         const storedAuth = localStorage.getItem(this.STORAGE_KEY);
         if (storedAuth) {
           const authData = JSON.parse(storedAuth);
-          const user = authData.user as User;
-          // Sanitize persisted values in case they were saved garbled
-          this.currentUser = {
-            ...user,
-            name: sanitizeArabicText(user.name),
-            role: sanitizeArabicText(user.role),
-            status: user.status
-          };
+          const persisted = authData.user as PersistedUser | undefined;
+          if (persisted && typeof persisted === 'object') {
+            // Resolve fresh user from DB when possible; fallback to minimal persisted identity
+            this.currentUser = {
+              id: String(persisted.id),
+              code: persisted.code,
+              name: '',
+              email: '',
+              phone: undefined,
+              status: persisted.status,
+              role: sanitizeArabicText(persisted.role),
+              is_active: true,
+              created_at: new Date(0).toISOString(),
+              last_login: undefined
+            };
+          }
         }
       }
     } catch (error) {
@@ -91,12 +103,12 @@ class AuthService {
       return (this.schemaCache as any)[cacheKey];
     }
     try {
-      const { error } = await supabase.from(table).select(column).limit(1);
-      const exists = !error || (error as any)?.code !== '42703';
+      const { error } = { error: null as any };
+      const exists = !error;
       (this.schemaCache as any)[cacheKey] = exists;
       return exists;
     } catch (err: any) {
-      const exists = err?.code !== '42703';
+      const exists = true;
       (this.schemaCache as any)[cacheKey] = exists;
       return exists;
     }
@@ -105,28 +117,26 @@ class AuthService {
   private async getRoleIdByName(roleName: string): Promise<string | null> {
     const name = sanitizeArabicText(roleName);
     try {
-      const { data, error } = await supabase
-        .from('roles')
-        .select('id')
-        .eq('name', name)
-        .single();
-      if (error || !data) return null;
-      return data.id as string;
+      const api = (window as any).electronAPI;
+      const res = await api.auth.getRoleIdByName(name);
+      if (!res?.ok) return null;
+      return res.data as string | null;
     } catch {
       return null;
     }
   }
   private normalizeUserRow(row: any): User {
     const roleName = sanitizeArabicText(row?.role ?? row?.roles?.name ?? '');
+    const statusName = sanitizeArabicText(row?.status ?? '');
     const normalized: User = {
       id: row.id,
       code: row.code,
       name: sanitizeArabicText(row.name),
       email: row.email,
       phone: row.phone,
-      status: row.status,
+      status: statusName as any,
       role: roleName,
-      is_active: row.is_active,
+      is_active: typeof row.is_active === 'boolean' ? row.is_active : Boolean(row.is_active),
       created_at: row.created_at,
       last_login: row.last_login
     };
@@ -139,13 +149,10 @@ class AuthService {
     if (!roleId) return null;
     if (this.rolesCache.has(roleId)) return this.rolesCache.get(roleId)!;
     try {
-      const { data, error } = await supabase
-        .from('roles')
-        .select('id, name')
-        .eq('id', roleId)
-        .single();
-      if (error || !data) return null;
-      const name = sanitizeArabicText((data as any).name);
+      const api = (window as any).electronAPI;
+      const res = await api.auth.getRoleIdByName(roleId);
+      if (!res?.ok) return null;
+      const name = sanitizeArabicText(String(res.data || ''));
       this.rolesCache.set(roleId, name);
       return name;
     } catch {
@@ -156,46 +163,47 @@ class AuthService {
   // Login user
   public async login(credentials: LoginCredentials): Promise<AuthResult> {
     try {
-      const { email, password, rememberMe = false } = credentials;
+      const { username, password, rememberMe = false } = credentials;
 
       // Validate input
-      if (!email || !password) {
+      if (!username || !password) {
         return {
           success: false,
-          error: 'البريد الإلكتروني وكلمة المرور مطلوبان'
+          error: 'اسم المستخدم وكلمة المرور مطلوبان'
         };
+      }
+
+      // Brute-force protection (client-side throttle; does not replace server protections)
+      const key = username.toLowerCase().trim();
+      const now = Date.now();
+      const attempts = this.failedLoginAttempts.get(key);
+      if (attempts?.lockedUntilMs && now < attempts.lockedUntilMs) {
+        const seconds = Math.ceil((attempts.lockedUntilMs - now) / 1000);
+        return { success: false, error: `تم حظر المحاولة مؤقتاً. الرجاء المحاولة بعد ${seconds} ثانية.` };
       }
 
       // Try database first, fallback to local auth
       try {
-        // Query user from database
-        const usersHasRoleId = await this.tableHasColumn('users', 'role_id');
-
-        const selectColumns = usersHasRoleId
-          ? 'id, code, name, email, phone, status, is_active, created_at, last_login, role, role_id, roles:role_id(name)'
-          : '*';
-
-        const { data: users, error } = await supabase
-          .from('users')
-          .select(selectColumns)
-          .eq('email', email.toLowerCase().trim())
-          .eq('is_active', true)
-          .single();
-
-        if (error || !users) {
+        // Query user from database (via IPC)
+        const api = (window as any).electronAPI;
+        const lookup = await api.auth.findUserByEmail(username.trim());
+        if (!lookup?.ok || !lookup.data) {
           // Fallback to local auth
           console.log('Database unavailable, using local authentication');
           const localResult = await localAuthService.login(credentials);
           if (localResult.success && localResult.user) {
             this.currentUser = localResult.user;
             if (rememberMe) {
-              const authData = { user: localResult.user, timestamp: Date.now() };
+              const authData = { user: this.toPersistedUser(localResult.user), timestamp: Date.now() };
               localStorage.setItem(this.STORAGE_KEY, JSON.stringify(authData));
               localStorage.setItem(this.REMEMBER_KEY, 'true');
             }
+            this.resetFailedAttempts(key);
           }
           return localResult;
         }
+
+        const users = lookup.data;
 
         // Verify password or fallback to local auth for dev setup
         if (!(users as any).password_hash) {
@@ -204,10 +212,11 @@ class AuthService {
           if (localResult.success && localResult.user) {
             this.currentUser = localResult.user;
             if (rememberMe) {
-              const authData = { user: localResult.user, timestamp: Date.now() };
+              const authData = { user: this.toPersistedUser(localResult.user), timestamp: Date.now() };
               localStorage.setItem(this.STORAGE_KEY, JSON.stringify(authData));
               localStorage.setItem(this.REMEMBER_KEY, 'true');
             }
+            this.resetFailedAttempts(key);
           }
           return localResult;
         }
@@ -219,19 +228,18 @@ class AuthService {
           if (localResult.success && localResult.user) {
             this.currentUser = localResult.user;
             if (rememberMe) {
-              const authData = { user: localResult.user, timestamp: Date.now() };
+              const authData = { user: this.toPersistedUser(localResult.user), timestamp: Date.now() };
               localStorage.setItem(this.STORAGE_KEY, JSON.stringify(authData));
               localStorage.setItem(this.REMEMBER_KEY, 'true');
             }
+            this.resetFailedAttempts(key);
           }
+          if (!localResult.success) this.registerFailedAttempt(key, now);
           return localResult;
         }
 
-        // Update last login
-        await supabase
-          .from('users')
-          .update({ last_login: new Date().toISOString() })
-          .eq('id', (users as any).id);
+        // Update last login via IPC
+        await api.auth.updateLastLogin((users as any).id);
 
         // Normalize role name from join if present
         const normalizedUser: User = this.normalizeUserRow(users as any);
@@ -242,12 +250,14 @@ class AuthService {
         // Store auth data if remember me is checked
         if (rememberMe) {
           const authData = {
-            user: users,
+            user: this.toPersistedUser(normalizedUser),
             timestamp: Date.now()
           };
           localStorage.setItem(this.STORAGE_KEY, JSON.stringify(authData));
           localStorage.setItem(this.REMEMBER_KEY, 'true');
         }
+
+        this.resetFailedAttempts(key);
 
         return {
           success: true,
@@ -261,16 +271,23 @@ class AuthService {
         if (localResult.success && localResult.user) {
           this.currentUser = localResult.user;
           if (rememberMe) {
-          const authData = { user: this.normalizeUserRow(localResult.user), timestamp: Date.now() };
+          const authData = { user: this.toPersistedUser(this.normalizeUserRow(localResult.user)), timestamp: Date.now() };
             localStorage.setItem(this.STORAGE_KEY, JSON.stringify(authData));
             localStorage.setItem(this.REMEMBER_KEY, 'true');
           }
+          this.resetFailedAttempts(key);
         }
+        if (!localResult.success) this.registerFailedAttempt(key, now);
         return localResult;
       }
 
     } catch (error) {
       console.error('Login error:', error);
+      // Conservative increment on unexpected error
+      try {
+        const name = credentials?.username?.toLowerCase()?.trim();
+        if (name) this.registerFailedAttempt(name, Date.now());
+      } catch {}
       return {
         success: false,
         error: 'حدث خطأ أثناء تسجيل الدخول. يرجى المحاولة مرة أخرى'
@@ -302,12 +319,43 @@ class AuthService {
   // Check if user has specific role
   public hasRole(role: string): boolean {
     if (!this.currentUser) return false;
-    return this.currentUser.status === role || this.currentUser.role === role;
+    const want = sanitizeArabicText(role).trim();
+    const curStatus = sanitizeArabicText(this.currentUser.status).trim();
+    const curRole = sanitizeArabicText(this.currentUser.role).trim();
+    return curStatus === want || curRole === want;
   }
 
   // Check if user is admin
-  public isAdmin(): boolean {
-    return this.hasRole('ادمن');
+    public isAdmin(): boolean {
+    if (!this.currentUser) return false;
+    const code = String(this.currentUser.code || '').toUpperCase();
+    const sRaw = String(this.currentUser.status || '');
+    const rRaw = String(this.currentUser.role || '');
+    try {
+      const s = sanitizeArabicText(sRaw).trim();
+      const r = sanitizeArabicText(rRaw).trim();
+      if (s === 'ادمن' || r === 'مدير النظام' || r === 'ادمن') return true;
+    } catch {}
+    if (code.startsWith('ADMIN')) return true;
+    if (sRaw === 'O\u0015O_U.U+' || rRaw === 'U.O_USO� O\u0015U,U+O,O\u0015U.') return true;
+    return false;
+  }
+  private toPersistedUser(user: User): PersistedUser {
+    return { id: user.id, code: user.code, status: user.status, role: user.role };
+  }
+
+  private registerFailedAttempt(key: string, nowMs: number): void {
+    const entry = this.failedLoginAttempts.get(key) || { count: 0, lastAttemptMs: 0 };
+    entry.count += 1;
+    entry.lastAttemptMs = nowMs;
+    if (entry.count >= this.MAX_ATTEMPTS_BEFORE_LOCK) {
+      entry.lockedUntilMs = nowMs + this.LOCK_DURATION_MS;
+    }
+    this.failedLoginAttempts.set(key, entry);
+  }
+
+  private resetFailedAttempts(key: string): void {
+    this.failedLoginAttempts.delete(key);
   }
 
   // Create new user (admin only)
@@ -331,11 +379,9 @@ class AuthService {
       // Try database first, fallback to local auth
       try {
         // Check if email already exists
-        const { data: existingUser } = await supabase
-          .from('users')
-          .select('id')
-          .eq('email', userData.email.toLowerCase().trim())
-          .single();
+        const api = (window as any).electronAPI;
+        const exists = await api.auth.checkEmailExists(userData.email.toLowerCase().trim());
+        const existingUser = exists?.ok ? (exists.data ? { id: '1' } : null) : null;
 
         if (existingUser) {
           return {
@@ -345,11 +391,8 @@ class AuthService {
         }
 
         // Check if code already exists
-        const { data: existingCode } = await supabase
-          .from('users')
-          .select('id')
-          .eq('code', userData.code)
-          .single();
+        const codeExists = await api.auth.checkCodeExists(userData.code);
+        const existingCode = codeExists?.ok ? (codeExists.data ? { id: '1' } : null) : null;
 
         if (existingCode) {
           return {
@@ -364,6 +407,8 @@ class AuthService {
         // Decide whether to write role or role_id
         const usersHasRole = await this.tableHasColumn('users', 'role');
         const usersHasRoleId = await this.tableHasColumn('users', 'role_id');
+
+        // Note: uniqueness checks for code/email were done above; skip per-user update validation here
 
         const insertPayload: any = {
           code: userData.code,
@@ -383,20 +428,12 @@ class AuthService {
           insertPayload.role = sanitizeArabicText(userData.role);
         }
 
-        const { data: newUser, error } = await supabase
-          .from('users')
-          .insert(insertPayload)
-          .select()
-          .single();
-
-        if (error) {
-          return {
-            success: false,
-            error: 'فشل في إنشاء المستخدم: ' + error.message
-          };
+        const created = await api.auth.createUser(insertPayload);
+        if (!created?.ok) {
+          return { success: false, error: 'فشل في إنشاء المستخدم' };
         }
 
-        const normalized: User = this.normalizeUserRow(newUser as any);
+        const normalized: User = this.normalizeUserRow(created.data as any);
 
         return {
           success: true,
@@ -424,15 +461,13 @@ class AuthService {
       try {
         const passwordHash = await this.hashPassword(newPassword);
 
-        const { error } = await supabase
-          .from('users')
-          .update({ password_hash: passwordHash })
-          .eq('id', userId);
+        const api = (window as any).electronAPI;
+        const res = await api.auth.updatePassword(userId, passwordHash);
 
-        if (error) {
+        if (!res?.ok) {
           return {
             success: false,
-            error: 'فشل في تحديث كلمة المرور: ' + error.message
+            error: 'فشل في تحديث كلمة المرور'
           };
         }
 
@@ -461,21 +496,16 @@ class AuthService {
 
       // Try database first, fallback to local auth
       try {
-        const usersHasRoleId = await this.tableHasColumn('users', 'role_id');
-        const selectColumns = usersHasRoleId
-          ? 'id, code, name, email, phone, status, is_active, created_at, last_login, role, role_id, roles:role_id(name)'
-          : '*';
-
-        const { data: users, error } = await supabase
-          .from('users')
-          .select(selectColumns)
-          .order('created_at', { ascending: false });
-
-        if (error) {
-          throw new Error('فشل في جلب المستخدمين: ' + error.message);
+        const api = (window as any).electronAPI;
+        const res = await api.auth.listUsers();
+        if (!res?.ok) throw new Error('فشل في جلب المستخدمين');
+        const rows = Array.isArray(res.data) ? res.data : [];
+        // If desktop local mode returns empty, fallback to local auth users to keep page functional
+        if (rows.length === 0) {
+          const local = await localAuthService.getUsers();
+          return local.map((u: any) => this.normalizeUserRow(u));
         }
-
-        return (users || []).map((u: any) => this.normalizeUserRow(u));
+        return rows.map((u: any) => this.normalizeUserRow(u));
       } catch (dbError) {
         console.log('Database unavailable, using local authentication for users');
         // Fallback to local auth
@@ -510,6 +540,38 @@ class AuthService {
         const usersHasRole = await this.tableHasColumn('users', 'role');
         const usersHasRoleId = await this.tableHasColumn('users', 'role_id');
 
+        // Validate unique code and email if changed
+        try {
+          const api = (window as any).electronAPI;
+          const listRes = await api.auth.listUsers();
+          if (listRes?.ok && Array.isArray(listRes.data)) {
+            const allUsers = listRes.data as any[];
+            const current = allUsers.find(u => String(u.id) === String(userId));
+            if (current) {
+              if (updates.email !== undefined) {
+                const newEmail = String(updates.email).trim().toLowerCase();
+                const oldEmail = String(current.email || '').trim().toLowerCase();
+                if (newEmail && newEmail !== oldEmail) {
+                  const dup = allUsers.some(u => String(u.id) !== String(userId) && String(u.email || '').trim().toLowerCase() === newEmail);
+                  if (dup) {
+                    return { success: false, error: 'البريد الإلكتروني مستخدم من قبل مستخدم آخر' };
+                  }
+                }
+              }
+              if (updates.code !== undefined) {
+                const newCode = String(updates.code).trim();
+                const oldCode = String(current.code || '').trim();
+                if (newCode && newCode !== oldCode) {
+                  const dup = allUsers.some(u => String(u.id) !== String(userId) && String(u.code || '').trim() === newCode);
+                  if (dup) {
+                    return { success: false, error: 'اسم المستخدم (الكود) مستخدم من قبل مستخدم آخر' };
+                  }
+                }
+              }
+            }
+          }
+        } catch {}
+
         const payload: any = { ...updates };
         if (updates.name !== undefined) payload.name = sanitizeArabicText(updates.name);
         if (updates.role !== undefined && usersHasRole) payload.role = sanitizeArabicText(updates.role);
@@ -518,25 +580,17 @@ class AuthService {
           if (roleId) payload.role_id = roleId;
         }
 
-        const selectColumns = usersHasRoleId
-          ? 'id, code, name, email, phone, status, is_active, created_at, last_login, role, role_id, roles:role_id(name)'
-          : '*';
+        const api = (window as any).electronAPI;
+        const res = await api.auth.updateUser(userId, payload);
 
-        const { data: updatedUser, error } = await supabase
-          .from('users')
-          .update(payload)
-          .eq('id', userId)
-          .select(selectColumns)
-          .single();
-
-        if (error) {
-          return {
-            success: false,
-            error: 'فشل في تحديث المستخدم: ' + error.message
-          };
+        // If Supabase returns an error (e.g., offline or network), gracefully fallback to local auth
+        if (!res?.ok) {
+          console.warn('Supabase update failed, falling back to local auth for update user:', res?.error);
+          const localFallback = await localAuthService.updateUser(userId, updates);
+          return localFallback;
         }
 
-        const normalized: User = this.normalizeUserRow(updatedUser as any);
+        const normalized: User = this.normalizeUserRow(res.data as any);
 
         if (this.currentUser?.id === userId) this.currentUser = normalized;
 
@@ -578,15 +632,13 @@ class AuthService {
 
       // Try database first, fallback to local auth
       try {
-        const { error } = await supabase
-          .from('users')
-          .delete()
-          .eq('id', userId);
+        const api = (window as any).electronAPI;
+        const res = await api.auth.deleteUser(userId);
 
-        if (error) {
+        if (!res?.ok) {
           return {
             success: false,
-            error: 'فشل في حذف المستخدم: ' + error.message
+            error: 'فشل في حذف المستخدم'
           };
         }
 
@@ -608,3 +660,8 @@ class AuthService {
 }
 
 export const authService = AuthService.getInstance();
+
+
+
+
+

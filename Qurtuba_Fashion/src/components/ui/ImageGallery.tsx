@@ -168,7 +168,7 @@ export function ImageGallery({
                     {image.mime_type.split('/')[1].toUpperCase()}
                   </Badge>
                   <span className="text-xs text-gray-400">
-                    {new Date(image.created_at).toLocaleDateString()}
+                    {new Date(image.created_at).toLocaleDateString('en-US')}
                   </span>
                 </div>
               </div>

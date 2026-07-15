@@ -1,5 +1,7 @@
 import { invoicesAdapter } from '@/adapters/invoices.adapter';
 import type { Invoice, NewInvoice } from '@/db/database.service';
+import { notifications } from '@/services/notifications.service';
+import { toIQD } from '@/utils/money';
 
 export interface InvoiceFormData {
   customerName: string;
@@ -9,6 +11,7 @@ export interface InvoiceFormData {
   paidAmount: number;
   status: string;
   deliveryDate: string;
+  paymentDate?: string;
   notes: string;
   items: {
     itemName: string;
@@ -18,10 +21,11 @@ export interface InvoiceFormData {
     totalPrice: number;
   }[];
   measurements?: {
-    length: number;
-    shoulder: number;
-    waist: number;
-    chest: number;
+    length?: string | number;
+    shoulder?: string | number;
+    waist?: string | number;
+    chest?: string | number;
+    collar?: string | number;
   };
   designDetails?: {
     fabricType: string[];
@@ -53,8 +57,8 @@ export class InvoiceService {
         customer_name: formData.customerName,
         customer_phone: formData.customerPhone,
         customer_address: formData.customerAddress,
-        total: formData.total,
-        paid_amount: formData.paidAmount,
+        total: toIQD(formData.total),
+        paid_amount: toIQD(formData.paidAmount),
         status: formData.status,
         due_date: formData.deliveryDate,
         notes: formData.notes,
@@ -62,13 +66,63 @@ export class InvoiceService {
           item_name: item.itemName,
           description: item.description,
           quantity: item.quantity,
-          unit_price: item.unitPrice,
-          total_price: item.totalPrice
+          unit_price: toIQD(item.unitPrice),
+          total_price: toIQD(item.totalPrice)
         })),
-        fabric_image_url: formData.fabricImageUrl
+        fabric_image_url: formData.fabricImageUrl,
+        // Persist payment date when provided
+        ...(formData.paymentDate ? { paid_at: formData.paymentDate } as any : {}),
+        // Snapshot customer measurements to avoid changing past invoices when customer profile changes later
+        ...(formData.measurements ? { customer_measurements: formData.measurements } as any : {}),
+        // Persist design details as comma-separated strings for portability across storages
+        fabric_type: formData.designDetails?.fabricType?.length ? formData.designDetails!.fabricType.join(',') : undefined,
+        fabric_source: formData.designDetails?.fabricSource?.length ? formData.designDetails!.fabricSource.join(',') : undefined,
+        collar_type: formData.designDetails?.collarType?.length ? formData.designDetails!.collarType.join(',') : undefined,
+        chest_style: formData.designDetails?.chestStyle?.length ? formData.designDetails!.chestStyle.join(',') : undefined,
+        sleeve_end: formData.designDetails?.sleeveEnd?.length ? formData.designDetails!.sleeveEnd.join(',') : undefined,
+        bunija_type: formData.designDetails?.bunijaType || undefined
       };
 
-      return await invoicesAdapter.createInvoice(newInvoice);
+      const created = await invoicesAdapter.createInvoice(newInvoice);
+      // Ensure customer table reflects this newly created invoice immediately
+      try {
+        const { databaseService } = await import('@/db/database.service');
+        await databaseService.reconcileCustomersFromInvoices([created as any]);
+        // Update customer's saved measurements from this invoice's form if provided
+        try {
+          const customers = await databaseService.getCustomers();
+          const target = customers.find(c => String((c as any).id) === String((created as any).customer_id))
+            || customers.find(c => (c.name || '').trim() === (newInvoice.customer_name || '').trim() && (c.phone || '').trim() === (newInvoice.customer_phone || '').trim());
+          const m = (formData as any).measurements || {};
+          const hasMeasurements = typeof m === 'object' && (m.length || m.shoulder || m.waist || m.chest);
+          if (target && hasMeasurements) {
+            await databaseService.updateCustomer(String((target as any).id), {
+              measurements: m
+            } as any, { silent: true });
+          }
+        } catch {}
+      } catch {}
+      try {
+        notifications.emit({
+          type: 'success',
+          title: 'فاتورة جديدة',
+          message: `تم إنشاء فاتورة للعميل ${formData.customerName}`,
+          target: { page: 'invoices', id: (created as any).id },
+        });
+        // Update caches consistently without duplicating rows
+        try {
+          const { queryClient } = await import('@/app/queryClient');
+          queryClient.setQueryData(['invoices'], (oldData: Invoice[] = []) => {
+            const arr = Array.isArray(oldData) ? oldData : [];
+            const exists = arr.some((inv) => String(inv.id) === String((created as any).id));
+            return exists ? arr : [created, ...arr];
+          });
+          queryClient.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === 'dashboard-stats' });
+          // Refresh customers list so new customer appears immediately
+          queryClient.invalidateQueries({ queryKey: ['customers'] });
+        } catch {}
+      } catch {}
+      return created;
     } catch (error) {
       console.error('Error creating invoice:', error);
       throw error;
@@ -79,7 +133,51 @@ export class InvoiceService {
   static async updateInvoice(id: string, updates: Partial<Invoice>): Promise<Invoice> {
     try {
       const { databaseService } = await import('@/db/database.service');
-      return await databaseService.updateInvoice(id, updates);
+
+      // Load current invoice to avoid no-op updates and noisy notifications
+      const current = await databaseService.getInvoiceById(id);
+      if (!current) {
+        throw new Error(`Invoice with id ${id} not found`);
+      }
+
+      // Determine if any provided field actually changes the current value
+      const keys = Object.keys(updates || {});
+      const isChanged = keys.some((k) => {
+        const nextVal: any = (updates as any)[k];
+        const prevVal: any = (current as any)[k];
+        if (typeof nextVal === 'undefined') return false;
+        const bothObjects = typeof nextVal === 'object' && nextVal !== null && typeof prevVal === 'object' && prevVal !== null;
+        if (bothObjects) return JSON.stringify(prevVal) !== JSON.stringify(nextVal);
+        // Coerce numeric strings and numbers for fair comparison
+        const numPrev = typeof prevVal === 'string' && !isNaN(Number(prevVal)) ? Number(prevVal) : prevVal;
+        const numNext = typeof nextVal === 'string' && !isNaN(Number(nextVal)) ? Number(nextVal) : nextVal;
+        return numPrev !== numNext;
+      });
+
+      if (!isChanged) {
+        // No-op: return current invoice without emitting notifications
+        return current;
+      }
+
+      const updated = await databaseService.updateInvoice(id, updates);
+      // Ensure all dependent views refresh immediately (lists, customers aggregates, and dashboard stats)
+      try {
+        const { queryClient } = await import('@/app/queryClient');
+        queryClient.invalidateQueries({ queryKey: ['invoices'] });
+        queryClient.invalidateQueries({ queryKey: ['customers'] });
+        queryClient.invalidateQueries({
+          predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === 'dashboard-stats',
+        });
+      } catch {}
+      try {
+        notifications.emit({
+          type: 'info',
+          title: 'تعديل فاتورة',
+          message: `تم تعديل الفاتورة رقم ${id}`,
+          target: { page: 'invoices', id },
+        });
+      } catch {}
+      return updated;
     } catch (error) {
       console.error('Error updating invoice:', error);
       throw error;
@@ -89,7 +187,70 @@ export class InvoiceService {
   // Delete invoice
   static async deleteInvoice(id: string): Promise<void> {
     try {
+      console.log('InvoiceService.deleteInvoice called with ID:', id);
       await invoicesAdapter.deleteInvoice(id);
+      console.log('Invoice deleted successfully via adapter');
+      
+      // Invalidate and refetch caches so all pages update immediately
+      try {
+        const { queryClient } = await import('@/app/queryClient');
+        
+        // Remove invoice from cache optimistically for instant UI update
+        queryClient.setQueryData(['invoices'], (oldData: any[] = []) => {
+          if (Array.isArray(oldData)) {
+            const filtered = oldData.filter((inv: any) => {
+              const invId = String((inv as any).id || '');
+              const invIdNum = Number((inv as any).id || 0);
+              const idString = String(id || '');
+              const idNum = Number(id || 0);
+              // Match by both string and number comparison
+              const matches = (
+                invId === idString ||
+                (idNum && invIdNum === idNum)
+              );
+              // Also filter out deleted invoices (defensive)
+              const deleted = (inv as any).deleted;
+              const isDeleted = deleted === 1 || deleted === '1' || deleted === true;
+              return !matches && !isDeleted;
+            });
+            console.log(`Optimistically removed invoice from cache: ${oldData.length} -> ${filtered.length}`);
+            return filtered;
+          }
+          return oldData;
+        });
+        
+        // Invalidate queries to mark them as stale - this will trigger refetch on next access
+        // Don't refetch immediately to avoid race condition with database commit
+        queryClient.invalidateQueries({ queryKey: ['invoices'], exact: true });
+        queryClient.invalidateQueries({ queryKey: ['customers'], exact: true });
+        queryClient.invalidateQueries({ queryKey: ['dashboard-stats'], exact: true });
+        
+        // DON'T refetch immediately - let queries refetch naturally when needed
+        // This prevents race condition where refetch happens before deletion is committed
+        // The optimistic update already removed the invoice from cache, so UI is updated instantly
+        
+        try {
+          const { databaseService } = await import('@/db/database.service');
+          const refreshed = await databaseService.getInvoices();
+          queryClient.setQueryData(['invoices'], Array.isArray(refreshed) ? refreshed : []);
+        } catch (refreshError) {
+          console.warn('Failed to refresh invoices after deletion (non-fatal):', refreshError);
+        }
+        
+        console.log('Invoices queries invalidated (will refetch when needed)');
+      } catch (cacheError) {
+        console.warn('Cache invalidation error (non-fatal):', cacheError);
+      }
+      
+      // Emit app notification to allow pages without react-query to react (e.g., customer details)
+      try {
+        notifications.emit({
+          type: 'success',
+          title: 'تم حذف الفاتورة',
+          message: `تم حذف الفاتورة بنجاح (ID: ${id})`,
+          target: { page: 'invoices', id },
+        });
+      } catch {}
     } catch (error) {
       console.error('Error deleting invoice:', error);
       throw error;
@@ -116,13 +277,16 @@ export class InvoiceService {
       }
       
       // Update only the necessary fields
-      const updates = {
+      const nowIso = new Date().toISOString();
+      const updates: Partial<Invoice> = {
         status: 'مدفوع',
-        paid_amount: invoice.total
-      };
+        paid_amount: invoice.total,
+        paid_at: nowIso,
+      } as any;
       
       console.log('Updating invoice with:', updates);
-      const result = await this.updateInvoice(id, updates);
+      // Call the static method explicitly to avoid losing `this` when passed by reference
+      const result = await InvoiceService.updateInvoice(id, updates);
       console.log('Update result:', result);
       
       return result;
@@ -133,9 +297,53 @@ export class InvoiceService {
     }
   }
 
+  // Mark invoice as delivered today by setting due_date to today
+  static async markAsDelivered(id: string): Promise<Invoice> {
+    try {
+      const { databaseService } = await import('@/db/database.service');
+      const invoice = await databaseService.getInvoiceById(id);
+      if (!invoice) {
+        throw new Error(`Invoice with id ${id} not found`);
+      }
+
+      // Use date-only format (YYYY-MM-DD) to avoid timezone shifts and ensure UI comparisons by day work correctly
+      const today = new Date();
+      const yyyy = today.getFullYear();
+      const mm = String(today.getMonth() + 1).padStart(2, '0');
+      const dd = String(today.getDate()).padStart(2, '0');
+      const todayYmd = `${yyyy}-${mm}-${dd}`;
+
+      const updated = await InvoiceService.updateInvoice(id, { due_date: todayYmd } as Partial<Invoice>);
+
+      try {
+        // Invalidate caches so UI reflects change immediately
+        const { queryClient } = await import('@/app/queryClient');
+        queryClient.invalidateQueries({ queryKey: ['invoices'] });
+        queryClient.invalidateQueries({
+          predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === 'dashboard-stats',
+        });
+      } catch {}
+
+      try {
+        notifications.emit({
+          type: 'success',
+          title: 'تم التسليم',
+          message: `تم تحديث تاريخ التسليم للفاتورة ${invoice.invoice_number} إلى اليوم`,
+          target: { page: 'invoices', id },
+        });
+      } catch {}
+
+      return updated;
+    } catch (error) {
+      console.error('Error marking invoice as delivered:', error);
+      throw error;
+    }
+  }
+
   // Calculate total from items
   static calculateTotal(items: InvoiceFormData['items']): number {
-    return items.reduce((total, item) => total + item.totalPrice, 0);
+    const sum = items.reduce((total, item) => total + toIQD(item.totalPrice), 0);
+    return toIQD(sum);
   }
 
   // Validate invoice form data
@@ -184,7 +392,7 @@ export class InvoiceService {
 
   // Format currency
   static formatCurrency(amount: number): string {
-    return new Intl.NumberFormat('ar-IQ', {
+    return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: 'IQD',
       minimumFractionDigits: 0,
@@ -194,12 +402,11 @@ export class InvoiceService {
 
   // Format date
   static formatDate(date: string): string {
-    return new Date(date).toLocaleDateString('ar-IQ', {
+    return new Date(date).toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'long',
       day: 'numeric',
     });
   }
 }
-
 

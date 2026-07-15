@@ -70,6 +70,27 @@ This guide will help you set up the complete database integration for your Qurtu
 - **Offline Support**: Works without internet using local data
 - **Error Handling**: Graceful fallback when Supabase is unavailable
 
+### Local Database (Electron)
+
+- The desktop app uses a local SQLite database (better-sqlite3) stored under the OS user data directory.
+- Data includes customers, invoices (with `fabric_image_url` stored as TEXT), orders, roles, and an outbox for sync.
+
+#### Local DB Self-Test
+
+Run a built-in self-test to verify local DB read/write and image URL persistence:
+
+1. Launch the Electron app:
+   - Windows: run `run-desktop-app.bat`
+   - Or: `npm run electron:dev`
+2. From the app menu or tray, click "اختبار القاعدة المحلية".
+3. A dialog will show a report. Success confirms that:
+   - A test customer, invoice (with `fabric_image_url`), and order were created
+   - Records were read back correctly
+   - Customer update persisted
+   - Outbox entries were recorded for sync
+
+Notes: Self-test records are labeled "SelfTest" and filtered from normal UI lists by name.
+
 ## 🔧 Application Features
 
 ### Fully Functional Forms

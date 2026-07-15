@@ -12,34 +12,39 @@ if (fs.existsSync(envPath)) {
   fs.copyFileSync(envPath, path.join(__dirname, '.env.backup'));
 }
 
-// Create .env file with Supabase configuration
+// Create .env file with Supabase configuration template
 const envContent = `# Supabase Configuration for Qurtuba Fashion
-# These are the default values for the project
+# Please replace these with your actual Supabase credentials
 
-VITE_SUPABASE_URL=https://dbjaogpesmyrqjwtzzwr.supabase.co
-VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRiamFvZ3Blc215cnFqd3R6endyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg0Nzk1MzksImV4cCI6MjA3NDA1NTUzOX0.mioc1bAd_RYxcKS546MuBB3-DpLdyxxJiumJW4zv6Rw
+VITE_SUPABASE_URL=your-supabase-project-url-here
+VITE_SUPABASE_ANON_KEY=your-supabase-anon-key-here
 
-# Note: You may need to update the VITE_SUPABASE_ANON_KEY with your actual Supabase anon key
-# Get it from: https://supabase.com/dashboard/project/dbjaogpesmyrqjwtzzwr/settings/api
+# Instructions:
+# 1. Go to https://supabase.com/dashboard
+# 2. Select your project (or create a new one)
+# 3. Go to Settings → API
+# 4. Copy the Project URL and replace VITE_SUPABASE_URL above
+# 5. Copy the anon public key and replace VITE_SUPABASE_ANON_KEY above
 `;
 
 try {
   fs.writeFileSync(envPath, envContent);
   console.log('✅ .env file created successfully!');
-  console.log('📝 Environment variables configured:');
-  console.log('   - VITE_SUPABASE_URL: https://dbjaogpesmyrqjwtzzwr.supabase.co');
-  console.log('   - VITE_SUPABASE_ANON_KEY: [configured]');
-  console.log('\n🚀 You can now run: npm run dev');
+  console.log('📝 Please update the .env file with your Supabase credentials:');
+  console.log('   - VITE_SUPABASE_URL: Your Supabase project URL');
+  console.log('   - VITE_SUPABASE_ANON_KEY: Your Supabase anon key');
   console.log('\n📋 Next steps:');
-  console.log('1. Make sure your Supabase database tables are created');
-  console.log('2. Run the database schema from complete-database-schema.sql');
-  console.log('3. Start the development server with: npm run dev');
+  console.log('1. Open .env file and add your Supabase credentials');
+  console.log('2. Make sure your Supabase database tables are created');
+  console.log('3. Run the database schema from complete-database-schema.sql');
+  console.log('4. Start the development server with: npm run dev');
 } catch (error) {
   console.error('❌ Error creating .env file:', error.message);
   console.log('\n🔧 Manual setup:');
   console.log('Create a .env file in the project root with:');
-  console.log('VITE_SUPABASE_URL=https://dbjaogpesmyrqjwtzzwr.supabase.co');
-  console.log('VITE_SUPABASE_ANON_KEY=your-actual-anon-key-here');
+  console.log('VITE_SUPABASE_URL=your-supabase-project-url');
+  console.log('VITE_SUPABASE_ANON_KEY=your-supabase-anon-key');
+  console.log('Get your credentials from: https://supabase.com/dashboard → Your Project → Settings → API');
 }
 
 

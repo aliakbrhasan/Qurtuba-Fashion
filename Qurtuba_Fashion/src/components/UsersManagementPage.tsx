@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Edit, Trash2, UserPlus, Shield, Users, Grid3X3, List, Key, Eye, EyeOff, AlertCircle, CheckCircle } from 'lucide-react';
+﻿import { useState, useEffect } from 'react';
+import { Edit, Trash2, UserPlus, Shield, Users, Grid3X3, List, Key, Eye, EyeOff, AlertCircle, CheckCircle, Download, Upload } from 'lucide-react';
 import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Input } from './ui/input';
@@ -10,11 +10,12 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { authService, User as AuthUser } from '../services/auth.service';
 import { rolesService, Role } from '../services/roles.service';
 import { toast } from 'sonner';
+import { ImportExportDialog } from './ImportExportDialog';
 
 
 
 interface UsersManagementPageProps {
-  onNavigate?: (page: string) => void;
+  onNavigate?: (page: string, itemId?: string) => void;
 }
 
 export function UsersManagementPage({ onNavigate }: UsersManagementPageProps) {
@@ -34,7 +35,7 @@ export function UsersManagementPage({ onNavigate }: UsersManagementPageProps) {
     status: 'موظف' as 'ادمن' | 'موظف' | 'محاسب',
     role: '',
     is_active: true
-  });
+  } as any);
   const [newPassword, setNewPassword] = useState({
     currentPassword: '',
     newPassword: '',
@@ -48,6 +49,7 @@ export function UsersManagementPage({ onNavigate }: UsersManagementPageProps) {
   const [isSavingUser, setIsSavingUser] = useState(false);
   const [isChangingPasswordSubmitting, setIsChangingPasswordSubmitting] = useState(false);
   const [roles, setRoles] = useState<Role[]>([]);
+  const [isImportExportOpen, setIsImportExportOpen] = useState(false);
 
   // Load users from auth service
   useEffect(() => {
@@ -58,7 +60,7 @@ export function UsersManagementPage({ onNavigate }: UsersManagementPageProps) {
         const admin = authService.isAdmin();
         setIsAuthorized(admin);
         if (!admin) {
-          setError('ليس لديك صلاحية لعرض المستخدمين');
+          setError('Ù„ÙŠØ³ Ù„Ø¯ÙŠÙƒ ØµÙ„Ø§Ø­ÙŠØ© Ù„Ø¹Ø±Ø¶ Ø§Ù„Ù…Ø³ØªØ®Ø¯Ù…ÙŠÙ†');
           setUsers([]);
           return;
         }
@@ -72,11 +74,11 @@ export function UsersManagementPage({ onNavigate }: UsersManagementPageProps) {
       } catch (error) {
         console.error('Error loading users:', error);
         const msg = (error as Error)?.message || '';
-        if (msg.includes('ليس لديك صلاحية')) {
+        if (msg.includes('Ù„ÙŠØ³ Ù„Ø¯ÙŠÙƒ ØµÙ„Ø§Ø­ÙŠØ©')) {
           setIsAuthorized(false);
         }
-        setError('فشل في تحميل المستخدمين' + (msg ? ': ' + msg : ''));
-        toast.error('فشل في تحميل المستخدمين');
+        setError('ÙØ´Ù„ ÙÙŠ ØªØ­Ù…ÙŠÙ„ Ø§Ù„Ù…Ø³ØªØ®Ø¯Ù…ÙŠÙ†' + (msg ? ': ' + msg : ''));
+        toast.error('ÙØ´Ù„ ÙÙŠ ØªØ­Ù…ÙŠÙ„ Ø§Ù„Ù…Ø³ØªØ®Ø¯Ù…ÙŠÙ†');
       } finally {
         setLoading(false);
       }
@@ -101,19 +103,19 @@ export function UsersManagementPage({ onNavigate }: UsersManagementPageProps) {
   const handleAddUser = async () => {
     if (isSubmittingAdd) return;
     if (!newUser.name || !newUser.email || !newUser.role || !newUser.code || !newUser.password) {
-      toast.error('يرجى ملء جميع الحقول المطلوبة');
+      toast.error('ÙŠØ±Ø¬Ù‰ Ù…Ù„Ø¡ Ø¬Ù…ÙŠØ¹ Ø§Ù„Ø­Ù‚ÙˆÙ„ Ø§Ù„Ù…Ø·Ù„ÙˆØ¨Ø©');
       return;
     }
 
     // Basic email format check
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(newUser.email)) {
-      toast.error('صيغة البريد الإلكتروني غير صحيحة');
+      toast.error('ØµÙŠØºØ© Ø§Ù„Ø¨Ø±ÙŠØ¯ Ø§Ù„Ø¥Ù„ÙƒØªØ±ÙˆÙ†ÙŠ ØºÙŠØ± ØµØ­ÙŠØ­Ø©');
       return;
     }
 
     if (newUser.password.length < 6) {
-      toast.error('كلمة المرور يجب أن تكون 6 أحرف على الأقل');
+      toast.error('ÙƒÙ„Ù…Ø© Ø§Ù„Ù…Ø±ÙˆØ± ÙŠØ¬Ø¨ Ø£Ù† ØªÙƒÙˆÙ† 6 Ø£Ø­Ø±Ù Ø¹Ù„Ù‰ Ø§Ù„Ø£Ù‚Ù„');
       return;
     }
 
@@ -143,15 +145,15 @@ export function UsersManagementPage({ onNavigate }: UsersManagementPageProps) {
           is_active: true
         });
         setIsAddUserDialogOpen(false);
-        toast.success('تم إنشاء المستخدم بنجاح');
+        toast.success('ØªÙ… Ø¥Ù†Ø´Ø§Ø¡ Ø§Ù„Ù…Ø³ØªØ®Ø¯Ù… Ø¨Ù†Ø¬Ø§Ø­');
       } else {
-        setError(result.error || 'فشل في إنشاء المستخدم');
-        toast.error(result.error || 'فشل في إنشاء المستخدم');
+        setError(result.error || 'ÙØ´Ù„ ÙÙŠ Ø¥Ù†Ø´Ø§Ø¡ Ø§Ù„Ù…Ø³ØªØ®Ø¯Ù…');
+        toast.error(result.error || 'ÙØ´Ù„ ÙÙŠ Ø¥Ù†Ø´Ø§Ø¡ Ø§Ù„Ù…Ø³ØªØ®Ø¯Ù…');
       }
     } catch (error) {
       console.error('Error creating user:', error);
-      setError('حدث خطأ أثناء إنشاء المستخدم');
-      toast.error('حدث خطأ أثناء إنشاء المستخدم');
+      setError('Ø­Ø¯Ø« Ø®Ø·Ø£ Ø£Ø«Ù†Ø§Ø¡ Ø¥Ù†Ø´Ø§Ø¡ Ø§Ù„Ù…Ø³ØªØ®Ø¯Ù…');
+      toast.error('Ø­Ø¯Ø« Ø®Ø·Ø£ Ø£Ø«Ù†Ø§Ø¡ Ø¥Ù†Ø´Ø§Ø¡ Ø§Ù„Ù…Ø³ØªØ®Ø¯Ù…');
     } finally {
       setIsSubmittingAdd(false);
     }
@@ -168,6 +170,8 @@ export function UsersManagementPage({ onNavigate }: UsersManagementPageProps) {
       setError('');
       setIsSavingUser(true);
       const result = await authService.updateUser(editingUser.id, {
+        // Allow updating login username (code)
+        code: editingUser.code,
         name: editingUser.name,
         email: editingUser.email,
         phone: editingUser.phone,
@@ -179,22 +183,22 @@ export function UsersManagementPage({ onNavigate }: UsersManagementPageProps) {
       if (result.success && result.user) {
         setUsers(users.map(u => u.id === editingUser.id ? result.user! : u));
         setEditingUser(null);
-        toast.success('تم تحديث المستخدم بنجاح');
+        toast.success('ØªÙ… ØªØ­Ø¯ÙŠØ« Ø§Ù„Ù…Ø³ØªØ®Ø¯Ù… Ø¨Ù†Ø¬Ø§Ø­');
       } else {
-        setError(result.error || 'فشل في تحديث المستخدم');
-        toast.error(result.error || 'فشل في تحديث المستخدم');
+        setError(result.error || 'ÙØ´Ù„ ÙÙŠ ØªØ­Ø¯ÙŠØ« Ø§Ù„Ù…Ø³ØªØ®Ø¯Ù…');
+        toast.error(result.error || 'ÙØ´Ù„ ÙÙŠ ØªØ­Ø¯ÙŠØ« Ø§Ù„Ù…Ø³ØªØ®Ø¯Ù…');
       }
     } catch (error) {
       console.error('Error updating user:', error);
-      setError('حدث خطأ أثناء تحديث المستخدم');
-      toast.error('حدث خطأ أثناء تحديث المستخدم');
+      setError('Ø­Ø¯Ø« Ø®Ø·Ø£ Ø£Ø«Ù†Ø§Ø¡ ØªØ­Ø¯ÙŠØ« Ø§Ù„Ù…Ø³ØªØ®Ø¯Ù…');
+      toast.error('Ø­Ø¯Ø« Ø®Ø·Ø£ Ø£Ø«Ù†Ø§Ø¡ ØªØ­Ø¯ÙŠØ« Ø§Ù„Ù…Ø³ØªØ®Ø¯Ù…');
     } finally {
       setIsSavingUser(false);
     }
   };
 
   const handleDeleteUser = async (userId: string) => {
-    if (!confirm('هل أنت متأكد من حذف هذا المستخدم؟')) {
+    if (!confirm('Ù‡Ù„ Ø£Ù†Øª Ù…ØªØ£ÙƒØ¯ Ù…Ù† Ø­Ø°Ù Ù‡Ø°Ø§ Ø§Ù„Ù…Ø³ØªØ®Ø¯Ù…ØŸ')) {
       return;
     }
 
@@ -204,15 +208,15 @@ export function UsersManagementPage({ onNavigate }: UsersManagementPageProps) {
       
       if (result.success) {
         setUsers(users.filter(u => u.id !== userId));
-        toast.success('تم حذف المستخدم بنجاح');
+        toast.success('ØªÙ… Ø­Ø°Ù Ø§Ù„Ù…Ø³ØªØ®Ø¯Ù… Ø¨Ù†Ø¬Ø§Ø­');
       } else {
-        setError(result.error || 'فشل في حذف المستخدم');
-        toast.error(result.error || 'فشل في حذف المستخدم');
+        setError(result.error || 'ÙØ´Ù„ ÙÙŠ Ø­Ø°Ù Ø§Ù„Ù…Ø³ØªØ®Ø¯Ù…');
+        toast.error(result.error || 'ÙØ´Ù„ ÙÙŠ Ø­Ø°Ù Ø§Ù„Ù…Ø³ØªØ®Ø¯Ù…');
       }
     } catch (error) {
       console.error('Error deleting user:', error);
-      setError('حدث خطأ أثناء حذف المستخدم');
-      toast.error('حدث خطأ أثناء حذف المستخدم');
+      setError('Ø­Ø¯Ø« Ø®Ø·Ø£ Ø£Ø«Ù†Ø§Ø¡ Ø­Ø°Ù Ø§Ù„Ù…Ø³ØªØ®Ø¯Ù…');
+      toast.error('Ø­Ø¯Ø« Ø®Ø·Ø£ Ø£Ø«Ù†Ø§Ø¡ Ø­Ø°Ù Ø§Ù„Ù…Ø³ØªØ®Ø¯Ù…');
     }
   };
 
@@ -224,7 +228,7 @@ export function UsersManagementPage({ onNavigate }: UsersManagementPageProps) {
 
     // Validate input fields
     if (!newPassword.newPassword || !newPassword.confirmPassword) {
-      const errorMsg = 'يرجى ملء جميع الحقول المطلوبة';
+      const errorMsg = 'ÙŠØ±Ø¬Ù‰ Ù…Ù„Ø¡ Ø¬Ù…ÙŠØ¹ Ø§Ù„Ø­Ù‚ÙˆÙ„ Ø§Ù„Ù…Ø·Ù„ÙˆØ¨Ø©';
       setError(errorMsg);
       toast.error(errorMsg);
       return;
@@ -236,7 +240,7 @@ export function UsersManagementPage({ onNavigate }: UsersManagementPageProps) {
 
     // Check minimum length
     if (trimmedNewPassword.length < 6) {
-      const errorMsg = 'كلمة المرور الجديدة يجب أن تكون 6 أحرف على الأقل';
+      const errorMsg = 'ÙƒÙ„Ù…Ø© Ø§Ù„Ù…Ø±ÙˆØ± Ø§Ù„Ø¬Ø¯ÙŠØ¯Ø© ÙŠØ¬Ø¨ Ø£Ù† ØªÙƒÙˆÙ† 6 Ø£Ø­Ø±Ù Ø¹Ù„Ù‰ Ø§Ù„Ø£Ù‚Ù„';
       setError(errorMsg);
       toast.error(errorMsg);
       return;
@@ -244,7 +248,7 @@ export function UsersManagementPage({ onNavigate }: UsersManagementPageProps) {
 
     // Check if passwords match
     if (trimmedNewPassword !== trimmedConfirmPassword) {
-      const errorMsg = 'كلمة المرور الجديدة وتأكيدها غير متطابقتين';
+      const errorMsg = 'ÙƒÙ„Ù…Ø© Ø§Ù„Ù…Ø±ÙˆØ± Ø§Ù„Ø¬Ø¯ÙŠØ¯Ø© ÙˆØªØ£ÙƒÙŠØ¯Ù‡Ø§ ØºÙŠØ± Ù…ØªØ·Ø§Ø¨Ù‚ØªÙŠÙ†';
       setError(errorMsg);
       toast.error(errorMsg);
       return;
@@ -262,15 +266,15 @@ export function UsersManagementPage({ onNavigate }: UsersManagementPageProps) {
           confirmPassword: ''
         });
         setError('');
-        toast.success('تم تغيير كلمة المرور بنجاح');
+        toast.success('ØªÙ… ØªØºÙŠÙŠØ± ÙƒÙ„Ù…Ø© Ø§Ù„Ù…Ø±ÙˆØ± Ø¨Ù†Ø¬Ø§Ø­');
       } else {
-        const errorMsg = result.error || 'فشل في تغيير كلمة المرور';
+        const errorMsg = result.error || 'ÙØ´Ù„ ÙÙŠ ØªØºÙŠÙŠØ± ÙƒÙ„Ù…Ø© Ø§Ù„Ù…Ø±ÙˆØ±';
         setError(errorMsg);
         toast.error(errorMsg);
       }
     } catch (error) {
       console.error('Error changing password:', error);
-      const errorMsg = 'حدث خطأ أثناء تغيير كلمة المرور';
+      const errorMsg = 'Ø­Ø¯Ø« Ø®Ø·Ø£ Ø£Ø«Ù†Ø§Ø¡ ØªØºÙŠÙŠØ± ÙƒÙ„Ù…Ø© Ø§Ù„Ù…Ø±ÙˆØ±';
       setError(errorMsg);
       toast.error(errorMsg);
     } finally {
@@ -296,8 +300,14 @@ export function UsersManagementPage({ onNavigate }: UsersManagementPageProps) {
     <div className="p-6 space-y-6">
       <div className="space-y-4">
         {/* Title */}
-        <div>
+        <div className="flex items-center justify-between">
           <h1 className="text-3xl font-bold text-[#13312A] arabic-text">إدارة المستخدمين</h1>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={()=>setIsImportExportOpen(true)} className="border-[#C69A72] text-[#13312A] hover:bg-[#C69A72]">
+              <Download className="w-4 h-4 mr-2" />
+              تصدير/استيراد
+            </Button>
+          </div>
         </div>
         
         {/* View Mode and Action Buttons */}
@@ -328,7 +338,7 @@ export function UsersManagementPage({ onNavigate }: UsersManagementPageProps) {
             variant="outline"
             className="border-[#13312A] text-[#13312A] hover:bg-[#13312A] hover:text-white"
             disabled={!isAuthorized}
-            title={!isAuthorized ? 'تحتاج لصلاحية ادمن' : undefined}
+            title={!isAuthorized ? 'ØªØ­ØªØ§Ø¬ Ù„ØµÙ„Ø§Ø­ÙŠØ© Ø§Ø¯Ù…Ù†' : undefined}
           >
             <Shield className="w-4 h-4 mr-2" />
             إدارة الأدوار
@@ -396,7 +406,7 @@ export function UsersManagementPage({ onNavigate }: UsersManagementPageProps) {
                       id="userPhone"
                       value={newUser.phone}
                       onChange={(e) => setNewUser({ ...newUser, phone: e.target.value })}
-                      placeholder="أدخل رقم الهاتف"
+                      placeholder="Ø£Ø¯Ø®Ù„ Ø±Ù‚Ù… Ø§Ù„Ù‡Ø§ØªÙ"
                     />
                   </div>
                 </div>
@@ -409,7 +419,7 @@ export function UsersManagementPage({ onNavigate }: UsersManagementPageProps) {
                         type={showPassword ? "text" : "password"}
                         value={newUser.password}
                         onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
-                        placeholder="أدخل كلمة المرور"
+                        placeholder="Ø£Ø¯Ø®Ù„ ÙƒÙ„Ù…Ø© Ø§Ù„Ù…Ø±ÙˆØ±"
                         required
                       />
                       <Button
@@ -418,6 +428,8 @@ export function UsersManagementPage({ onNavigate }: UsersManagementPageProps) {
                         size="sm"
                         className="absolute left-0 top-0 h-full px-3 py-2 hover:bg-transparent"
                         onClick={() => setShowPassword(!showPassword)}
+                        aria-label={showPassword ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'}
+                        title={showPassword ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'}
                       >
                         {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                       </Button>
@@ -425,8 +437,8 @@ export function UsersManagementPage({ onNavigate }: UsersManagementPageProps) {
                   </div>
                   <div>
                     <Label htmlFor="userStatus" className="arabic-text">الحالة *</Label>
-                    <Select value={newUser.status} onValueChange={(value: 'ادمن' | 'موظف' | 'محاسب') => setNewUser({ ...newUser, status: value })}>
-                      <SelectTrigger>
+                    <Select value={newUser.status} onValueChange={(value: string) => setNewUser({ ...newUser, status: value } as any)}>
+                      <SelectTrigger aria-label="تحديد الدور" title="تحديد الدور">
                         <SelectValue placeholder="اختر الحالة" />
                       </SelectTrigger>
                       <SelectContent>
@@ -441,7 +453,7 @@ export function UsersManagementPage({ onNavigate }: UsersManagementPageProps) {
                   <div>
                     <Label htmlFor="userRole" className="arabic-text">الدور *</Label>
                     <Select value={newUser.role} onValueChange={(value: string) => setNewUser({ ...newUser, role: value })}>
-                      <SelectTrigger>
+                      <SelectTrigger aria-label="حالة الحساب" title="حالة الحساب">
                         <SelectValue placeholder="اختر الدور" />
                       </SelectTrigger>
                       <SelectContent>
@@ -451,11 +463,11 @@ export function UsersManagementPage({ onNavigate }: UsersManagementPageProps) {
                           ))
                         ) : (
                           <>
-                            <SelectItem value="مدير النظام">مدير النظام</SelectItem>
-                            <SelectItem value="مندوب مبيعات">مندوب مبيعات</SelectItem>
-                            <SelectItem value="محاسب رئيسي">محاسب رئيسي</SelectItem>
-                            <SelectItem value="محاسب مالي">محاسب مالي</SelectItem>
-                            <SelectItem value="موظف استقبال">موظف استقبال</SelectItem>
+                            <SelectItem value="Ù…Ø¯ÙŠØ± Ø§Ù„Ù†Ø¸Ø§Ù…">Ù…Ø¯ÙŠØ± Ø§Ù„Ù†Ø¸Ø§Ù…</SelectItem>
+                            <SelectItem value="Ù…Ù†Ø¯ÙˆØ¨ Ù…Ø¨ÙŠØ¹Ø§Øª">Ù…Ù†Ø¯ÙˆØ¨ Ù…Ø¨ÙŠØ¹Ø§Øª</SelectItem>
+                            <SelectItem value="Ù…Ø­Ø§Ø³Ø¨ Ø±Ø¦ÙŠØ³ÙŠ">Ù…Ø­Ø§Ø³Ø¨ Ø±Ø¦ÙŠØ³ÙŠ</SelectItem>
+                            <SelectItem value="Ù…Ø­Ø§Ø³Ø¨ Ù…Ø§Ù„ÙŠ">Ù…Ø­Ø§Ø³Ø¨ Ù…Ø§Ù„ÙŠ</SelectItem>
+                            <SelectItem value="Ù…ÙˆØ¸Ù Ø§Ø³ØªÙ‚Ø¨Ø§Ù„">Ù…ÙˆØ¸Ù Ø§Ø³ØªÙ‚Ø¨Ø§Ù„</SelectItem>
                           </>
                         )}
                       </SelectContent>
@@ -495,7 +507,7 @@ export function UsersManagementPage({ onNavigate }: UsersManagementPageProps) {
             <div className="space-y-3">
               {users.length === 0 ? (
                 <div className="text-center py-8">
-                  <div className="text-[#13312A] arabic-text">لا توجد مستخدمين مسجلين</div>
+                  <div className="text-[#13312A] arabic-text">Ù„Ø§ ØªÙˆØ¬Ø¯ Ù…Ø³ØªØ®Ø¯Ù…ÙŠÙ† Ù…Ø³Ø¬Ù„ÙŠÙ†</div>
                 </div>
               ) : (
                 users.map((user) => (
@@ -528,7 +540,7 @@ export function UsersManagementPage({ onNavigate }: UsersManagementPageProps) {
                       onClick={() => handleEditUser(user)}
                       className="flex-1 sm:flex-none border-[#13312A] text-[#13312A] hover:bg-[#13312A] hover:text-white"
                       disabled={!isAuthorized}
-                      title={!isAuthorized ? 'تحتاج لصلاحية ادمن' : undefined}
+                      title={!isAuthorized ? 'ØªØ­ØªØ§Ø¬ Ù„ØµÙ„Ø§Ø­ÙŠØ© Ø§Ø¯Ù…Ù†' : undefined}
                     >
                       <Edit className="w-4 h-4 sm:mr-1" />
                       <span className="sm:hidden arabic-text text-xs">تعديل</span>
@@ -539,10 +551,10 @@ export function UsersManagementPage({ onNavigate }: UsersManagementPageProps) {
                       onClick={() => setChangingPasswordUser(user)}
                       className="flex-1 sm:flex-none border-blue-500 text-blue-500 hover:bg-blue-500 hover:text-white"
                       disabled={!isAuthorized}
-                      title={!isAuthorized ? 'تحتاج لصلاحية ادمن' : undefined}
+                      title={!isAuthorized ? 'ØªØ­ØªØ§Ø¬ Ù„ØµÙ„Ø§Ø­ÙŠØ© Ø§Ø¯Ù…Ù†' : undefined}
                     >
                       <Key className="w-4 h-4 sm:mr-1" />
-                      <span className="sm:hidden arabic-text text-xs">كلمة مرور</span>
+                      <span className="sm:hidden arabic-text text-xs">تغيير كلمة المرور</span>
                     </Button>
                     <Button
                       variant="outline"
@@ -550,7 +562,7 @@ export function UsersManagementPage({ onNavigate }: UsersManagementPageProps) {
                       onClick={() => handleDeleteUser(user.id)}
                       className="flex-1 sm:flex-none border-red-500 text-red-500 hover:bg-red-500 hover:text-white"
                       disabled={!isAuthorized}
-                      title={!isAuthorized ? 'تحتاج لصلاحية ادمن' : undefined}
+                      title={!isAuthorized ? 'ØªØ­ØªØ§Ø¬ Ù„ØµÙ„Ø§Ø­ÙŠØ© Ø§Ø¯Ù…Ù†' : undefined}
                     >
                       <Trash2 className="w-4 h-4 sm:mr-1" />
                       <span className="sm:hidden arabic-text text-xs">حذف</span>
@@ -624,7 +636,7 @@ export function UsersManagementPage({ onNavigate }: UsersManagementPageProps) {
                           onClick={() => handleEditUser(user)}
                           className="border-[#13312A] text-[#13312A] hover:bg-[#13312A] hover:text-white"
                           disabled={!isAuthorized}
-                          title={!isAuthorized ? 'تحتاج لصلاحية ادمن' : undefined}
+                          title={!isAuthorized ? 'ØªØ­ØªØ§Ø¬ Ù„ØµÙ„Ø§Ø­ÙŠØ© Ø§Ø¯Ù…Ù†' : undefined}
                         >
                           <Edit className="w-4 h-4" />
                         </Button>
@@ -634,7 +646,7 @@ export function UsersManagementPage({ onNavigate }: UsersManagementPageProps) {
                           onClick={() => setChangingPasswordUser(user)}
                           className="border-blue-500 text-blue-500 hover:bg-blue-500 hover:text-white"
                           disabled={!isAuthorized}
-                          title={!isAuthorized ? 'تحتاج لصلاحية ادمن' : undefined}
+                          title={!isAuthorized ? 'ØªØ­ØªØ§Ø¬ Ù„ØµÙ„Ø§Ø­ÙŠØ© Ø§Ø¯Ù…Ù†' : undefined}
                         >
                           <Key className="w-4 h-4" />
                         </Button>
@@ -644,7 +656,7 @@ export function UsersManagementPage({ onNavigate }: UsersManagementPageProps) {
                           onClick={() => handleDeleteUser(user.id)}
                           className="border-red-500 text-red-500 hover:bg-red-500 hover:text-white"
                           disabled={!isAuthorized}
-                          title={!isAuthorized ? 'تحتاج لصلاحية ادمن' : undefined}
+                          title={!isAuthorized ? 'ØªØ­ØªØ§Ø¬ Ù„ØµÙ„Ø§Ø­ÙŠØ© Ø§Ø¯Ù…Ù†' : undefined}
                         >
                           <Trash2 className="w-4 h-4" />
                         </Button>
@@ -658,7 +670,7 @@ export function UsersManagementPage({ onNavigate }: UsersManagementPageProps) {
         </div>
       )}
 
-      {/* نافذة تعديل المستخدم */}
+      {/* Ù†Ø§ÙØ°Ø© ØªØ¹Ø¯ÙŠÙ„ Ø§Ù„Ù…Ø³ØªØ®Ø¯Ù… */}
       {editingUser && (
         <Dialog open={!!editingUser} onOpenChange={() => setEditingUser(null)}>
           <DialogContent className="w-full max-w-md h-[100dvh] max-h-[100dvh] p-4 sm:p-6 m-0 rounded-none sm:rounded-lg flex flex-col overscroll-contain">
@@ -718,7 +730,7 @@ export function UsersManagementPage({ onNavigate }: UsersManagementPageProps) {
                   <Label htmlFor="editUserStatus" className="arabic-text">الحالة</Label>
                   <Select 
                     value={editingUser.status} 
-                    onValueChange={(value: 'ادمن' | 'موظف' | 'محاسب') => setEditingUser({ ...editingUser, status: value })}
+                    onValueChange={(value: string) => setEditingUser({ ...editingUser, status: value } as any)}
                   >
                     <SelectTrigger>
                       <SelectValue />
@@ -746,15 +758,39 @@ export function UsersManagementPage({ onNavigate }: UsersManagementPageProps) {
                         ))
                       ) : (
                         <>
-                          <SelectItem value="مدير النظام">مدير النظام</SelectItem>
-                          <SelectItem value="مندوب مبيعات">مندوب مبيعات</SelectItem>
-                          <SelectItem value="محاسب رئيسي">محاسب رئيسي</SelectItem>
-                          <SelectItem value="محاسب مالي">محاسب مالي</SelectItem>
-                          <SelectItem value="موظف استقبال">موظف استقبال</SelectItem>
+                          <SelectItem value="Ù…Ø¯ÙŠØ± Ø§Ù„Ù†Ø¸Ø§Ù…">Ù…Ø¯ÙŠØ± Ø§Ù„Ù†Ø¸Ø§Ù…</SelectItem>
+                          <SelectItem value="Ù…Ù†Ø¯ÙˆØ¨ Ù…Ø¨ÙŠØ¹Ø§Øª">Ù…Ù†Ø¯ÙˆØ¨ Ù…Ø¨ÙŠØ¹Ø§Øª</SelectItem>
+                          <SelectItem value="Ù…Ø­Ø§Ø³Ø¨ Ø±Ø¦ÙŠØ³ÙŠ">Ù…Ø­Ø§Ø³Ø¨ Ø±Ø¦ÙŠØ³ÙŠ</SelectItem>
+                          <SelectItem value="Ù…Ø­Ø§Ø³Ø¨ Ù…Ø§Ù„ÙŠ">Ù…Ø­Ø§Ø³Ø¨ Ù…Ø§Ù„ÙŠ</SelectItem>
+                          <SelectItem value="Ù…ÙˆØ¸Ù Ø§Ø³ØªÙ‚Ø¨Ø§Ù„">Ù…ÙˆØ¸Ù Ø§Ø³ØªÙ‚Ø¨Ø§Ù„</SelectItem>
                         </>
                       )}
                     </SelectContent>
                   </Select>
+                </div>
+              </div>
+              {/* كلمة المرور الحالية - للعرض كحقل دائم مع زر تغيير */}
+              <div className="grid grid-cols-1 gap-4">
+                <div>
+                  <Label htmlFor="currentPassword" className="arabic-text">كلمة المرور الحالية</Label>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      id="currentPassword"
+                      type="password"
+                      value="********"
+                      disabled
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="border-blue-500 text-blue-500 hover:bg-blue-500 hover:text-white"
+                      onClick={() => setChangingPasswordUser(editingUser!)}
+                    >
+                      <Key className="w-4 h-4 mr-1" />
+                      تغيير
+                    </Button>
+                  </div>
+                  <p className="text-xs text-gray-500 arabic-text mt-1">لا يمكن عرض كلمة المرور الحالية لأسباب أمنية. يمكنك تغييرها من هنا.</p>
                 </div>
               </div>
               <div className="grid grid-cols-1 gap-4">
@@ -782,7 +818,7 @@ export function UsersManagementPage({ onNavigate }: UsersManagementPageProps) {
         </Dialog>
       )}
 
-      {/* نافذة تغيير كلمة المرور */}
+      {/* Ù†Ø§ÙØ°Ø© ØªØºÙŠÙŠØ± ÙƒÙ„Ù…Ø© Ø§Ù„Ù…Ø±ÙˆØ± */}
       {changingPasswordUser && (
         <Dialog open={!!changingPasswordUser} onOpenChange={() => setChangingPasswordUser(null)}>
           <DialogContent className="w-full max-w-md h-[100dvh] max-h-[100dvh] p-4 sm:p-6 m-0 rounded-none sm:rounded-lg flex flex-col overscroll-contain">
@@ -823,6 +859,8 @@ export function UsersManagementPage({ onNavigate }: UsersManagementPageProps) {
                       size="sm"
                       className="absolute left-0 top-0 h-full px-3 py-2 hover:bg-transparent"
                       onClick={() => setShowNewPassword(!showNewPassword)}
+                      aria-label={showNewPassword ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'}
+                      title={showNewPassword ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'}
                     >
                       {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </Button>
@@ -854,6 +892,8 @@ export function UsersManagementPage({ onNavigate }: UsersManagementPageProps) {
                       size="sm"
                       className="absolute left-0 top-0 h-full px-3 py-2 hover:bg-transparent"
                       onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      aria-label={showConfirmPassword ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'}
+                      title={showConfirmPassword ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'}
                     >
                       {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </Button>
@@ -873,8 +913,8 @@ export function UsersManagementPage({ onNavigate }: UsersManagementPageProps) {
                       <p className="font-medium">متطلبات كلمة المرور:</p>
                       <ul className="mt-1 space-y-1 text-xs">
                         <li>• يجب أن تكون 6 أحرف على الأقل</li>
-                        <li>• يُفضل أن تحتوي على أرقام وحروف</li>
-                        <li>• تجنب استخدام كلمات مرور بسيطة</li>
+                        <li>• يُفضّل أن تحتوي على أرقام وحروف</li>
+                        <li>• تجنّب استخدام كلمات مرور بسيطة</li>
                       </ul>
                     </div>
                   </div>
@@ -911,6 +951,8 @@ export function UsersManagementPage({ onNavigate }: UsersManagementPageProps) {
         </Dialog>
       )}
 
+      <ImportExportDialog open={isImportExportOpen} onOpenChange={setIsImportExportOpen} />
     </div>
   );
 }
+

@@ -1,8 +1,8 @@
 "use client";
 
 import * as React from "react";
-import * as SheetPrimitive from "@radix-ui/react-dialog@1.1.6";
-import { XIcon } from "lucide-react@0.487.0";
+import * as SheetPrimitive from "@radix-ui/react-dialog";
+import { XIcon } from "lucide-react";
 
 import { cn } from "./utils";
 
@@ -69,6 +69,12 @@ function SheetContent({
             "data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom inset-x-0 bottom-0 h-auto border-t",
           className,
         )}
+        onEscapeKeyDown={(event: Event) => {
+          event.preventDefault();
+        }}
+        onInteractOutside={(event: Event) => {
+          event.preventDefault();
+        }}
         {...props}
       >
         {children}

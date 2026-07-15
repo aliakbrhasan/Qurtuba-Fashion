@@ -3,9 +3,11 @@ import { Card, CardContent } from './ui/card';
 import { Skeleton } from './ui/skeleton';
 import { TrendingUp, AlertCircle, RefreshCw } from 'lucide-react';
 import { Button } from './ui/button';
+import { DateInput } from './ui/date-input';
 import { useDashboardStats } from '@/hooks/useDashboardStats';
 import { StatCard } from './dashboard/StatCard';
 import { DashboardGrids } from './dashboard/ResponsiveGrid';
+import { formatArabicNumber } from '@/utils/arabicNumbers';
 
 export function FinancialPage() {
   const [startDate, setStartDate] = useState<string>('');
@@ -42,7 +44,7 @@ export function FinancialPage() {
   };
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('ar-IQ', {
+    return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: 'IQD',
       minimumFractionDigits: 0,
@@ -79,22 +81,20 @@ export function FinancialPage() {
     <div className="container mx-auto p-4 space-y-6">
       {/* Filters */}
       <div className="flex flex-col md:flex-row items-start md:items-end gap-3">
-        <div>
+        <div className="w-full max-w-xs">
           <label className="block text-sm text-[#13312A] arabic-text mb-1">تاريخ البداية</label>
-          <input
-            type="date"
+          <DateInput
             value={startDate}
             onChange={(e) => setStartDate(e.target.value)}
-            className="border rounded px-3 py-2"
+            className="bg-white border-[#C69A72]"
           />
         </div>
-        <div>
+        <div className="w-full max-w-xs">
           <label className="block text-sm text-[#13312A] arabic-text mb-1">تاريخ النهاية</label>
-          <input
-            type="date"
+          <DateInput
             value={endDate}
             onChange={(e) => setEndDate(e.target.value)}
-            className="border rounded px-3 py-2"
+            className="bg-white border-[#C69A72]"
           />
         </div>
         <div className="flex gap-2">
@@ -112,7 +112,7 @@ export function FinancialPage() {
           التقارير المالية والإحصائيات
         </h1>
         <p className="text-[#155446] arabic-text">
-          نظرة شاملة على الأداء المالي - {new Date().toLocaleDateString('ar-IQ')}
+          نظرة شاملة على الأداء المالي - {new Date().toLocaleDateString('en-US')}
         </p>
       </div>
 
@@ -122,7 +122,7 @@ export function FinancialPage() {
         <DashboardGrids.Stats>
           <StatCard
             title="فواتير اليوم"
-            value={isLoading ? <Skeleton className="h-8 w-16" /> : stats.todayInvoices}
+            value={isLoading ? <Skeleton className="h-8 w-16" /> : formatArabicNumber(stats.todayInvoices)}
             icon={TrendingUp}
             color="bg-[#155446]"
             subtitle="فواتير جديدة اليوم"
@@ -136,14 +136,14 @@ export function FinancialPage() {
           />
           <StatCard
             title="إجمالي الزبائن"
-            value={isLoading ? <Skeleton className="h-8 w-16" /> : stats.totalCustomers}
+            value={isLoading ? <Skeleton className="h-8 w-16" /> : formatArabicNumber(stats.totalCustomers)}
             icon={TrendingUp}
             color="bg-[#C69A72]"
             subtitle="زبائن مسجلون"
           />
           <StatCard
             title="إجمالي الفواتير"
-            value={isLoading ? <Skeleton className="h-8 w-16" /> : stats.totalInvoices}
+            value={isLoading ? <Skeleton className="h-8 w-16" /> : formatArabicNumber(stats.totalInvoices)}
             icon={TrendingUp}
             color="bg-[#155446]"
             subtitle="جميع الفواتير"
@@ -185,21 +185,21 @@ export function FinancialPage() {
         <DashboardGrids.Status>
           <StatCard
             title="فواتير معلقة"
-            value={isLoading ? <Skeleton className="h-8 w-16" /> : stats.pendingInvoices}
+            value={isLoading ? <Skeleton className="h-8 w-16" /> : formatArabicNumber(stats.pendingInvoices)}
             icon={TrendingUp}
             color="bg-yellow-600"
             subtitle="في انتظار الدفع"
           />
           <StatCard
             title="فواتير مدفوعة"
-            value={isLoading ? <Skeleton className="h-8 w-16" /> : stats.paidInvoices}
+            value={isLoading ? <Skeleton className="h-8 w-16" /> : formatArabicNumber(stats.paidInvoices)}
             icon={TrendingUp}
             color="bg-green-600"
             subtitle="مدفوعة بالكامل"
           />
           <StatCard
             title="فواتير جزئية"
-            value={isLoading ? <Skeleton className="h-8 w-16" /> : stats.partialInvoices}
+            value={isLoading ? <Skeleton className="h-8 w-16" /> : formatArabicNumber(stats.partialInvoices)}
             icon={TrendingUp}
             color="bg-blue-600"
             subtitle="مدفوعة جزئياً"
@@ -229,7 +229,7 @@ export function FinancialPage() {
           />
           <StatCard
             title="إجمالي الطلبات"
-            value={isLoading ? <Skeleton className="h-8 w-16" /> : stats.totalOrders}
+            value={isLoading ? <Skeleton className="h-8 w-16" /> : formatArabicNumber(stats.totalOrders)}
             icon={TrendingUp}
             color="bg-orange-600"
             subtitle="جميع الطلبات"

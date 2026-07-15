@@ -1,43 +1,64 @@
-import { useMemo } from 'react';
+﻿import { useMemo, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { databaseService, type Invoice } from '@/db/database.service';
 import type { Customer as UiCustomer, CustomerOrder } from '@/types/customer';
+import { sanitizeArabicText } from '@/utils/encoding';
 
 type DbCustomer = Awaited<ReturnType<typeof databaseService.getCustomers>>[number];
 
+function stableNumberFromString(input: string): number {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < input.length; i++) {
+    hash ^= input.charCodeAt(i);
+    hash = (hash * 0x01000193) >>> 0;
+  }
+  return hash & 0x7fffffff;
+}
+
 function parseIdToNumber(id: string | number | undefined): number {
-	if (typeof id === 'number') return id;
-	if (!id) return Date.now();
-	const parsed = parseInt(String(id), 10);
-	return Number.isNaN(parsed) ? Date.now() : parsed;
+  if (typeof id === 'number') return id;
+  if (!id) return stableNumberFromString('missing');
+  const numeric = Number(id);
+  if (!Number.isNaN(numeric) && Number.isFinite(numeric)) return Math.trunc(numeric);
+  return stableNumberFromString(String(id));
 }
 
 function buildOrderFromInvoice(invoice: Invoice): CustomerOrder {
-	return {
-		id: String(invoice.id),
-		type: 'فاتورة',
-		status: invoice.status,
-		orderDate: invoice.invoice_date || invoice.created_at,
-		deliveryDate: invoice.due_date || invoice.invoice_date || invoice.created_at,
-		total: invoice.total,
-		paid: invoice.paid_amount || 0,
-	};
+  return {
+    id: String(invoice.id),
+    type: 'فاتورة',
+    status: invoice.status,
+    orderDate: invoice.invoice_date || invoice.created_at,
+    deliveryDate: invoice.due_date || invoice.invoice_date || invoice.created_at,
+    total: invoice.total,
+    paid: invoice.paid_amount || 0,
+  };
 }
 
 function mapDbCustomerToUi(db: DbCustomer): UiCustomer {
-	return {
-		id: parseIdToNumber(db.id),
-		name: db.name,
-		phone: db.phone || '',
-		address: db.address || '',
-		totalSpent: db.totalSpent || 0,
-		lastOrder: db.lastOrder || '',
-		label: db.label || 'جديد',
-		measurements: db.measurements || { height: 0, shoulder: 0, waist: 0, chest: 0 },
-		orders: [],
-		notes: db.notes,
-		created_at: db.created_at,
-	};
+    const totalSpent = (db as any).total_spent ?? (db as any).totalSpent ?? 0;
+    const lastOrder = (db as any).last_order ?? (db as any).lastOrder ?? '';
+    let measurements: any = (db as any).measurements;
+    if (typeof measurements === 'string') {
+        try { measurements = JSON.parse(measurements); } catch { measurements = null; }
+    }
+    if (!measurements || typeof measurements !== 'object') {
+        measurements = { height: 0, shoulder: 0, waist: 0, chest: 0 };
+    }
+    return {
+        id: parseIdToNumber((db as any).id),
+        name: (db as any).name,
+        phone: (db as any).phone || '',
+        address: (db as any).address || '',
+        totalSpent: Number(totalSpent) || 0,
+        lastOrder: String(lastOrder || ''),
+        label: sanitizeArabicText((db as any).label) || 'جديد',
+        label_auto: ((db as any).label_auto === 0) ? false : true,
+        measurements,
+        orders: [],
+        notes: (db as any).notes,
+        created_at: (db as any).created_at,
+    };
 }
 
 export function useCustomers() {
@@ -61,19 +82,32 @@ export function useCustomers() {
 	} = useQuery({
 		// Share cache with invoices page
 		queryKey: ['invoices'],
-		queryFn: () => databaseService.getInvoices(),
-		staleTime: 60 * 1000,
-		refetchInterval: 30 * 1000,
+		queryFn: async () => {
+			const rows = await databaseService.getInvoices();
+			// Keep customers table up-to-date from invoices
+			try { await databaseService.reconcileCustomersFromInvoices(rows); } catch {}
+			return rows;
+		},
+		staleTime: 10 * 1000,
+		refetchInterval: 10 * 1000,
 	});
+
+    // Ensure customers snapshot refreshes after invoices reconciliation completes
+    // This guarantees the customers page reflects newly derived customers from invoices on desktop
+    useEffect(() => {
+        try { void refetchCustomers(); } catch {}
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [invoices?.length]);
 
 	const customers: UiCustomer[] = useMemo(() => {
 		// Seed with DB customers, create primary and alias indices
 		const map = new Map<string, UiCustomer>(); // key -> customer
 		const aliasToKey = new Map<string, string>(); // name|phone -> key
 
-		for (const c of dbCustomers) {
+	for (const c of dbCustomers) {
 			const ui = mapDbCustomerToUi(c);
 			const key = String(c.id);
+			ui.totalSpent = 0;
 			map.set(key, ui);
 			const alias = `${(c.name || '').trim()}|${(c.phone || '').trim()}`;
 			if (alias !== '|') aliasToKey.set(alias, key);
@@ -102,7 +136,7 @@ export function useCustomers() {
 					totalSpent: 0,
 					lastOrder: inv.invoice_date || inv.created_at,
 					label: 'جديد',
-					measurements: { height: 0, shoulder: 0, waist: 0, chest: 0 },
+	measurements: { height: 0, shoulder: 0, waist: 0, chest: 0, collar: 0 },
 					orders: [],
 					created_at: inv.created_at,
 				};
@@ -135,5 +169,8 @@ export function useCustomers() {
 		},
 	};
 }
+
+
+
 
 

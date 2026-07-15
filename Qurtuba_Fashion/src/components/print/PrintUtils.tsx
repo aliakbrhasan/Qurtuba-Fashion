@@ -1,6 +1,18 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 
+// Type definitions for Electron API
+declare global {
+  interface Window {
+    electronAPI?: {
+      getLogoPath: () => Promise<{ ok: boolean; data?: string; error?: string }>;
+      print: (data: { title: string; content: string; styles?: string; pageSize?: string | { width: number; height: number }; landscape?: boolean; printBackground?: boolean }) => Promise<any>;
+      printPreview: (data: { title: string; content: string; styles?: string; pageSize?: string | { width: number; height: number }; landscape?: boolean; printBackground?: boolean }) => Promise<any>;
+      pdfPreview: (data: { title: string; content: string; styles?: string; pageSize?: string; landscape?: boolean }) => Promise<any>;
+    };
+  }
+}
+
 export const brandPrintStyles = `
   @page {
     size: A4 portrait;
@@ -14,6 +26,8 @@ export const brandPrintStyles = `
     direction: rtl;
     color: #13312A;
     -webkit-text-size-adjust: 100%;
+    -moz-text-size-adjust: 100%;
+    -ms-text-size-adjust: 100%;
     text-size-adjust: 100%;
     -webkit-user-select: none;
     -moz-user-select: none;
@@ -327,20 +341,139 @@ export const brandPrintStyles = `
   }
 `;
 
-export const formatPrintDateTime = (date: Date) =>
-  new Intl.DateTimeFormat('ar-IQ', {
+export const formatPrintDateTime = (date: Date) => {
+  return new Intl.DateTimeFormat('en-US', {
     dateStyle: 'long',
     timeStyle: 'short',
   }).format(date);
+};
 
-export const openPrintWindow = (title: string, content: React.ReactElement) => {
+export type PrintWindowOptions = {
+  pageSize?: string | { width: number; height: number };
+  landscape?: boolean;
+  printBackground?: boolean;
+};
+
+const isPromiseLike = (value: unknown): value is Promise<unknown> => {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as Promise<unknown>).then === 'function'
+  );
+};
+
+const handleAsyncResult = (
+  result: unknown,
+  {
+    onSuccess,
+    onError,
+  }: {
+    onSuccess?: (value: unknown) => void;
+    onError?: (error: unknown) => void;
+  },
+) => {
+  if (isPromiseLike(result)) {
+    result
+      .then((value) => {
+        onSuccess?.(value);
+      })
+      .catch((error) => {
+        onError?.(error);
+      });
+    return;
+  }
+
+  onSuccess?.(result);
+};
+
+const createTimeoutGuard = (callback: () => void, timeoutMs = 5000) => {
+  if (typeof window === 'undefined') {
+    return {
+      cancel: () => false,
+      didTimeout: () => false,
+    };
+  }
+
+  let state: 'pending' | 'triggered' | 'cleared' = 'pending';
+  const timerId = window.setTimeout(() => {
+    if (state !== 'pending') return;
+    state = 'triggered';
+    callback();
+  }, timeoutMs);
+
+  return {
+    cancel: () => {
+      if (state !== 'pending') return false;
+      state = 'cleared';
+      window.clearTimeout(timerId);
+      return true;
+    },
+    didTimeout: () => state === 'triggered',
+  };
+};
+
+export const openPrintWindow = (title: string, content: React.ReactElement, options?: PrintWindowOptions) => {
+  console.log('openPrintWindow called with title:', title);
+  console.log('content type:', typeof content);
+  console.log('window.electronAPI available:', !!window.electronAPI);
+  
+  const markup = renderToStaticMarkup(content);
+  console.log('markup generated, length:', markup.length);
+
+  const electronPrint = window.electronAPI?.print;
+  
+  if (typeof electronPrint === 'function') {
+    try {
+      const timeoutGuard = createTimeoutGuard(() => {
+        console.warn('Electron print request timed out, falling back to browser print.');
+        fallbackPrint(title, markup);
+      });
+      const result = electronPrint({
+        title,
+        content: `
+          <div class="print-container">
+            <div class="print-inner">${markup}</div>
+            <div class="print-footer">تم إنشاء هذا المستند من خلال نظام إدارة أزياء قرطبة</div>
+          </div>
+        `,
+        styles: brandPrintStyles,
+        pageSize: options?.pageSize ?? 'A4',
+        landscape: options?.landscape ?? false,
+        printBackground: options?.printBackground ?? true
+      });
+
+      handleAsyncResult(result, {
+        onSuccess: () => {
+          timeoutGuard.cancel();
+        },
+        onError: (error) => {
+          console.error('Print failed:', error);
+          if (!timeoutGuard.didTimeout()) {
+            timeoutGuard.cancel();
+            fallbackPrint(title, markup);
+          }
+        },
+      });
+    } catch (error) {
+      console.error('Print threw synchronously:', error);
+      fallbackPrint(title, markup);
+    }
+    return;
+  }
+
+  if (window.electronAPI && !electronPrint) {
+    console.warn('Electron API detected but print function is unavailable. Falling back to browser print.');
+  }
+
+  fallbackPrint(title, markup);
+};
+
+const fallbackPrint = (title: string, markup: string) => {
   const printWindow = window.open('', '_blank', 'width=900,height=700');
 
   if (!printWindow) {
     return;
   }
-
-  const markup = renderToStaticMarkup(content);
 
   printWindow.document.write(`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
@@ -368,4 +501,213 @@ export const openPrintWindow = (title: string, content: React.ReactElement) => {
 
   printWindow.document.close();
   printWindow.focus();
+};
+
+export const openPrintInvoiceWindow = async (title: string, content: React.ReactElement) => {
+  let markup = renderToStaticMarkup(content);
+  
+  // In Electron, replace logo src with base64 data URL for reliable printing
+  if (window.electronAPI && window.electronAPI.getLogoPath) {
+    try {
+      const logoResult = await window.electronAPI.getLogoPath();
+      if (logoResult?.ok && logoResult?.data) {
+        const logoDataUrl = logoResult.data;
+        // Replace any logo src attributes (including data URLs or file paths) with base64
+        // Match both quoted and unquoted src attributes
+        markup = markup.replace(
+          /(<img[^>]*src=["'])([^"']*logo[^"']*)(["'][^>]*>)/gi,
+          (_match, before, _src, after) => {
+            return `${before}${logoDataUrl}${after}`;
+          }
+        );
+        // Also handle alt text that might contain "logo" or "Qurtuba"
+        markup = markup.replace(
+          /(<img[^>]*alt=["'][^"']*(?:logo|Qurtuba)[^"']*["'][^>]*src=["'])([^"']*)(["'][^>]*>)/gi,
+          (_match, before, _src, after) => {
+            return `${before}${logoDataUrl}${after}`;
+          }
+        );
+        console.log('Logo replaced in print markup with base64 data URL');
+      }
+    } catch (error) {
+      console.warn('Failed to get logo path:', error);
+    }
+  }
+  
+  console.log('openPrintInvoiceWindow called with title:', title);
+  console.log('window.electronAPI available:', !!window.electronAPI);
+  console.log('window.electronAPI.print available:', !!(window.electronAPI && window.electronAPI.print));
+  
+  // Check if we're in Electron environment
+  const electronPrint = window.electronAPI?.print;
+  
+  if (typeof electronPrint === 'function') {
+    console.log('Using Electron print API');
+    try {
+      const timeoutGuard = createTimeoutGuard(() => {
+        console.warn('Electron print request timed out, using browser fallback.');
+        fallbackPrintInvoice(title, markup);
+      });
+      const result = electronPrint({
+        title,
+        content: markup,
+        styles: `
+          @page { size: A5 landscape; margin: 6mm; }
+          html, body { padding: 0; margin: 0; background: #ffffff; }
+          * { box-sizing: border-box; }
+        `,
+        pageSize: 'A5',
+        landscape: true,
+        printBackground: true
+      });
+
+      handleAsyncResult(result, {
+        onSuccess: (value) => {
+          timeoutGuard.cancel();
+          if (value !== undefined) {
+            console.log('Print API result:', value);
+          }
+        },
+        onError: (error) => {
+          console.error('Print failed:', error);
+          if (!timeoutGuard.didTimeout()) {
+            timeoutGuard.cancel();
+            fallbackPrintInvoice(title, markup);
+          }
+        },
+      });
+    } catch (error) {
+      console.error('Print threw synchronously:', error);
+      fallbackPrintInvoice(title, markup);
+    }
+    return;
+  }
+
+  console.log('Using fallback print');
+  fallbackPrintInvoice(title, markup);
+};
+
+const fallbackPrintInvoice = (title: string, markup: string) => {
+  const printWindow = window.open('', '_blank', 'width=900,height=700');
+
+  if (!printWindow) {
+    return;
+  }
+
+  printWindow.document.write(`<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charSet="utf-8" />
+    <title>${title}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet" />
+    <style>
+      @page { size: A5 landscape; margin: 6mm; }
+      html, body { padding: 0; margin: 0; background: #ffffff; }
+      * { box-sizing: border-box; }
+    </style>
+  </head>
+  <body>
+    ${markup}
+    <script>
+      window.onload = () => {
+        window.focus();
+        setTimeout(() => window.print(), 300);
+      };
+    <\/script>
+  </body>
+</html>`);
+
+  printWindow.document.close();
+  printWindow.focus();
+};
+
+export const openPrintPreviewWindow = (title: string, content: React.ReactElement) => {
+  const markup = renderToStaticMarkup(content);
+  
+  // Check if we're in Electron environment
+  if (window.electronAPI?.printPreview) {
+    // Use Electron's native print preview functionality
+    try {
+      const timeoutGuard = createTimeoutGuard(() => {
+        console.warn('Electron print preview timed out, falling back to print window.');
+        openPrintWindow(title, content);
+      });
+      const result = window.electronAPI.printPreview({
+        title,
+        content: `
+          <div class="print-container">
+            <div class="print-inner">${markup}</div>
+            <div class="print-footer">تم إنشاء هذا المستند من خلال نظام إدارة أزياء قرطبة</div>
+          </div>
+        `,
+        styles: brandPrintStyles
+      });
+
+      handleAsyncResult(result, {
+        onSuccess: () => {
+          timeoutGuard.cancel();
+        },
+        onError: (error) => {
+          console.error('Print preview failed:', error);
+          if (!timeoutGuard.didTimeout()) {
+            timeoutGuard.cancel();
+            openPrintWindow(title, content);
+          }
+        },
+      });
+    } catch (error) {
+      console.error('Print preview threw synchronously:', error);
+      openPrintWindow(title, content);
+    }
+  } else {
+    // Fallback to regular print
+    openPrintWindow(title, content);
+  }
+};
+
+// OS-native PDF preview: renders to PDF then opens system viewer
+export const openPdfPreviewWindow = (title: string, content: React.ReactElement, opts?: { pageSize?: 'A4'|'A5'|'Letter'|'Legal'; landscape?: boolean }) => {
+  const markup = renderToStaticMarkup(content);
+
+  if (window.electronAPI?.pdfPreview) {
+    try {
+      const timeoutGuard = createTimeoutGuard(() => {
+        console.warn('Electron PDF preview timed out, falling back to in-app preview.');
+        openPrintPreviewWindow(title, content);
+      });
+      const result = window.electronAPI.pdfPreview({
+        title,
+        content: `
+          <div class="print-container">
+            <div class="print-inner">${markup}</div>
+            <div class="print-footer">تم توليد المعاينة كملف PDF</div>
+          </div>
+        `,
+        styles: brandPrintStyles,
+        pageSize: opts?.pageSize || 'A5',
+        landscape: opts?.landscape ?? true,
+      });
+
+      handleAsyncResult(result, {
+        onSuccess: () => {
+          timeoutGuard.cancel();
+        },
+        onError: (error) => {
+          console.error('PDF preview failed:', error);
+          if (!timeoutGuard.didTimeout()) {
+            timeoutGuard.cancel();
+            openPrintPreviewWindow(title, content);
+          }
+        },
+      });
+    } catch (error) {
+      console.error('PDF preview threw synchronously:', error);
+      openPrintPreviewWindow(title, content);
+    }
+  } else {
+    // Fallback: in-app preview
+    openPrintPreviewWindow(title, content);
+  }
 };

@@ -1,16 +1,18 @@
-import React, { useState, useMemo } from 'react';
-import { renderToStaticMarkup } from 'react-dom/server';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Card, CardContent } from './ui/card';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
 import { Badge } from './ui/badge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from './ui/dialog';
 import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { PrintInvoicesDialog } from './PrintInvoicesDialog';
 // import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { useInvoices } from '@/hooks/useInvoices';
+import { usePermissions } from '@/hooks/usePermissions';
+import { useAuth } from './ProtectedRoute';
+import { formatArabicNumber, formatStringNumber } from '@/utils/arabicNumbers';
 // import { InvoiceService } from '@/services/invoice.service';
 import {
   Plus,
@@ -32,19 +34,21 @@ import {
   ArrowUpDown,
   FilterX,
   RefreshCw,
+  Trash2,
+  CreditCard,
 } from 'lucide-react';
 import { ArrowUp, ArrowDown } from 'lucide-react';
 import { ImageWithFallback } from './figma/ImageWithFallback';
 import {
   PrintableInvoice,
-  receiptStyles,
   formatCurrency,
   formatDate,
   PrintableInvoiceData,
 } from './PrintableInvoice';
-import { openPrintWindow, formatPrintDateTime } from './print/PrintUtils';
+import { openPrintWindow, openPrintInvoiceWindow, openPdfPreviewWindow, formatPrintDateTime } from './print/PrintUtils.tsx';
 // import { InvoiceDetailsPage } from './InvoiceDetailsPage';
 import { InvoiceDetailsDialog } from './InvoiceDetailsDialog';
+import { NewInvoiceDialogWithDB } from './NewInvoiceDialogWithDB';
 
 type DateParts = {
   year: string;
@@ -68,11 +72,13 @@ const monthOptions = [
 ];
 
 const dayOptions = Array.from({ length: 31 }, (_, index) => (index + 1).toString());
+const TABLE_PAGE_SIZE = 20;
+const GRID_PAGE_SIZE = 12;
 
 const getLastDayOfMonth = (year: number, month: number) => new Date(year, month, 0).getDate();
 
 const formatRangeDate = (date: Date) =>
-  new Intl.DateTimeFormat('ar-IQ', {
+  new Intl.DateTimeFormat('en-US', {
     year: 'numeric',
     month: 'long',
     day: 'numeric',
@@ -156,25 +162,35 @@ export function InvoicesPage({ onCreateInvoice, onViewInvoiceDetails, onMarkAsPa
   const [sortField, setSortField] = useState<string>('receivedDate');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('table');
+  const [currentPage, setCurrentPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [dateFilter, setDateFilter] = useState<string>('all');
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
   const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isDuplicateDialogOpen, setIsDuplicateDialogOpen] = useState(false);
+  const [invoiceToEdit, setInvoiceToEdit] = useState<Invoice | null>(null);
+  const [invoiceToDuplicate, setInvoiceToDuplicate] = useState<Invoice | null>(null);
   
   // Use the database hook
   const { invoices: dbInvoices, loading, error, markAsPaid: markInvoiceAsPaid, loadInvoices } = useInvoices();
+  
+  // Use permissions and auth hooks
+  const { currentUser } = useAuth();
+  const { hasActionPermission } = usePermissions(currentUser);
 
   // Transform database invoices to match the expected format
   const invoices: Invoice[] = dbInvoices.map(invoice => ({
     id: invoice.id,
     customerName: invoice.customer_name,
-    phone: invoice.customer_phone || '',
+    phone: invoice.customer_phone ?? '',
     address: invoice.customer_address || '',
     total: invoice.total,
     paid: invoice.paid_amount,
     receivedDate: invoice.invoice_date,
     deliveryDate: invoice.due_date || invoice.invoice_date,
+    paymentDate: invoice.paid_at || undefined,
     status: invoice.status,
     notes: invoice.notes || '',
     fabricImage: 'https://images.unsplash.com/photo-1642683497706-77a72ea549bb?q=80&w=1740&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D=100&fit=crop',
@@ -351,7 +367,7 @@ export function InvoicesPage({ onCreateInvoice, onViewInvoiceDetails, onMarkAsPa
     let filtered = invoices.filter(invoice => {
       // Search filter
       const matchesSearch = invoice.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        invoice.phone.includes(searchTerm) ||
+        (invoice.phone?.includes?.(searchTerm) ?? false) ||
         invoice.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (invoice.address?.toLowerCase().includes(searchTerm.toLowerCase()) ?? false);
       
@@ -407,6 +423,48 @@ export function InvoicesPage({ onCreateInvoice, onViewInvoiceDetails, onMarkAsPa
     });
   }, [invoices, searchTerm, statusFilter, dateFilter, sortField, sortDirection]);
 
+  const pageSize = viewMode === 'grid' ? GRID_PAGE_SIZE : TABLE_PAGE_SIZE;
+  const totalPages = Math.max(1, Math.ceil(filteredAndSortedInvoices.length / pageSize));
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, statusFilter, dateFilter, viewMode, sortField, sortDirection]);
+
+  useEffect(() => {
+    setCurrentPage((prev) => Math.min(prev, totalPages));
+  }, [totalPages]);
+
+  const paginatedInvoices = useMemo(() => {
+    const startIndex = (currentPage - 1) * pageSize;
+    return filteredAndSortedInvoices.slice(startIndex, startIndex + pageSize);
+  }, [filteredAndSortedInvoices, currentPage, pageSize]);
+
+  const pageStartIndex = filteredAndSortedInvoices.length === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+  const pageEndIndex = filteredAndSortedInvoices.length === 0 ? 0 : Math.min(pageStartIndex + paginatedInvoices.length - 1, filteredAndSortedInvoices.length);
+  const hasMultiplePages = totalPages > 1;
+
+  const visiblePageNumbers = useMemo(() => {
+    const maxButtons = 5;
+    if (totalPages <= maxButtons) {
+      return Array.from({ length: totalPages }, (_, idx) => idx + 1);
+    }
+    let start = Math.max(1, currentPage - 2);
+    let end = Math.min(totalPages, start + maxButtons - 1);
+    if (end - start < maxButtons - 1) {
+      start = Math.max(1, end - maxButtons + 1);
+    }
+    return Array.from({ length: end - start + 1 }, (_, idx) => start + idx);
+  }, [currentPage, totalPages]);
+
+  const goToPage = (page: number) => {
+    setCurrentPage(Math.min(Math.max(page, 1), totalPages));
+  };
+
+  const showLeadingEllipsis = visiblePageNumbers.length > 0 && visiblePageNumbers[0] > 1;
+  const showTrailingEllipsis = visiblePageNumbers.length > 0 && visiblePageNumbers[visiblePageNumbers.length - 1] < totalPages;
+  const handlePrevPage = () => goToPage(currentPage - 1);
+  const handleNextPage = () => goToPage(currentPage + 1);
+
   // Statistics
   const stats = useMemo(() => {
     const total = filteredAndSortedInvoices.length;
@@ -419,177 +477,185 @@ export function InvoicesPage({ onCreateInvoice, onViewInvoiceDetails, onMarkAsPa
     return { total, paid, pending, partial, totalAmount, paidAmount };
   }, [filteredAndSortedInvoices]);
 
-  const handlePrintInvoices = (rangeStart: Date, rangeEnd: Date) => {
-    const invoicesInRange = filteredAndSortedInvoices.filter((invoice) => {
-      const invoiceDate = new Date(invoice.receivedDate);
-      return invoiceDate >= rangeStart && invoiceDate <= rangeEnd;
-    });
+  const handlePrintInvoices = (rangeStart: Date, rangeEnd: Date): boolean => {
+    try {
+      const invoicesInRange = filteredAndSortedInvoices.filter((invoice) => {
+        const invoiceDate = new Date(invoice.receivedDate);
+        return invoiceDate >= rangeStart && invoiceDate <= rangeEnd;
+      });
 
-    const totalAmount = invoicesInRange.reduce((sum, invoice) => sum + invoice.total, 0);
-    const totalPaid = invoicesInRange.reduce((sum, invoice) => sum + invoice.paid, 0);
-    const totalRemaining = invoicesInRange.reduce((sum, invoice) => sum + Math.max(invoice.total - invoice.paid, 0), 0);
-    const statusCounts = invoicesInRange.reduce<Record<string, number>>((acc, invoice) => {
-      acc[invoice.status] = (acc[invoice.status] || 0) + 1;
-      return acc;
-    }, {});
-    const now = new Date();
-    const rangeLabel = `${formatRangeDate(rangeStart)} إلى ${formatRangeDate(rangeEnd)}`;
+      const totalAmount = invoicesInRange.reduce((sum, invoice) => sum + invoice.total, 0);
+      const totalPaid = invoicesInRange.reduce((sum, invoice) => sum + invoice.paid, 0);
+      const totalRemaining = invoicesInRange.reduce((sum, invoice) => sum + Math.max(invoice.total - invoice.paid, 0), 0);
+      const statusCounts = invoicesInRange.reduce<Record<string, number>>((acc, invoice) => {
+        acc[invoice.status] = (acc[invoice.status] || 0) + 1;
+        return acc;
+      }, {});
+      const now = new Date();
+      const rangeLabel = `${formatRangeDate(rangeStart)} إلى ${formatRangeDate(rangeEnd)}`;
 
-    openPrintWindow('قائمة الفواتير', (
-      <>
-        <header className="print-header">
-          <h1 className="print-title">سجل الفواتير</h1>
-          <p className="print-subtitle">قائمة تفصيلية بالفواتير المسجلة في نظام أزياء قرطبة</p>
-          <div className="print-meta">
-            <span>تاريخ الطباعة: {formatPrintDateTime(now)}</span>
-            <span>عدد الفواتير: {invoicesInRange.length}</span>
-            <span>الفترة المختارة: {rangeLabel}</span>
-          </div>
-        </header>
+      openPrintWindow('قائمة الفواتير', (
+        <>
+          <header className="print-header">
+            <h1 className="print-title">سجل الفواتير</h1>
+            <p className="print-subtitle">قائمة تفصيلية بالفواتير المسجلة في نظام أزياء قرطبة</p>
+            <div className="print-meta">
+              <span>تاريخ الطباعة: {formatPrintDateTime(now)}</span>
+              <span>عدد الفواتير: {invoicesInRange.length}</span>
+              <span>الفترة المختارة: {rangeLabel}</span>
+            </div>
+          </header>
 
-        <section className="print-section">
-          <h2 className="section-title">ملخص الأرقام</h2>
-          <div className="metrics-grid">
-            <div className="metric-card accent">
-              <span className="metric-label">إجمالي قيمة الفواتير</span>
-              <span className="metric-value">{formatCurrency(totalAmount)}</span>
-            </div>
-            <div className="metric-card">
-              <span className="metric-label">المبالغ المستلمة</span>
-              <span className="metric-value">{formatCurrency(totalPaid)}</span>
-            </div>
-            <div className="metric-card">
-              <span className="metric-label">المبالغ المتبقية</span>
-              <span className="metric-value">{formatCurrency(totalRemaining)}</span>
-            </div>
-            {Object.entries(statusCounts).map(([status, count]) => (
-              <div className="metric-card" key={status}>
-                <span className="metric-label">فواتير {getStatusLabel(status)}</span>
-                <span className="metric-value">{count}</span>
+          <section className="print-section">
+            <h2 className="section-title">ملخص الأرقام</h2>
+            <div className="metrics-grid">
+              <div className="metric-card accent">
+                <span className="metric-label">إجمالي قيمة الفواتير</span>
+                <span className="metric-value">{formatCurrency(totalAmount)}</span>
               </div>
-            ))}
-          </div>
-        </section>
+              <div className="metric-card">
+                <span className="metric-label">المبالغ المستلمة</span>
+                <span className="metric-value">{formatCurrency(totalPaid)}</span>
+              </div>
+              <div className="metric-card">
+                <span className="metric-label">المبالغ المتبقية</span>
+                <span className="metric-value">{formatCurrency(totalRemaining)}</span>
+              </div>
+              {Object.entries(statusCounts).map(([status, count]) => (
+                <div className="metric-card" key={status}>
+                  <span className="metric-label">فواتير {getStatusLabel(status)}</span>
+                  <span className="metric-value">{count}</span>
+                </div>
+              ))}
+            </div>
+          </section>
 
-        <section className="print-section">
-          <h2 className="section-title">جدول الفواتير</h2>
-          <p className="section-description">
-            يتضمن الجدول التفاصيل الأساسية لكل فاتورة بما في ذلك حالة السداد ومواعيد التسليم.
-            {invoicesInRange.length === 0 && ' لا توجد فواتير ضمن الفترة المحددة حالياً.'}
-          </p>
-          <div className="print-table-wrapper">
-            <table className="print-table">
-              <thead>
-                <tr>
-                  <th>رقم الفاتورة</th>
-                  <th>الزبون</th>
-                  <th>الهاتف</th>
-                  <th>تاريخ الاستلام</th>
-                  <th>تاريخ التسليم</th>
-                  <th>المبلغ الكلي</th>
-                  <th>المبلغ الواصل</th>
-                  <th>المتبقي</th>
-                  <th>الحالة</th>
-                </tr>
-              </thead>
-              <tbody>
-                {invoicesInRange.map((invoice) => {
-                  const remaining = Math.max(invoice.total - invoice.paid, 0);
-                  return (
-                    <tr key={invoice.id}>
-                      <td>{invoice.id}</td>
-                      <td>{invoice.customerName}</td>
-                      <td>{invoice.phone}</td>
-                      <td>{formatDate(invoice.receivedDate)}</td>
-                      <td>{formatDate(invoice.deliveryDate)}</td>
-                      <td>{formatCurrency(invoice.total)}</td>
-                      <td>{formatCurrency(invoice.paid)}</td>
-                      <td>{formatCurrency(remaining)}</td>
-                      <td>
-                        <span className="status-pill" style={getStatusPrintStyle(invoice.status)}>
-                          {getStatusLabel(invoice.status)}
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </section>
+          <section className="print-section">
+            <h2 className="section-title">جدول الفواتير</h2>
+            <p className="section-description">
+              يتضمن الجدول التفاصيل الأساسية لكل فاتورة بما في ذلك حالة السداد ومواعيد التسليم.
+              {invoicesInRange.length === 0 && ' لا توجد فواتير ضمن الفترة المحددة حالياً.'}
+            </p>
+            <div className="print-table-wrapper">
+              <table className="print-table">
+                <thead>
+                  <tr>
+                    <th>رقم الفاتورة</th>
+                    <th>الزبون</th>
+                    <th>الهاتف</th>
+                    <th>تاريخ الاستلام</th>
+                    <th>تاريخ التسليم</th>
+                    <th>المبلغ الكلي</th>
+                    <th>المبلغ الواصل</th>
+                    <th>المتبقي</th>
+                    <th>الحالة</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {invoicesInRange.map((invoice) => {
+                    const remaining = Math.max(invoice.total - invoice.paid, 0);
+                    return (
+                      <tr key={invoice.id}>
+                        <td>{invoice.id}</td>
+                        <td>{invoice.customerName}</td>
+                        <td>{invoice.phone}</td>
+                        <td>{formatDate(invoice.receivedDate)}</td>
+                        <td>{formatDate(invoice.deliveryDate)}</td>
+                        <td>{formatCurrency(invoice.total)}</td>
+                        <td>{formatCurrency(invoice.paid)}</td>
+                        <td>{formatCurrency(remaining)}</td>
+                        <td>
+                          <span className="status-pill" style={getStatusPrintStyle(invoice.status)}>
+                            {getStatusLabel(invoice.status)}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </section>
 
-        <section className="print-section">
-          <h2 className="section-title">تفاصيل الفواتير</h2>
-          <p className="section-description">
-            تم تجهيز هذه البطاقات لتعرض بيانات الزبون والملاحظات المرتبطة بكل فاتورة.
-            {invoicesInRange.length === 0 && ' لا توجد فواتير ضمن الفترة المحددة حالياً.'}
-          </p>
-          <div className="detail-cards">
-            {invoicesInRange.map((invoice) => {
-              const remaining = Math.max(invoice.total - invoice.paid, 0);
-              return (
-                <article className="detail-card" key={`${invoice.id}-details`}>
-                  <div className="detail-card-header">
-                    <h3 className="detail-title">{invoice.customerName}</h3>
-                    <span className="status-pill" style={getStatusPrintStyle(invoice.status)}>
-                      {getStatusLabel(invoice.status)}
-                    </span>
-                  </div>
-                  <div className="detail-grid two-column">
-                    <div className="detail-item">
-                      <span className="item-label">رقم الفاتورة</span>
-                      <span className="item-value">{invoice.id}</span>
+          <section className="print-section">
+            <h2 className="section-title">تفاصيل الفواتير</h2>
+            <p className="section-description">
+              تم تجهيز هذه البطاقات لتعرض بيانات الزبون والملاحظات المرتبطة بكل فاتورة.
+              {invoicesInRange.length === 0 && ' لا توجد فواتير ضمن الفترة المحددة حالياً.'}
+            </p>
+            <div className="detail-cards">
+              {invoicesInRange.map((invoice) => {
+                const remaining = Math.max(invoice.total - invoice.paid, 0);
+                return (
+                  <article className="detail-card" key={`${invoice.id}-details`}>
+                    <div className="detail-card-header">
+                      <h3 className="detail-title">{invoice.customerName}</h3>
+                      <span className="status-pill" style={getStatusPrintStyle(invoice.status)}>
+                        {getStatusLabel(invoice.status)}
+                      </span>
                     </div>
-                    <div className="detail-item">
-                      <span className="item-label">الهاتف</span>
-                      <span className="item-value">{invoice.phone}</span>
-                    </div>
-                    <div className="detail-item">
-                      <span className="item-label">تاريخ الاستلام</span>
-                      <span className="item-value">{formatDate(invoice.receivedDate)}</span>
-                    </div>
-                    <div className="detail-item">
-                      <span className="item-label">تاريخ التسليم</span>
-                      <span className="item-value">{formatDate(invoice.deliveryDate)}</span>
-                    </div>
-                  </div>
-                  <div className="detail-grid two-column">
-                    <div className="detail-item">
-                      <span className="item-label">المبلغ الكلي</span>
-                      <span className="item-value">{formatCurrency(invoice.total)}</span>
-                    </div>
-                    <div className="detail-item">
-                      <span className="item-label">المبلغ الواصل</span>
-                      <span className="item-value">{formatCurrency(invoice.paid)}</span>
-                    </div>
-                    <div className="detail-item">
-                      <span className="item-label">المبلغ المتبقي</span>
-                      <span className="item-value">{formatCurrency(remaining)}</span>
-                    </div>
-                  </div>
-                  {invoice.address && (
-                    <div className="detail-grid">
+                    <div className="detail-grid two-column">
                       <div className="detail-item">
-                        <span className="item-label">العنوان</span>
-                        <span className="item-value">{invoice.address}</span>
+                        <span className="item-label">رقم الفاتورة</span>
+                        <span className="item-value">{invoice.id}</span>
+                      </div>
+                      <div className="detail-item">
+                        <span className="item-label">الهاتف</span>
+                        <span className="item-value">{invoice.phone}</span>
+                      </div>
+                      <div className="detail-item">
+                        <span className="item-label">تاريخ الاستلام</span>
+                        <span className="item-value">{formatDate(invoice.receivedDate)}</span>
+                      </div>
+                      <div className="detail-item">
+                        <span className="item-label">تاريخ التسليم</span>
+                        <span className="item-value">{formatDate(invoice.deliveryDate)}</span>
                       </div>
                     </div>
-                  )}
-                  {invoice.notes && (
-                    <div className="detail-grid">
+                    <div className="detail-grid two-column">
                       <div className="detail-item">
-                        <span className="item-label">ملاحظات</span>
-                        <span className="item-value">{invoice.notes}</span>
+                        <span className="item-label">المبلغ الكلي</span>
+                        <span className="item-value">{formatCurrency(invoice.total)}</span>
+                      </div>
+                      <div className="detail-item">
+                        <span className="item-label">المبلغ الواصل</span>
+                        <span className="item-value">{formatCurrency(invoice.paid)}</span>
+                      </div>
+                      <div className="detail-item">
+                        <span className="item-label">المبلغ المتبقي</span>
+                        <span className="item-value">{formatCurrency(remaining)}</span>
                       </div>
                     </div>
-                  )}
-                </article>
-              );
-            })}
-          </div>
-        </section>
-      </>
-    ));
+                    {invoice.address && (
+                      <div className="detail-grid">
+                        <div className="detail-item">
+                          <span className="item-label">العنوان</span>
+                          <span className="item-value">{invoice.address}</span>
+                        </div>
+                      </div>
+                    )}
+                    {invoice.notes && (
+                      <div className="detail-grid">
+                        <div className="detail-item">
+                          <span className="item-label">ملاحظات</span>
+                          <span className="item-value">{invoice.notes}</span>
+                        </div>
+                      </div>
+                    )}
+                  </article>
+                );
+              })}
+            </div>
+          </section>
+        </>
+      ), { pageSize: 'A4', landscape: false });
+
+      return true;
+    } catch (error) {
+      console.error('Failed to prepare invoice list for printing:', error);
+      setPrintError('حدث خطأ غير متوقع أثناء تجهيز الطباعة. يرجى المحاولة مرة أخرى أو التواصل مع الدعم.');
+      return false;
+    }
   };
 
   const handleConfirmPrintRange = () => {
@@ -608,74 +674,19 @@ export function InvoicesPage({ onCreateInvoice, onViewInvoiceDetails, onMarkAsPa
       return;
     }
 
-    setIsPrintDialogOpen(false);
-    handlePrintInvoices(startDate, endDate);
+    const success = handlePrintInvoices(startDate, endDate);
+    if (success) {
+      setIsPrintDialogOpen(false);
+    }
   };
 
   const handlePrintInvoice = (invoice: Invoice) => {
-    const receiptWindow = window.open('', '_blank', 'width=900,height=700');
-
-    if (!receiptWindow) {
-      return;
-    }
-
-    const markup = renderToStaticMarkup(<PrintableInvoice invoice={invoice} />);
-
-    receiptWindow.document.write(`<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-  <head>
-    <meta charSet="utf-8" />
-    <title>فاتورة ${invoice.id}</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet" />
-    <style>${receiptStyles}</style>
-  </head>
-  <body>
-    ${markup}
-    <script>
-      window.onload = () => {
-        window.focus();
-        setTimeout(() => window.print(), 300);
-      };
-    <\/script>
-  </body>
-</html>`);
-    receiptWindow.document.close();
-    receiptWindow.focus();
+    openPrintInvoiceWindow(`فاتورة ${invoice.id}`, <PrintableInvoice invoice={invoice} />);
   };
 
-  const handleExportPDF = (invoice: Invoice) => {
-    const receiptWindow = window.open('', '_blank', 'width=900,height=700');
-
-    if (!receiptWindow) {
-      return;
-    }
-
-    const markup = renderToStaticMarkup(<PrintableInvoice invoice={invoice} />);
-
-    receiptWindow.document.write(`<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-  <head>
-    <meta charSet="utf-8" />
-    <title>فاتورة ${invoice.id}</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet" />
-    <style>${receiptStyles}</style>
-  </head>
-  <body>
-    ${markup}
-    <script>
-      window.onload = () => {
-        window.focus();
-        setTimeout(() => window.print(), 300);
-      };
-    <\/script>
-  </body>
-</html>`);
-    receiptWindow.document.close();
-    receiptWindow.focus();
+  // Native PDF preview using Electron IPC (opens in system PDF viewer)
+  const handleExportPDF2 = (invoice: Invoice) => {
+    openPdfPreviewWindow(`فاتورة ${invoice.id}`, <PrintableInvoice invoice={invoice} />, { pageSize: 'A5', landscape: true });
   };
 
   const handleShareWhatsApp = (invoice: Invoice) => {
@@ -690,7 +701,8 @@ export function InvoicesPage({ onCreateInvoice, onViewInvoiceDetails, onMarkAsPa
       `تاريخ التسليم: ${formatDate(invoice.deliveryDate)}`,
     ].join('\n');
 
-    const whatsappUrl = `https://wa.me/${invoice.phone.replace(/^0/, '964')}?text=${encodeURIComponent(message)}`;
+    const phone = (invoice.phone || '').replace(/^0/, '964');
+    const whatsappUrl = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
     window.open(whatsappUrl, '_blank');
   };
 
@@ -726,137 +738,155 @@ export function InvoicesPage({ onCreateInvoice, onViewInvoiceDetails, onMarkAsPa
     return invoice.status === 'معلق' || invoice.status === 'جزئي';
   };
 
+  const handleEditInvoice = (invoice: Invoice) => {
+    if (hasActionPermission('edit_invoice')) {
+      setInvoiceToEdit(invoice);
+      setIsEditDialogOpen(true);
+    }
+  };
+
+  const handleDuplicateInvoice = (invoice: Invoice) => {
+    if (hasActionPermission('create_invoice')) {
+      setInvoiceToDuplicate(invoice);
+      setIsDuplicateDialogOpen(true);
+    }
+  };
+
+  // Note: handlers inlined in onOpenChange; kept no extra functions
+
+  const handleDeleteInvoice = async (invoice: Invoice) => {
+    const confirmMessage = `هل أنت متأكد من حذف الفاتورة رقم ${invoice.id}؟\n\nهذا الإجراء لا يمكن التراجع عنه.`;
+    
+    if (window.confirm(confirmMessage)) {
+      try {
+        const { InvoiceService } = await import('@/services/invoice.service');
+        await InvoiceService.deleteInvoice(invoice.id);
+        // InvoiceService.deleteInvoice already handles optimistic cache update and invalidation
+        // DON'T call loadInvoices() here - it causes race condition where data is refetched before deletion is committed
+        
+        // Show success message
+        alert('تم حذف الفاتورة بنجاح!');
+      } catch (error) {
+        console.error('Error deleting invoice:', error);
+        alert(`حدث خطأ في حذف الفاتورة: ${error instanceof Error ? error.message : 'خطأ غير معروف'}`);
+      }
+    }
+  };
+
   return (
     <>
     <div className="min-h-screen bg-gradient-to-br from-[#F6E9CA] to-[#FDFBF7]">
       <div className="container mx-auto p-4 space-y-6">
-        {/* Enhanced Header with Statistics */}
+        {/* Header Section with inline Search and Controls */}
         <div className="bg-white rounded-xl shadow-lg border border-[#C69A72]/20 p-6">
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-            <div className="flex-1">
-              <h1 className="text-3xl font-bold text-[#13312A] arabic-text mb-2">إدارة الفواتير</h1>
+          <div className="flex flex-row-reverse items-center justify-between gap-4 overflow-x-auto whitespace-nowrap md:flex-nowrap">
+            {/* Title and description (right) */}
+            <div className="flex-shrink-0 text-right">
+              <h1 className="text-3xl font-bold text-[#13312A] arabic-text mb-1">إدارة الفواتير</h1>
               <p className="text-[#155446] arabic-text">إدارة شاملة لفواتير العملاء والطلبات</p>
             </div>
-            
-            {/* Statistics Cards */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="bg-gradient-to-r from-[#155446] to-[#13312A] text-white p-4 rounded-lg text-center">
-                <div className="text-2xl font-bold">{stats.total}</div>
-                <div className="text-sm opacity-90 arabic-text">إجمالي الفواتير</div>
+
+            {/* Center controls: search + sort + view + clear */}
+            <div className="flex-1 flex items-center justify-center gap-3 min-w-[320px]">
+              {/* Search */}
+              <div className="relative w-[360px] md:w-[480px]">
+                <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 text-[#155446] w-5 h-5 pointer-events-none" />
+                <Input
+                  placeholder="بحث عن الفواتير، الزبائن، أو أرقام الهاتف..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pr-16 pl-4 py-3 bg-white border-2 border-[#C69A72]/30 rounded-xl text-right text-base focus:border-[#155446] focus:ring-2 focus:ring-[#155446]/20 transition-all duration-300"
+                />
               </div>
-              <div className="bg-gradient-to-r from-green-500 to-green-600 text-white p-4 rounded-lg text-center">
-                <div className="text-2xl font-bold">{stats.paid}</div>
-                <div className="text-sm opacity-90 arabic-text">مدفوعة</div>
+
+              {/* Sort */}
+              <Select value={sortField} onValueChange={(val: string) => { setSortField(val); setSortDirection(defaultDescFields.has(val) ? 'desc' : 'asc'); }}>
+                <SelectTrigger className="w-40 border-2 border-[#C69A72]/30 rounded-xl" aria-label="ترتيب حسب" title="ترتيب حسب">
+                  <SelectValue placeholder="ترتيب حسب" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="receivedDate">التاريخ</SelectItem>
+                  <SelectItem value="customerName">اسم الزبون</SelectItem>
+                  <SelectItem value="total">المبلغ</SelectItem>
+                  <SelectItem value="status">الحالة</SelectItem>
+                </SelectContent>
+              </Select>
+
+              {/* View toggle */}
+              <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+                <Button
+                  variant={viewMode === 'table' ? 'default' : 'ghost'}
+                  size="sm"
+                  onClick={() => setViewMode('table')}
+                  className="flex items-center gap-2"
+                  aria-label="عرض بشكل جدول"
+                  title="عرض بشكل جدول"
+                >
+                  <List className="w-4 h-4" />
+                  <span className="hidden sm:inline arabic-text">جدول</span>
+                </Button>
+                <Button
+                  variant={viewMode === 'grid' ? 'default' : 'ghost'}
+                  size="sm"
+                  onClick={() => setViewMode('grid')}
+                  className="flex items-center gap-2"
+                  aria-label="عرض بشكل شبكة"
+                  title="عرض بشكل شبكة"
+                >
+                  <Grid3X3 className="w-4 h-4" />
+                  <span className="hidden sm:inline arabic-text">شبكة</span>
+                </Button>
               </div>
-              <div className="bg-gradient-to-r from-yellow-500 to-orange-500 text-white p-4 rounded-lg text-center">
-                <div className="text-2xl font-bold">{stats.pending}</div>
-                <div className="text-sm opacity-90 arabic-text">معلقة</div>
-              </div>
-              <div className="bg-gradient-to-r from-[#C69A72] to-[#B8860B] text-white p-4 rounded-lg text-center">
-                <div className="text-2xl font-bold">{formatCurrency(stats.totalAmount)}</div>
-                <div className="text-sm opacity-90 arabic-text">إجمالي المبلغ</div>
-              </div>
-            </div>
-          </div>
-          
-          {/* Action Buttons */}
-          <div className="flex flex-wrap gap-3 mt-6">
-            <Button
-              onClick={onCreateInvoice}
-              className="bg-[#155446] hover:bg-[#13312A] text-[#F6E9CA] flex items-center gap-2 px-6 py-3 text-lg font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
-            >
-              <Plus className="w-5 h-5" />
-              <span className="arabic-text">فاتورة جديدة</span>
-            </Button>
-            
-            <Button
-              variant="outline"
-              onClick={openPrintDialog}
-              className="border-2 border-[#C69A72] text-[#13312A] hover:bg-[#C69A72] hover:text-white flex items-center gap-2 px-6 py-3 text-lg font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
-            >
-              <Printer className="w-5 h-5" />
-              <span className="arabic-text">طباعة القائمة</span>
-            </Button>
-            
-            <Button
-              variant="outline"
-              onClick={() => setShowFilters(!showFilters)}
-              className="border-2 border-[#155446] text-[#155446] hover:bg-[#155446] hover:text-white flex items-center gap-2 px-6 py-3 text-lg font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
-            >
-              <Filter className="w-5 h-5" />
-              <span className="arabic-text">تصفية متقدمة</span>
-            </Button>
-            
-            <div className="flex items-center gap-2 bg-white rounded-xl p-2 border border-[#C69A72]/30">
+
+              {/* Clear */}
               <Button
-                variant={viewMode === 'table' ? 'default' : 'ghost'}
-                size="sm"
-                onClick={() => setViewMode('table')}
-                className="flex items-center gap-2"
+                variant="outline"
+                onClick={() => {
+                  setSearchTerm('');
+                  setStatusFilter('all');
+                  setDateFilter('all');
+                  setSortField('receivedDate');
+                  setSortDirection('desc');
+                }}
+                className="border-2 border-red-300 text-red-600 hover:bg-red-50 flex items-center gap-2 px-4 py-3 rounded-xl"
               >
-                <List className="w-4 h-4" />
-                <span className="hidden sm:inline arabic-text">جدول</span>
+                <FilterX className="w-4 h-4" />
+                <span className="arabic-text">مسح</span>
               </Button>
+            </div>
+
+            {/* Action buttons (left) */}
+            <div className="flex items-center gap-3 flex-shrink-0">
               <Button
-                variant={viewMode === 'grid' ? 'default' : 'ghost'}
-                size="sm"
-                onClick={() => setViewMode('grid')}
-                className="flex items-center gap-2"
+                onClick={onCreateInvoice}
+                className="bg-[#155446] hover:bg-[#13312A] text-[#F6E9CA] flex items-center gap-2 px-6 py-3 text-lg font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
               >
-                <Grid3X3 className="w-4 h-4" />
-                <span className="hidden sm:inline arabic-text">شبكة</span>
+                <Plus className="w-5 h-5" />
+                <span className="arabic-text">فاتورة جديدة</span>
+              </Button>
+
+              <Button
+                variant="outline"
+                onClick={openPrintDialog}
+                className="border-2 border-[#C69A72] text-[#13312A] hover:bg-[#C69A72] hover:text-white flex items-center gap-2 px-6 py-3 text-lg font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
+              >
+                <Printer className="w-5 h-5" />
+                <span className="arabic-text">طباعة القائمة</span>
+              </Button>
+
+              <Button
+                variant="outline"
+                onClick={() => setShowFilters(!showFilters)}
+                className="border-2 border-[#155446] text-[#155446] hover:bg-[#155446] hover:text-white flex items-center gap-2 px-6 py-3 text-lg font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
+              >
+                <Filter className="w-5 h-5" />
+                <span className="arabic-text">تصفية متقدمة</span>
               </Button>
             </div>
           </div>
         </div>
 
-        {/* Search and Basic Filters */}
-        <Card className="bg-white rounded-xl shadow-lg border border-[#C69A72]/20">
-          <CardContent className="p-6">
-            <div className="flex flex-col lg:flex-row gap-4">
-              <div className="flex-1 relative">
-                <Search className="absolute right-4 top-1/2 transform -translate-y-1/2 text-[#155446] w-5 h-5" />
-                <Input
-                  placeholder="بحث عن الفواتير، الزبائن، أو أرقام الهاتف..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pr-12 pl-4 py-3 bg-white border-2 border-[#C69A72]/30 rounded-xl text-right text-lg focus:border-[#155446] focus:ring-2 focus:ring-[#155446]/20 transition-all duration-300"
-                />
-              </div>
-              <div className="flex flex-wrap gap-3">
-                <Select value={sortField} onValueChange={(val: string) => {
-                  setSortField(val);
-                  setSortDirection(defaultDescFields.has(val) ? 'desc' : 'asc');
-                }}>
-                  <SelectTrigger className="w-48 border-2 border-[#C69A72]/30 rounded-xl">
-                    <SelectValue placeholder="ترتيب حسب" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="receivedDate">التاريخ</SelectItem>
-                    <SelectItem value="customer">اسم الزبون</SelectItem>
-                    <SelectItem value="total">المبلغ</SelectItem>
-                    <SelectItem value="status">الحالة</SelectItem>
-                  </SelectContent>
-                </Select>
-                
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setSearchTerm('');
-                    setStatusFilter('all');
-                    setDateFilter('all');
-                    setSortField('receivedDate');
-                    setSortDirection('desc');
-                  }}
-                  className="border-2 border-red-300 text-red-600 hover:bg-red-50 flex items-center gap-2 px-4 py-3 rounded-xl"
-                >
-                  <FilterX className="w-4 h-4" />
-                  <span className="arabic-text">مسح الفلاتر</span>
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        {/* Search card removed; controls moved into header */}
 
         {/* Advanced Filters */}
         {showFilters && (
@@ -867,7 +897,7 @@ export function InvoicesPage({ onCreateInvoice, onViewInvoiceDetails, onMarkAsPa
                 <div>
                   <Label className="text-[#155446] arabic-text font-semibold mb-2 block">حالة الفاتورة</Label>
                   <Select value={statusFilter} onValueChange={setStatusFilter}>
-                    <SelectTrigger className="border-2 border-[#C69A72]/30 rounded-xl">
+                <SelectTrigger className="border-2 border-[#C69A72]/30 rounded-xl" aria-label="تصفية حسب الحالة" title="تصفية حسب الحالة">
                       <SelectValue placeholder="اختر الحالة" />
                     </SelectTrigger>
                     <SelectContent>
@@ -882,7 +912,7 @@ export function InvoicesPage({ onCreateInvoice, onViewInvoiceDetails, onMarkAsPa
                 <div>
                   <Label className="text-[#155446] arabic-text font-semibold mb-2 block">الفترة الزمنية</Label>
                   <Select value={dateFilter} onValueChange={setDateFilter}>
-                    <SelectTrigger className="border-2 border-[#C69A72]/30 rounded-xl">
+                <SelectTrigger className="border-2 border-[#C69A72]/30 rounded-xl" aria-label="تصفية حسب المدة" title="تصفية حسب المدة">
                       <SelectValue placeholder="اختر الفترة" />
                     </SelectTrigger>
                     <SelectContent>
@@ -931,6 +961,57 @@ export function InvoicesPage({ onCreateInvoice, onViewInvoiceDetails, onMarkAsPa
           </div>
         )}
 
+        {/* Statistics Cards - compact layout */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <Card className="bg-gradient-to-br from-[#155446] to-[#13312A] border-0 shadow-md hover:shadow-lg transition-all duration-300">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-semibold arabic-text text-black">إجمالي الفواتير</span>
+                <div className="w-8 h-8 bg-white rounded-md flex items-center justify-center">
+                  <List className="w-5 h-5 text-[#13312A]" />
+                </div>
+              </div>
+              <div className="mt-2 text-2xl font-bold text-black">{formatArabicNumber(stats.total)}</div>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-gradient-to-br from-green-500 to-green-600 border-0 shadow-md hover:shadow-lg transition-all duration-300">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-semibold arabic-text text-black">مدفوعة</span>
+                <div className="w-8 h-8 bg-white rounded-md flex items-center justify-center">
+                  <CheckCircle className="w-5 h-5 text-[#13312A]" />
+                </div>
+              </div>
+              <div className="mt-2 text-2xl font-bold text-black">{formatArabicNumber(stats.paid)}</div>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-gradient-to-br from-yellow-500 to-orange-500 border-0 shadow-md hover:shadow-lg transition-all duration-300">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-semibold arabic-text text-black">معلقة</span>
+                <div className="w-8 h-8 bg-white rounded-md flex items-center justify-center">
+                  <Clock className="w-5 h-5 text-[#13312A]" />
+                </div>
+              </div>
+              <div className="mt-2 text-2xl font-bold text-black">{formatArabicNumber(stats.pending)}</div>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-gradient-to-br from-[#C69A72] to-[#B8860B] border-0 shadow-md hover:shadow-lg transition-all duration-300">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-semibold arabic-text text-black">إجمالي المبلغ</span>
+                <div className="w-8 h-8 bg-white rounded-md flex items-center justify-center">
+                  <CreditCard className="w-5 h-5 text-[#13312A]" />
+                </div>
+              </div>
+              <div className="mt-2 text-2xl font-bold text-black">{formatCurrency(stats.totalAmount)}</div>
+            </CardContent>
+          </Card>
+        </div>
+
         {/* Invoices Display */}
         {!loading && !error && (
           <>
@@ -957,7 +1038,7 @@ export function InvoicesPage({ onCreateInvoice, onViewInvoiceDetails, onMarkAsPa
                     <div className="overflow-x-auto">
                       <Table>
                         <TableHeader>
-                          <TableRow className="bg-gradient-to-r from-[#13312A] to-[#155446] hover:bg-gradient-to-r hover:from-[#13312A] hover:to-[#155446]">
+                          <TableRow className="bg-[#155446] hover:bg-[#13312A]">
                             <TableHead className="text-[#F6E9CA] arabic-text text-right font-bold text-base select-none">
                               <div className="flex items-center justify-between cursor-pointer" onClick={() => handleHeaderSort('id')}>
                                 <span>رقم الفاتورة</span>
@@ -1033,7 +1114,7 @@ export function InvoicesPage({ onCreateInvoice, onViewInvoiceDetails, onMarkAsPa
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {filteredAndSortedInvoices.map((invoice) => (
+                          {paginatedInvoices.map((invoice) => (
                             <TableRow 
                               key={invoice.id} 
                               className="hover:bg-gradient-to-r hover:from-[#F6E9CA]/50 hover:to-[#FDFBF7] cursor-pointer transition-all duration-300 border-b border-[#C69A72]/20"
@@ -1083,7 +1164,7 @@ export function InvoicesPage({ onCreateInvoice, onViewInvoiceDetails, onMarkAsPa
                                   )}
                                   
                                   <DropdownMenu>
-                                    <DropdownMenuTrigger className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground h-8 px-3">
+                                    <DropdownMenuTrigger className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground h-8 px-3" aria-label={`مزید إجراءات لفاتورة ${invoice.id}`} title={`مزید إجراءات لفاتورة ${invoice.id}`}>
                                       <MoreVertical className="w-4 h-4" />
                                     </DropdownMenuTrigger>
                                     <DropdownMenuContent align="end" className="bg-white border-[#C69A72] rounded-xl shadow-lg">
@@ -1091,15 +1172,19 @@ export function InvoicesPage({ onCreateInvoice, onViewInvoiceDetails, onMarkAsPa
                                         <Eye className="w-4 h-4 ml-2" />
                                         عرض التفاصيل
                                       </DropdownMenuItem>
-                                      <DropdownMenuItem className="arabic-text">
-                                        <Edit className="w-4 h-4 ml-2" />
-                                        تعديل الفاتورة
-                                      </DropdownMenuItem>
-                                      <DropdownMenuItem className="arabic-text">
-                                        <Copy className="w-4 h-4 ml-2" />
-                                        تكرار الفاتورة
-                                      </DropdownMenuItem>
-                                      <DropdownMenuItem onClick={() => handleExportPDF(invoice)} className="arabic-text">
+                                      {hasActionPermission('edit_invoice') && (
+                                        <DropdownMenuItem onClick={() => handleEditInvoice(invoice)} className="arabic-text">
+                                          <Edit className="w-4 h-4 ml-2" />
+                                          تعديل الفاتورة
+                                        </DropdownMenuItem>
+                                      )}
+                                      {hasActionPermission('create_invoice') && (
+                                        <DropdownMenuItem onClick={() => handleDuplicateInvoice(invoice)} className="arabic-text">
+                                          <Copy className="w-4 h-4 ml-2" />
+                                          تكرار الفاتورة
+                                        </DropdownMenuItem>
+                                      )}
+                                      <DropdownMenuItem onClick={() => handleExportPDF2(invoice)} className="arabic-text">
                                         <Download className="w-4 h-4 ml-2" />
                                         تصدير إلى PDF
                                       </DropdownMenuItem>
@@ -1111,6 +1196,15 @@ export function InvoicesPage({ onCreateInvoice, onViewInvoiceDetails, onMarkAsPa
                                         <FileImage className="w-4 h-4 ml-2" />
                                         حفظ كصورة
                                       </DropdownMenuItem>
+                                      {hasActionPermission('delete_invoice') && (
+                                        <DropdownMenuItem 
+                                          onClick={() => handleDeleteInvoice(invoice)} 
+                                          className="arabic-text text-red-600 hover:text-red-700 hover:bg-red-50"
+                                        >
+                                          <Trash2 className="w-4 h-4 ml-2" />
+                                          حذف الفاتورة
+                                        </DropdownMenuItem>
+                                      )}
                                     </DropdownMenuContent>
                                   </DropdownMenu>
                                 </div>
@@ -1126,7 +1220,7 @@ export function InvoicesPage({ onCreateInvoice, onViewInvoiceDetails, onMarkAsPa
                 {/* Grid View */}
                 {viewMode === 'grid' && (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                    {filteredAndSortedInvoices.map((invoice) => (
+                    {paginatedInvoices.map((invoice) => (
                       <Card 
                         key={invoice.id} 
                         className="bg-white rounded-xl shadow-lg border border-[#C69A72]/20 hover:shadow-xl transition-all duration-300 cursor-pointer group"
@@ -1165,8 +1259,8 @@ export function InvoicesPage({ onCreateInvoice, onViewInvoiceDetails, onMarkAsPa
                           {/* Content */}
                           <div className="p-4">
                             <h3 className="text-lg font-bold text-[#13312A] arabic-text mb-2 truncate">{invoice.customerName}</h3>
-                            <p className="text-sm text-[#155446] arabic-text mb-1">رقم الفاتورة: {invoice.id}</p>
-                            <p className="text-sm text-[#155446] font-mono mb-3">{invoice.phone}</p>
+                            <p className="text-sm text-[#155446] arabic-text mb-1">رقم الفاتورة: {formatStringNumber(invoice.id)}</p>
+                            <p className="text-sm text-[#155446] font-mono mb-3">{formatStringNumber(invoice.phone)}</p>
                             
                             <div className="space-y-2 mb-4">
                               <div className="flex justify-between items-center">
@@ -1201,6 +1295,7 @@ export function InvoicesPage({ onCreateInvoice, onViewInvoiceDetails, onMarkAsPa
                                 variant="outline"
                                 onClick={() => handlePrintInvoice(invoice)}
                                 className="flex-1 border-[#C69A72] text-[#13312A] hover:bg-[#C69A72] hover:text-white rounded-lg"
+                                aria-label={`طباعة فاتورة ${invoice.customerName}`}
                               >
                                 <Printer className="w-4 h-4 ml-1" />
                                 <span className="arabic-text">طباعة</span>
@@ -1216,7 +1311,7 @@ export function InvoicesPage({ onCreateInvoice, onViewInvoiceDetails, onMarkAsPa
                               </Button>
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
-                                  <Button size="sm" variant="outline" className="border-[#C69A72] text-[#13312A] hover:bg-[#C69A72] hover:text-white rounded-lg">
+                                  <Button size="sm" variant="outline" className="border-[#C69A72] text-[#13312A] hover:bg-[#C69A72] hover:text-white rounded-lg" aria-label={`مزید إجراءات لفاتورة ${invoice.id}`} title={`مزید إجراءات لفاتورة ${invoice.id}`}>
                                     <MoreVertical className="w-4 h-4" />
                                   </Button>
                                 </DropdownMenuTrigger>
@@ -1225,14 +1320,31 @@ export function InvoicesPage({ onCreateInvoice, onViewInvoiceDetails, onMarkAsPa
                                     <Eye className="w-4 h-4 ml-2" />
                                     عرض التفاصيل
                                   </DropdownMenuItem>
-                                  <DropdownMenuItem className="arabic-text">
-                                    <Edit className="w-4 h-4 ml-2" />
-                                    تعديل
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem onClick={() => handleExportPDF(invoice)} className="arabic-text">
+                                  {hasActionPermission('edit_invoice') && (
+                                    <DropdownMenuItem onClick={() => handleEditInvoice(invoice)} className="arabic-text">
+                                      <Edit className="w-4 h-4 ml-2" />
+                                      تعديل
+                                    </DropdownMenuItem>
+                                  )}
+                                  {hasActionPermission('create_invoice') && (
+                                    <DropdownMenuItem onClick={() => handleDuplicateInvoice(invoice)} className="arabic-text">
+                                      <Copy className="w-4 h-4 ml-2" />
+                                      تكرار
+                                    </DropdownMenuItem>
+                                  )}
+                                  <DropdownMenuItem onClick={() => handleExportPDF2(invoice)} className="arabic-text">
                                     <Download className="w-4 h-4 ml-2" />
                                     تصدير PDF
                                   </DropdownMenuItem>
+                                  {hasActionPermission('delete_invoice') && (
+                                    <DropdownMenuItem 
+                                      onClick={() => handleDeleteInvoice(invoice)} 
+                                      className="arabic-text text-red-600 hover:text-red-700 hover:bg-red-50"
+                                    >
+                                      <Trash2 className="w-4 h-4 ml-2" />
+                                      حذف الفاتورة
+                                    </DropdownMenuItem>
+                                  )}
                                 </DropdownMenuContent>
                               </DropdownMenu>
                             </div>
@@ -1240,6 +1352,61 @@ export function InvoicesPage({ onCreateInvoice, onViewInvoiceDetails, onMarkAsPa
                         </CardContent>
                       </Card>
                     ))}
+                  </div>
+                )}
+
+                {hasMultiplePages && (
+                  <div className="mt-8 bg-white rounded-xl border border-[#C69A72]/20 shadow-sm p-4 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                    <div className="text-sm text-[#155446] arabic-text">
+                      عرض {pageStartIndex}-{pageEndIndex} من {filteredAndSortedInvoices.length} فاتورة
+                    </div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={currentPage === 1}
+                        onClick={handlePrevPage}
+                        className="min-w-[90px]"
+                      >
+                        السابق
+                      </Button>
+                      {showLeadingEllipsis && (
+                        <>
+                          <Button variant="outline" size="sm" onClick={() => goToPage(1)}>
+                            1
+                          </Button>
+                          <span className="px-2 text-[#155446]">...</span>
+                        </>
+                      )}
+                      {visiblePageNumbers.map((page) => (
+                        <Button
+                          key={page}
+                          variant={page === currentPage ? 'default' : 'outline'}
+                          size="sm"
+                          onClick={() => goToPage(page)}
+                          aria-current={page === currentPage ? 'page' : undefined}
+                        >
+                          {page}
+                        </Button>
+                      ))}
+                      {showTrailingEllipsis && (
+                        <>
+                          <span className="px-2 text-[#155446]">...</span>
+                          <Button variant="outline" size="sm" onClick={() => goToPage(totalPages)}>
+                            {totalPages}
+                          </Button>
+                        </>
+                      )}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={currentPage === totalPages}
+                        onClick={handleNextPage}
+                        className="min-w-[90px]"
+                      >
+                        التالي
+                      </Button>
+                    </div>
                   </div>
                 )}
               </>
@@ -1250,144 +1417,22 @@ export function InvoicesPage({ onCreateInvoice, onViewInvoiceDetails, onMarkAsPa
       </div>
     </div>
 
-      <Dialog open={isPrintDialogOpen} onOpenChange={handlePrintDialogOpenChange}>
-        <DialogContent className="max-w-3xl bg-[#F6E9CA] border-[#C69A72]">
-          <DialogHeader>
-            <DialogTitle className="text-[#13312A] arabic-text">تحديد فترة الطباعة</DialogTitle>
-            <DialogDescription className="text-[#155446] arabic-text">
-              اختر تاريخ البداية والنهاية قبل طباعة قائمة الفواتير، ويمكنك توسيع الفترة أو تقليصها حسب الحاجة.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-6">
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-4 rounded-xl border border-[#C69A72] bg-[#FDFBF7] p-4">
-                <h3 className="text-lg font-semibold text-[#13312A] arabic-text">بداية الفترة (من)</h3>
-                <div className="grid gap-3 sm:grid-cols-3">
-                  <div className="flex flex-col gap-1">
-                    <Label className="text-[#13312A] arabic-text">السنة</Label>
-                    <Input
-                      type="number"
-                      min={2000}
-                      max={2100}
-                      value={fromDateParts.year}
-                      onChange={(e) => handleFromYearChange(e.target.value)}
-                      placeholder="مثال: 2024"
-                      className="border-[#C69A72] text-right arabic-text touch-target"
-                    />
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <Label className="text-[#13312A] arabic-text">الشهر</Label>
-                    <select
-                      value={fromDateParts.month}
-                      onChange={(e) => handleFromMonthChange(e.target.value)}
-                      className="px-3 py-2 border border-[#C69A72] rounded-md bg-white text-[#13312A] arabic-text touch-target focus:border-[#155446] focus:ring-1 focus:ring-[#155446]"
-                    >
-                      <option value="">من بداية السنة</option>
-                      {monthOptions.map((month) => (
-                        <option key={`from-month-${month.value}`} value={month.value}>
-                          {month.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <Label className="text-[#13312A] arabic-text">اليوم</Label>
-                    <select
-                      value={fromDateParts.day}
-                      onChange={(e) => handleFromDayChange(e.target.value)}
-                      disabled={!fromDateParts.month}
-                      className="px-3 py-2 border border-[#C69A72] rounded-md bg-white text-[#13312A] arabic-text touch-target focus:border-[#155446] focus:ring-1 focus:ring-[#155446] disabled:cursor-not-allowed disabled:bg-[#E2D4BD] disabled:text-[#7A6A58]"
-                    >
-                      <option value="">من بداية الشهر</option>
-                      {dayOptions.map((day) => (
-                        <option key={`from-day-${day}`} value={day}>
-                          {day}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-4 rounded-xl border border-[#C69A72] bg-[#FDFBF7] p-4">
-                <h3 className="text-lg font-semibold text-[#13312A] arabic-text">نهاية الفترة (إلى)</h3>
-                <div className="grid gap-3 sm:grid-cols-3">
-                  <div className="flex flex-col gap-1">
-                    <Label className="text-[#13312A] arabic-text">السنة</Label>
-                    <Input
-                      type="number"
-                      min={2000}
-                      max={2100}
-                      value={toDateParts.year}
-                      onChange={(e) => handleToYearChange(e.target.value)}
-                      placeholder="مثال: 2024"
-                      className="border-[#C69A72] text-right arabic-text touch-target"
-                    />
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <Label className="text-[#13312A] arabic-text">الشهر</Label>
-                    <select
-                      value={toDateParts.month}
-                      onChange={(e) => handleToMonthChange(e.target.value)}
-                      className="px-3 py-2 border border-[#C69A72] rounded-md bg-white text-[#13312A] arabic-text touch-target focus:border-[#155446] focus:ring-1 focus:ring-[#155446]"
-                    >
-                      <option value="">حتى نهاية السنة</option>
-                      {monthOptions.map((month) => (
-                        <option key={`to-month-${month.value}`} value={month.value}>
-                          {month.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <Label className="text-[#13312A] arabic-text">اليوم</Label>
-                    <select
-                      value={toDateParts.day}
-                      onChange={(e) => handleToDayChange(e.target.value)}
-                      disabled={!toDateParts.month}
-                      className="px-3 py-2 border border-[#C69A72] rounded-md bg-white text-[#13312A] arabic-text touch-target focus:border-[#155446] focus:ring-1 focus:ring-[#155446] disabled:cursor-not-allowed disabled:bg-[#E2D4BD] disabled:text-[#7A6A58]"
-                    >
-                      <option value="">حتى نهاية الشهر</option>
-                      {dayOptions.map((day) => (
-                        <option key={`to-day-${day}`} value={day}>
-                          {day}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <p className="text-sm text-[#155446] arabic-text">
-              ترك حقل الشهر أو اليوم فارغاً يعني طباعة الفترة الكاملة للسنة أو الشهر المحدد. سيتم استخدام تاريخ الاستلام لكل فاتورة لتحديد مدى الطباعة.
-            </p>
-
-            {printError && (
-              <p className="text-sm text-red-600 arabic-text">{printError}</p>
-            )}
-          </div>
-
-          <DialogFooter className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => handlePrintDialogOpenChange(false)}
-              className="border-[#C69A72] text-[#13312A] hover:bg-[#C69A72] touch-target"
-            >
-              إلغاء
-            </Button>
-            <Button
-              type="button"
-              onClick={handleConfirmPrintRange}
-              className="bg-[#155446] hover:bg-[#13312A] text-[#F6E9CA] touch-target"
-            >
-              بدء الطباعة
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <PrintInvoicesDialog
+        isOpen={isPrintDialogOpen}
+        fromDateParts={fromDateParts}
+        toDateParts={toDateParts}
+        monthOptions={monthOptions}
+        dayOptions={dayOptions}
+        printError={printError}
+        onClose={() => handlePrintDialogOpenChange(false)}
+        onConfirm={handleConfirmPrintRange}
+        onFromYearChange={handleFromYearChange}
+        onFromMonthChange={handleFromMonthChange}
+        onFromDayChange={handleFromDayChange}
+        onToYearChange={handleToYearChange}
+        onToMonthChange={handleToMonthChange}
+        onToDayChange={handleToDayChange}
+      />
 
       {/* Invoice Details Dialog - Fallback for when onViewInvoiceDetails is not provided */}
       {selectedInvoice && !onViewInvoiceDetails && (
@@ -1397,6 +1442,71 @@ export function InvoicesPage({ onCreateInvoice, onViewInvoiceDetails, onMarkAsPa
           invoice={selectedInvoice!}
         />
       )}
+
+      {/* Edit Invoice Dialog */}
+      {invoiceToEdit && (
+        <NewInvoiceDialogWithDB
+          isOpen={isEditDialogOpen}
+          onOpenChange={(open) => {
+            setIsEditDialogOpen(open);
+            if (!open) setInvoiceToEdit(null);
+          }}
+          onInvoiceCreated={() => {
+            setIsEditDialogOpen(false);
+            setInvoiceToEdit(null);
+            if (loadInvoices) {
+              loadInvoices();
+            }
+          }}
+          prefillCustomer={{
+            id: invoiceToEdit.id, // Pass the invoice ID for editing
+            name: invoiceToEdit.customerName,
+            phone: invoiceToEdit.phone,
+            address: invoiceToEdit.address,
+            total: invoiceToEdit.total,
+            paidAmount: invoiceToEdit.paid,
+            status: invoiceToEdit.status,
+            deliveryDate: typeof invoiceToEdit.deliveryDate === 'string' ? invoiceToEdit.deliveryDate : invoiceToEdit.deliveryDate.toISOString().split('T')[0],
+            notes: invoiceToEdit.notes,
+            items: [],
+            measurements: invoiceToEdit.measurements,
+            designDetails: invoiceToEdit.designDetails
+          }}
+        />
+      )}
+
+      {/* Duplicate Invoice Dialog */}
+      {invoiceToDuplicate && (
+        <NewInvoiceDialogWithDB
+          isOpen={isDuplicateDialogOpen}
+          onOpenChange={(open) => {
+            setIsDuplicateDialogOpen(open);
+            if (!open) setInvoiceToDuplicate(null);
+          }}
+          onInvoiceCreated={() => {
+            setIsDuplicateDialogOpen(false);
+            setInvoiceToDuplicate(null);
+            if (loadInvoices) {
+              loadInvoices();
+            }
+          }}
+          prefillCustomer={{
+            name: invoiceToDuplicate.customerName,
+            phone: invoiceToDuplicate.phone,
+            address: invoiceToDuplicate.address,
+            total: invoiceToDuplicate.total,
+            paidAmount: 0, // Reset paid amount for duplicate
+            status: 'معلق', // Reset status for duplicate
+            deliveryDate: typeof invoiceToDuplicate.deliveryDate === 'string' ? invoiceToDuplicate.deliveryDate : invoiceToDuplicate.deliveryDate.toISOString().split('T')[0],
+            notes: invoiceToDuplicate.notes,
+            items: [],
+            measurements: invoiceToDuplicate.measurements,
+            designDetails: invoiceToDuplicate.designDetails
+          }}
+        />
+      )}
     </>
   );
 }
+
+

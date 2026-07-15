@@ -1,14 +1,18 @@
 import React from 'react';
-import { Home, Receipt, Users, Menu, Settings, User, LogOut, DollarSign } from 'lucide-react';
+import { Home, Receipt, Users, Menu, Settings, User, LogOut, DollarSign, Bell, Download, Upload, HardDrive } from 'lucide-react';
 import { Button } from './ui/button';
 import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle, SheetDescription } from './ui/sheet';
 import { User as UserType } from '../services/auth.service';
 import { usePermissions } from '../hooks/usePermissions';
+import { useState } from 'react';
+import { NotificationCenter } from './dashboard/NotificationCenter';
+import { useNotifications } from '@/app/NotificationsProvider';
+// import { SyncStatus } from './SyncStatus';
 
 interface LayoutProps {
   children: React.ReactNode;
   currentPage: string;
-  onNavigate: (page: string) => void;
+  onNavigate: (page: string, itemId?: string) => void;
   isLoggedIn: boolean;
   onLogout: () => void;
   currentUser?: UserType | null;
@@ -16,6 +20,59 @@ interface LayoutProps {
 
 export function Layout({ children, currentPage, onNavigate, isLoggedIn, onLogout, currentUser }: LayoutProps) {
   const { hasPagePermission } = usePermissions(currentUser ?? null);
+  const { unreadCount } = useNotifications();
+  const [isNotificationOpen, setIsNotificationOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [importing, setImporting] = useState(false);
+
+  const handleExport = async () => {
+    try {
+      setExporting(true);
+      const { storage } = await import('@/storage');
+      if (typeof (storage as any).exportAll === 'function') {
+        const data = await (storage as any).exportAll();
+        const json = JSON.stringify(data, null, 2);
+        const defaultName = `qurtuba-backup-${new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')}.json`;
+        const isElectron = typeof window !== 'undefined' && (window as any).electronAPI;
+        if (isElectron) {
+          try {
+            const result = await (window as any).electronAPI.showSaveDialog({
+              title: 'حفظ النسخة الاحتياطية',
+              defaultPath: defaultName,
+              filters: [{ name: 'JSON', extensions: ['json'] }]
+            });
+            if (!result?.canceled && result?.filePath) {
+              await (window as any).electronAPI.saveFile(json, result.filePath);
+            }
+          } catch {}
+        } else {
+          const blob = new Blob([json], { type: 'application/json' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = defaultName;
+          a.click();
+          URL.revokeObjectURL(url);
+        }
+      }
+    } finally { setExporting(false); }
+  };
+
+  const handleImport = async (file: File) => {
+    try {
+      setImporting(true);
+      const text = await file.text();
+      const json = JSON.parse(text);
+      const { storage } = await import('@/storage');
+      if (typeof (storage as any).importAll === 'function') {
+        await (storage as any).importAll(json);
+        // Hard reload caches
+        window.location.reload();
+      }
+    } catch (e) {
+      console.error('Import failed:', e);
+    } finally { setImporting(false); }
+  };
 
   // All possible navigation items
   const allNavigationItems = [
@@ -54,6 +111,21 @@ export function Layout({ children, currentPage, onNavigate, isLoggedIn, onLogout
             </Button>
           );
         })}
+        {hasPagePermission('adminLog') && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => onNavigate('adminLog')}
+            className={`flex flex-col items-center gap-1 p-2 touch-target ${
+              (currentPage === 'adminLog')
+                ? 'text-[#F6E9CA] bg-[#155446]'
+                : 'text-[#C69A72] hover:text-[#F6E9CA] hover:bg-[#155446]'
+            }`}
+          >
+            <HardDrive size={20} />
+            <span className="text-xs arabic-text">سجل الإدارة</span>
+          </Button>
+        )}
         
         <Sheet>
           <SheetTrigger className="inline-flex flex-col items-center gap-1 p-2 touch-target text-[#C69A72] hover:text-[#F6E9CA] hover:bg-[#155446] rounded-md transition-colors">
@@ -82,6 +154,20 @@ export function Layout({ children, currentPage, onNavigate, isLoggedIn, onLogout
             )}
             
             <div className="flex flex-col gap-4 mt-4">
+              <div className="p-4 bg-[#155446] rounded-lg">
+                <div className="flex items-center gap-2 text-[#F6E9CA] mb-3"><HardDrive size={18} /><span className="arabic-text">إدارة البيانات المحلية</span></div>
+                <div className="flex gap-2">
+                  <button onClick={handleExport} disabled={exporting} className="inline-flex items-center gap-2 bg-[#C69A72] text-[#13312A] rounded px-3 py-2 text-sm">
+                    <Download size={16} />
+                    <span className="arabic-text">تصدير</span>
+                  </button>
+                  <label className="inline-flex items-center gap-2 bg-[#C69A72] text-[#13312A] rounded px-3 py-2 text-sm cursor-pointer" title={importing ? 'جاري الاستيراد...' : 'استيراد نسخة احتياطية'}>
+                    <Upload size={16} />
+                    <span className="arabic-text">استيراد</span>
+                    <input type="file" accept="application/json" className="hidden" onChange={(e) => e.target.files && e.target.files[0] && handleImport(e.target.files[0])} />
+                  </label>
+                </div>
+              </div>
               {/* Show additional pages based on permissions */}
               {hasPagePermission('users') && (
                 <Button
@@ -140,11 +226,52 @@ export function Layout({ children, currentPage, onNavigate, isLoggedIn, onLogout
                   </Button>
                 );
               })}
+              {hasPagePermission('adminLog') && (
+                <Button
+                  variant="ghost"
+                  onClick={() => onNavigate('adminLog')}
+                  className={`flex items-center gap-2 px-4 py-2 touch-target ${
+                    (activePage === 'adminLog')
+                      ? 'text-[#F6E9CA] bg-[#155446]'
+                      : 'text-[#C69A72] hover:text-[#F6E9CA] hover:bg-[#155446]'
+                  }`}
+                >
+                  <HardDrive size={18} />
+                  <span className="arabic-text">سجل الإدارة</span>
+                </Button>
+              )}
               
             </nav>
           </div>
           
           <div className="flex items-center gap-4">
+            <div>
+              <Button
+                variant="ghost"
+                onClick={() => setIsNotificationOpen(true)}
+                className="text-[#C69A72] hover:text-[#F6E9CA] hover:bg-[#155446] p-2 touch-target relative"
+                aria-label="مركز التنبيهات"
+                title="مركز التنبيهات"
+              >
+                <Bell size={18} />
+                {unreadCount > 0 && (
+                  <span className="absolute top-0 right-0 translate-x-1/2 -translate-y-1/2 bg-red-600 text-white text-[10px] leading-none rounded-full py-[2px] px-[6px]">
+                    {unreadCount}
+                  </span>
+                )}
+              </Button>
+            </div>
+            <div className="flex items-center gap-2">
+              <button onClick={handleExport} disabled={exporting} className="inline-flex items-center gap-2 bg-[#C69A72] text-[#13312A] rounded px-3 py-2 text-sm">
+                <Download size={16} />
+                <span className="arabic-text">تصدير</span>
+              </button>
+              <label className="inline-flex items-center gap-2 bg-[#C69A72] text-[#13312A] rounded px-3 py-2 text-sm cursor-pointer" title={importing ? 'جاري الاستيراد...' : 'استيراد نسخة احتياطية'}>
+                <Upload size={16} />
+                <span className="arabic-text">استيراد</span>
+                <input type="file" accept="application/json" className="hidden" onChange={(e) => e.target.files && e.target.files[0] && handleImport(e.target.files[0])} />
+              </label>
+            </div>
             {currentUser && (
               <div className="flex items-center gap-2 text-[#F6E9CA]">
                 <div className="w-8 h-8 bg-[#155446] rounded-full flex items-center justify-center">
@@ -161,6 +288,8 @@ export function Layout({ children, currentPage, onNavigate, isLoggedIn, onLogout
                 variant="ghost"
                 onClick={() => onNavigate('users')}
                 className="text-[#C69A72] hover:text-[#F6E9CA] hover:bg-[#155446] p-2 touch-target"
+                aria-label="إعدادات المستخدمين"
+                title="إدارة المستخدمين"
               >
                 <Settings size={18} />
               </Button>
@@ -169,6 +298,8 @@ export function Layout({ children, currentPage, onNavigate, isLoggedIn, onLogout
               variant="ghost"
               onClick={onLogout}
               className="text-[#C69A72] hover:text-[#F6E9CA] hover:bg-destructive p-2 touch-target"
+              aria-label="تسجيل الخروج"
+              title="تسجيل الخروج"
             >
               <LogOut size={18} />
             </Button>
@@ -189,6 +320,11 @@ export function Layout({ children, currentPage, onNavigate, isLoggedIn, onLogout
         {children}
       </main>
       <MobileNavigation />
+      <NotificationCenter
+        isOpen={isNotificationOpen}
+        onClose={() => setIsNotificationOpen(false)}
+        onNavigate={onNavigate}
+      />
     </div>
   );
 }

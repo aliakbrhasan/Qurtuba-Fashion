@@ -1,20 +1,31 @@
-import React from 'react';
+//
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
+import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
-import { Calendar, Clock, User, Receipt } from 'lucide-react';
-import type { Invoice, Customer } from '@/db/database.service';
+import { Calendar, Clock, Receipt, Handshake } from 'lucide-react';
+import type { Invoice } from '@/db/database.service';
+import { formatCurrency } from '../PrintableInvoice';
 
 interface RecentActivitiesProps {
   recentInvoices: Invoice[];
-  recentCustomers: Customer[];
+  recentCustomers: any[];
   upcomingDeliveries: Invoice[];
 }
 
 export function RecentActivities({ 
   recentInvoices, 
-  recentCustomers, 
+  recentCustomers: _recentCustomers,
   upcomingDeliveries 
 }: RecentActivitiesProps) {
+  const handleMarkDelivered = async (invoiceId: string) => {
+    try {
+      const { InvoiceService } = await import('@/services/invoice.service');
+      await InvoiceService.markAsDelivered(invoiceId);
+    } catch (err) {
+      console.error('Failed to mark delivered:', err);
+      alert('حدث خطأ أثناء تحديث تاريخ التسليم');
+    }
+  };
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     const now = new Date();
@@ -24,7 +35,7 @@ export function RecentActivities({
     if (diffDays === 0) return 'اليوم';
     if (diffDays === 1) return 'أمس';
     if (diffDays < 7) return `منذ ${diffDays} أيام`;
-    return date.toLocaleDateString('ar-IQ');
+    return date.toLocaleDateString('en-US');
   };
 
   const getStatusColor = (status: string) => {
@@ -74,7 +85,7 @@ export function RecentActivities({
                       {invoice.customer_name}
                     </p>
                     <p className="text-sm text-[#155446] arabic-text">
-                      {invoice.invoice_number} - {invoice.total.toLocaleString('ar-IQ')} د.ع
+                      {invoice.invoice_number} - {formatCurrency(invoice.total)}
                     </p>
                     <p className="text-xs text-[#155446] flex items-center gap-1">
                       <Clock className="w-3 h-3" />
@@ -123,20 +134,33 @@ export function RecentActivities({
                         {invoice.customer_name}
                       </p>
                       <p className="text-sm text-[#155446] arabic-text">
-                        {invoice.invoice_number} - {invoice.total.toLocaleString('ar-IQ')} د.ع
+                        {invoice.invoice_number} - {formatCurrency(invoice.total)}
                       </p>
                       <p className="text-xs text-[#155446] flex items-center gap-1">
                         <Calendar className="w-3 h-3" />
-                        {dueDate.toLocaleDateString('ar-IQ')}
+                        {dueDate.toLocaleDateString('en-US')}
                       </p>
                     </div>
-                    <div className="text-left">
+                    <div className="text-left flex items-center gap-2">
                       <Badge className={getPriorityColor(invoice.due_date!)}>
                         {diffDays === 0 ? 'اليوم' : 
                          diffDays === 1 ? 'غداً' : 
                          diffDays < 0 ? 'متأخر' : 
                          `خلال ${diffDays} أيام`}
                       </Badge>
+                      {diffDays > 0 && (
+                        <Button
+                          size="sm"
+                          onClick={() => handleMarkDelivered(invoice.id)}
+                          className="bg-[#155446] hover:bg-[#13312A] text-[#F6E9CA]"
+                          aria-label={`تم التسليم للفاتورة ${invoice.invoice_number}`}
+                        >
+                          <span className="inline-flex items-center gap-1">
+                            <Handshake className="w-4 h-4" />
+                            تم التسليم
+                          </span>
+                        </Button>
+                      )}
                     </div>
                   </div>
                 );

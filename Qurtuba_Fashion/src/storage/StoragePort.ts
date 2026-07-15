@@ -37,6 +37,13 @@ export interface StoragePort {
 		notes?: string;
 		items?: Omit<InvoiceItem, 'id' | 'invoice_id' | 'created_at'>[];
 		fabric_image_url?: string;
+		// Optional design details saved with the invoice (comma-separated lists)
+		fabric_type?: string;
+		fabric_source?: string;
+		collar_type?: string;
+		chest_style?: string;
+		sleeve_end?: string;
+		bunija_type?: string;
 	}): Promise<Invoice>;
 	updateInvoice(id: string, updates: Partial<Invoice>): Promise<Invoice>;
 	deleteInvoice(id: string): Promise<void>;
@@ -51,6 +58,14 @@ export interface StoragePort {
 	upsertCustomerFromCloud?(payload: any): Promise<void>;
 	upsertInvoiceFromCloud?(payload: any): Promise<void>;
 	upsertOrderFromCloud?(payload: any): Promise<void>;
+
+	// Backup/restore helpers
+	exportAll?(): Promise<{ customers: Customer[]; invoices: Invoice[]; orders: Order[]; items?: InvoiceItem[]; meta?: any }>;
+	importAll?(data: { customers?: Customer[]; invoices?: Invoice[]; orders?: Order[]; items?: InvoiceItem[] }): Promise<void>;
+
+	// Admin logs (optional)
+	getAdminLogs?(): Promise<Array<{ id: string; action_type: string; entity_type: string; entity_id: string; changed_fields?: any; action_date: string; action_time: string; user_name?: string; created_at: string }>>;
+	createAdminLog?(entry: { action_type: 'create' | 'update' | 'delete'; entity_type: 'invoice' | 'customer'; entity_id: string; changed_fields?: any; action_date?: string; action_time?: string; user_name?: string }): Promise<any>;
 }
 
 export function isElectronRuntime(): boolean {

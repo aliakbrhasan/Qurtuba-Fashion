@@ -6,6 +6,13 @@ class LocalAuthService {
   private currentUser: User | null = null;
   private readonly STORAGE_KEY = 'qurtuba_auth';
   private readonly REMEMBER_KEY = 'qurtuba_remember';
+  private readonly USERS_STORAGE_KEY = 'qurtuba_users_store_v1';
+  private readonly USERS_CACHE_FILE_KEY = 'users_store_v1';
+  private readonly PASSWORDS_STORAGE_KEY = 'qurtuba_passwords_store_v1';
+  private readonly PASSWORDS_CACHE_FILE_KEY = 'passwords_store_v1';
+  
+  // Store password hashes: key is user code or id, value is password hash
+  private passwordHashes: Map<string, string> = new Map();
 
   // Mock users for local testing
   private mockUsers: User[] = [
@@ -49,6 +56,9 @@ class LocalAuthService {
 
   private constructor() {
     this.initializeAuth();
+    this.loadUsersFromStorage();
+    this.loadPasswordsFromStorage();
+    this.initializeDefaultPasswords();
   }
 
   public static getInstance(): LocalAuthService {
@@ -82,6 +92,114 @@ class LocalAuthService {
     }
   }
 
+  private loadUsersFromStorage(): void {
+    try {
+      // Prefer Electron persistent cache file when available
+      const api = (window as any).electronAPI;
+      if (api?.cache?.readJson) {
+        const res = api.cache.readJson(this.USERS_CACHE_FILE_KEY);
+        if (res && res.ok && Array.isArray(res.data)) {
+          this.mockUsers = res.data as User[];
+          return;
+        }
+      }
+    } catch {}
+    try {
+      const raw = localStorage.getItem(this.USERS_STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          this.mockUsers = parsed as User[];
+        }
+      } else {
+        // Seed initial users into storage on first run
+        this.saveUsersToStorage();
+      }
+    } catch (e) {
+      // If storage is corrupted, reset to defaults
+      try { this.saveUsersToStorage(); } catch {}
+    }
+  }
+
+  private saveUsersToStorage(): void {
+    try {
+      const api = (window as any).electronAPI;
+      if (api?.cache?.writeJson) {
+        void api.cache.writeJson(this.USERS_CACHE_FILE_KEY, this.mockUsers);
+      }
+    } catch {}
+    try {
+      localStorage.setItem(this.USERS_STORAGE_KEY, JSON.stringify(this.mockUsers));
+    } catch {}
+  }
+
+  private loadPasswordsFromStorage(): void {
+    try {
+      // Prefer Electron persistent cache file when available
+      const api = (window as any).electronAPI;
+      if (api?.cache?.readJson) {
+        // Note: readJson is async but we're calling it synchronously
+        // In practice, this should be wrapped in async/await, but for now we'll handle it as a promise
+        Promise.resolve(api.cache.readJson(this.PASSWORDS_CACHE_FILE_KEY)).then((res: any) => {
+          if (res && res.ok && res.data) {
+            try {
+              const passwords = typeof res.data === 'string' ? JSON.parse(res.data) : res.data;
+              if (passwords && typeof passwords === 'object') {
+                this.passwordHashes = new Map(Object.entries(passwords));
+              }
+            } catch {}
+          }
+        }).catch(() => {});
+      }
+    } catch {}
+    try {
+      const raw = localStorage.getItem(this.PASSWORDS_STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object') {
+          this.passwordHashes = new Map(Object.entries(parsed));
+        }
+      }
+    } catch (e) {
+      // If storage is corrupted, start with empty map
+      this.passwordHashes = new Map();
+    }
+  }
+
+  private savePasswordsToStorage(): void {
+    try {
+      const passwordsObj = Object.fromEntries(this.passwordHashes);
+      const api = (window as any).electronAPI;
+      if (api?.cache?.writeJson) {
+        void api.cache.writeJson(this.PASSWORDS_CACHE_FILE_KEY, passwordsObj);
+      }
+    } catch {}
+    try {
+      const passwordsObj = Object.fromEntries(this.passwordHashes);
+      localStorage.setItem(this.PASSWORDS_STORAGE_KEY, JSON.stringify(passwordsObj));
+    } catch {}
+  }
+
+  private initializeDefaultPasswords(): void {
+    // Initialize default passwords for mock users if they don't exist in storage
+    const defaultPasswords: { [key: string]: string } = {
+      'ADMIN001': 'admin123',
+      'EMP001': 'ahmed123',
+      'ACC001': 'fatima123'
+    };
+
+    // Only set defaults if passwordHashes is empty
+    if (this.passwordHashes.size === 0) {
+      for (const [code, password] of Object.entries(defaultPasswords)) {
+        // Store as plain text for demo (in production, should be hashed)
+        // This is just for local testing
+        this.passwordHashes.set(code, password);
+      }
+      // Save default passwords to storage
+      this.savePasswordsToStorage();
+    }
+  }
+
   // Hash password using Web Crypto API (currently unused in local auth)
   // private async hashPassword(password: string): Promise<string> {
   //   const encoder = new TextEncoder();
@@ -100,41 +218,41 @@ class LocalAuthService {
   // Login user
   public async login(credentials: LoginCredentials): Promise<AuthResult> {
     try {
-      const { email, password, rememberMe = false } = credentials;
+      const { username, password, rememberMe = false } = credentials;
 
       // Validate input
-      if (!email || !password) {
+      if (!username || !password) {
         return {
           success: false,
-          error: 'البريد الإلكتروني وكلمة المرور مطلوبان'
+          error: 'اسم المستخدم وكلمة المرور مطلوبان'
         };
       }
 
       // Find user in mock data
       const user = this.mockUsers.find(u => 
-        u.email.toLowerCase().trim() === email.toLowerCase().trim() && 
+        u.code.trim() === username.trim() && 
         u.is_active
       );
 
       if (!user) {
         return {
           success: false,
-          error: 'البريد الإلكتروني أو كلمة المرور غير صحيحة'
+          error: 'اسم المستخدم أو كلمة المرور غير صحيحة'
         };
       }
 
       // Simple password verification for demo
       // In real app, you would verify against stored hash
-      const validPasswords: { [key: string]: string } = {
-        'admin@qurtuba.com': 'admin123',
-        'ahmed@qurtuba.com': 'ahmed123',
-        'fatima@qurtuba.com': 'fatima123'
+      const validPasswordsByCode: { [key: string]: string } = {
+        'ADMIN001': 'admin123',
+        'EMP001': 'ahmed123',
+        'ACC001': 'fatima123'
       };
 
-      if (validPasswords[email.toLowerCase().trim()] !== password) {
+      if (validPasswordsByCode[username.trim()] !== password) {
         return {
           success: false,
-          error: 'البريد الإلكتروني أو كلمة المرور غير صحيحة'
+          error: 'اسم المستخدم أو كلمة المرور غير صحيحة'
         };
       }
 
@@ -206,7 +324,8 @@ class LocalAuthService {
       if (!this.isAdmin()) {
         throw new Error('ليس لديك صلاحية لعرض المستخدمين');
       }
-      return this.mockUsers;
+      // Return a copy to avoid accidental external mutation
+      return [...this.mockUsers];
     } catch (error) {
       console.error('Get users error:', error);
       throw error;
@@ -264,6 +383,7 @@ class LocalAuthService {
       };
 
       this.mockUsers.push(newUser);
+      this.saveUsersToStorage();
 
       return {
         success: true,
@@ -298,6 +418,7 @@ class LocalAuthService {
       }
 
       this.mockUsers[userIndex] = { ...this.mockUsers[userIndex], ...updates };
+      this.saveUsersToStorage();
 
       // Update current user if it's the same user
       if (this.currentUser?.id === userId) {
@@ -344,6 +465,7 @@ class LocalAuthService {
       }
 
       this.mockUsers.splice(userIndex, 1);
+      this.saveUsersToStorage();
 
       return { success: true };
 

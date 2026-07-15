@@ -2,27 +2,40 @@
   "appId": "com.qurtuba.fashion",
   "productName": "أزياء قرطبة",
   "directories": {
-    "output": "dist-electron"
+    "output": "dist",
+    "buildResources": "build"
   },
   "files": [
     "build/**/*",
-    "electron/**/*",
+    "dist-electron/**/*",
     "node_modules/**/*",
     "package.json"
   ],
+  "asarUnpack": [
+    "node_modules/better-sqlite3/**",
+    "**/*.node",
+    "node_modules/better-sqlite3/build/**",
+    "node_modules/better-sqlite3/build/Release/**",
+    "dist-electron/**/*"
+  ],
+  "extraResources": [
+    { "from": "build/fonts", "to": "fonts" },
+    { "from": "resources", "to": "resources", "filter": ["**/*"] },
+    { "from": "build/icon.ico", "to": "icon.ico" },
+    { "from": "build/logo.png", "to": "logo.png" },
+    { "from": "node_modules/better-sqlite3/build/Release", "to": "better-sqlite3" }
+  ],
+  "asar": true,
   "win": {
     "target": [
-      {
-        "target": "nsis",
-        "arch": ["x64", "ia32"]
-      },
-      {
-        "target": "portable",
-        "arch": ["x64"]
-      }
+      { "target": "nsis", "arch": ["x64"] }
     ],
+    "icon": "build/icon.ico",
     "requestedExecutionLevel": "asInvoker",
-    "forceCodeSigning": false
+    "forceCodeSigning": false,
+    "signAndEditExecutable": false,
+    "signDlls": false,
+    "publisherName": "Qurtuba Fashion Team"
   },
   "mac": {
     "target": [
@@ -56,10 +69,12 @@
   },
   "nsis": {
     "oneClick": false,
+    "perMachine": false,
     "allowToChangeInstallationDirectory": true,
     "createDesktopShortcut": true,
     "createStartMenuShortcut": true,
-    "shortcutName": "أزياء قرطبة"
+    "shortcutName": "أزياء قرطبة",
+    "allowElevation": true,
   },
   "dmg": {
     "title": "أزياء قرطبة",
@@ -76,10 +91,9 @@
       }
     ]
   },
-  "publish": {
-    "provider": "github",
-    "owner": "your-username",
-    "repo": "qurtuba-fashion"
-  },
-  "copyright": "Copyright © 2024 أزياء قرطبة"
+  "publish": null,
+  "copyright": "Copyright © 2024 أزياء قرطبة",
+  "buildDependenciesFromSource": false,
+  "nodeGypRebuild": false,
+  "npmRebuild": false
 }

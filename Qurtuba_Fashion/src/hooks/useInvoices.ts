@@ -20,13 +20,7 @@ export function useInvoices() {
   // Mutation to create invoice
   const createInvoiceMutation = useMutation({
     mutationFn: InvoiceService.createInvoice,
-    onSuccess: (newInvoice) => {
-      // Update the cache with the new invoice
-      queryClient.setQueryData(['invoices'], (oldData: Invoice[] = []) => [
-        newInvoice,
-        ...oldData
-      ]);
-    },
+    // Avoid duplicating cache updates; InvoiceService already updates/invalidate caches.
     onError: (error) => {
       console.error('Error creating invoice:', error);
     }
@@ -43,6 +37,13 @@ export function useInvoices() {
           invoice.id === updatedInvoice.id ? updatedInvoice : invoice
         )
       );
+      // Refresh dashboard and customers derived data
+      try {
+        queryClient.invalidateQueries({
+          predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === 'dashboard-stats',
+        });
+        queryClient.invalidateQueries({ queryKey: ['customers'] });
+      } catch {}
     },
     onError: (error) => {
       console.error('Error updating invoice:', error);
@@ -57,6 +58,13 @@ export function useInvoices() {
       queryClient.setQueryData(['invoices'], (oldData: Invoice[] = []) =>
         oldData.filter(invoice => invoice.id !== deletedId)
       );
+      // Refresh dashboard and customers derived data
+      try {
+        queryClient.invalidateQueries({
+          predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === 'dashboard-stats',
+        });
+        queryClient.invalidateQueries({ queryKey: ['customers'] });
+      } catch {}
     },
     onError: (error) => {
       console.error('Error deleting invoice:', error);
@@ -73,6 +81,13 @@ export function useInvoices() {
           invoice.id === updatedInvoice.id ? updatedInvoice : invoice
         )
       );
+      // Refresh dashboard and customers derived data
+      try {
+        queryClient.invalidateQueries({
+          predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === 'dashboard-stats',
+        });
+        queryClient.invalidateQueries({ queryKey: ['customers'] });
+      } catch {}
     },
     onError: (error) => {
       console.error('Error marking invoice as paid:', error);

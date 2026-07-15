@@ -1,0 +1,260 @@
+{
+  "customers": [
+    {
+      "name": "تميم علي اكبر",
+      "phone": "9998888",
+      "address": "كربلاء",
+      "label": "منتظم",
+      "totalSpent": 2,
+      "lastOrder": "2025-10-31T10:07:56.206Z",
+      "measurements": {
+        "length": "123ت",
+        "shoulder": "123ت",
+        "waist": "123",
+        "chest": "ت",
+        "collar": "تمتك"
+      },
+      "notes": "",
+      "created_at": "2025-10-31T10:07:56.207Z",
+      "id": "33999811-003e-4b51-83b1-785d6d43514c",
+      "label_auto": false
+    },
+    {
+      "name": "علي جاسم",
+      "phone": "99999999",
+      "address": "ىىىىىى",
+      "label": "منتظم",
+      "totalSpent": 0,
+      "measurements": {
+        "height": 0,
+        "shoulder": 0,
+        "waist": 0,
+        "chest": 0,
+        "collar": 0
+      },
+      "notes": "",
+      "created_at": "2025-10-30T00:17:31.791Z",
+      "id": "a9613c3f-de1b-4dfc-931a-72e245d477a3"
+    },
+    {
+      "name": "نانتنا",
+      "phone": "غالتال",
+      "address": "تالاتلتا",
+      "label": "جديد",
+      "totalSpent": 0,
+      "measurements": {
+        "height": "تالاتلتال",
+        "shoulder": "تالتلتالاتضعلغ",
+        "waist": "غفقبفبب",
+        "chest": "عغلفغب",
+        "collar": "البلابال"
+      },
+      "notes": "",
+      "created_at": "2025-10-29T15:52:04.395Z",
+      "id": "9872504b-99c2-4318-a146-3c882c6ca958"
+    },
+    {
+      "name": "محممد22",
+      "phone": "2323",
+      "address": "323",
+      "label": "جديد",
+      "totalSpent": 0,
+      "measurements": {
+        "height": null,
+        "shoulder": null,
+        "waist": null,
+        "chest": null
+      },
+      "notes": "",
+      "created_at": "2025-10-27T14:27:06.481Z",
+      "id": "1e40b359-7ef8-49b7-a3be-b7590bd3762c"
+    },
+    {
+      "name": "محمد",
+      "phone": "222",
+      "address": "",
+      "label": "جديد",
+      "totalSpent": 0,
+      "measurements": {
+        "height": null,
+        "shoulder": null,
+        "waist": 0,
+        "chest": 0
+      },
+      "notes": "",
+      "created_at": "2025-10-27T14:16:56.941Z",
+      "id": "471bea8e-684c-4f8e-9704-2e4c1c910977"
+    },
+    {
+      "name": "هههه12333",
+      "phone": "9002",
+      "address": "متكمت",
+      "label": "جديد",
+      "totalSpent": 0,
+      "measurements": {
+        "height": 0,
+        "shoulder": 0,
+        "waist": 0,
+        "chest": 0,
+        "collar": 0
+      },
+      "notes": "",
+      "created_at": "2025-10-25T16:20:50.638Z",
+      "id": "6662a8aa-d751-4c71-be00-23f91873e3b3"
+    },
+    {
+      "name": "كل المعلومات",
+      "phone": "02948",
+      "address": "تشكميستبش",
+      "label": "جديد",
+      "totalSpent": 0,
+      "measurements": {
+        "length": "12اتتت",
+        "shoulder": "21",
+        "waist": "12",
+        "chest": "121",
+        "collar": ""
+      },
+      "notes": "",
+      "created_at": "2025-10-25T16:19:13.137Z",
+      "id": "a5578789-c7d8-4ad0-8de7-bf1da8e4784e"
+    },
+    {
+      "name": "هههه1",
+      "phone": "9009",
+      "address": "متكمت",
+      "label": "جديد",
+      "totalSpent": 0,
+      "measurements": {
+        "height": 0,
+        "shoulder": 0,
+        "waist": 0,
+        "chest": 0,
+        "collar": 0
+      },
+      "notes": "",
+      "created_at": "2025-10-22T18:02:36.150Z",
+      "id": "03a79fcc-a595-4318-bf1a-6bdee77b0be7"
+    },
+    {
+      "name": "هههه1",
+      "phone": "9002",
+      "address": "متكمت",
+      "label": "جديد",
+      "totalSpent": 0,
+      "measurements": {
+        "height": 0,
+        "shoulder": 0,
+        "waist": 0,
+        "chest": 0,
+        "collar": 0
+      },
+      "notes": "",
+      "created_at": "2025-10-22T18:02:36.128Z",
+      "id": "5f145cb5-edbf-45f4-8edd-4124ad8a2e40"
+    },
+    {
+      "name": "هههه123",
+      "phone": "9002",
+      "address": "متكمت",
+      "label": "جديد",
+      "totalSpent": 0,
+      "measurements": {
+        "height": 0,
+        "shoulder": 0,
+        "waist": 0,
+        "chest": 0,
+        "collar": 0
+      },
+      "notes": "",
+      "created_at": "2025-10-22T18:02:36.060Z",
+      "id": "f3a4853e-0bc1-4cf3-a419-4ea096641888"
+    },
+    {
+      "name": "هههه",
+      "phone": "9009",
+      "address": "متكمت",
+      "label": "جديد",
+      "totalSpent": 0,
+      "measurements": {
+        "height": 0,
+        "shoulder": 0,
+        "waist": 0,
+        "chest": 0
+      },
+      "notes": "",
+      "created_at": "2025-10-22T10:40:54.533Z",
+      "id": "ca2e225d-ed5d-4bec-b3db-9839ae402a71"
+    },
+    {
+      "name": "ffffdsaffa",
+      "phone": "0909",
+      "address": "lajksdhfa",
+      "label": "جديد",
+      "totalSpent": 0,
+      "measurements": {
+        "height": 0,
+        "shoulder": 0,
+        "waist": 0,
+        "chest": 0
+      },
+      "notes": "",
+      "created_at": "2025-10-21T08:01:58.836Z",
+      "id": "d6c49af7-aa25-48d3-9fd8-12ec92ab55dc"
+    },
+    {
+      "name": "asdfj;dsl",
+      "phone": "lasj009pr8q",
+      "address": "",
+      "label": "جديد",
+      "totalSpent": 0,
+      "measurements": {
+        "height": 0,
+        "shoulder": 0,
+        "waist": 0,
+        "chest": 0
+      },
+      "notes": "",
+      "created_at": "2025-10-11T14:37:33.203Z",
+      "id": "d564e086-dd7f-40d1-8a9f-8855371c2fd6"
+    }
+  ],
+  "invoices": [
+    {
+      "id": "b98d9684-9b0a-4814-a0cc-8bd0e56937be",
+      "invoice_number": "INV-1761905276206",
+      "customer_id": "33999811-003e-4b51-83b1-785d6d43514c",
+      "customer_name": "تميم علي اكبر",
+      "customer_phone": "9998888",
+      "customer_address": "كربلاء",
+      "total": 123,
+      "paid_amount": 2,
+      "status": "جزئي",
+      "invoice_date": "2025-10-31T10:07:56.206Z",
+      "due_date": "",
+      "notes": "",
+      "customer_measurements": {
+        "length": "123ت",
+        "shoulder": "123ت",
+        "waist": "123",
+        "chest": "ت",
+        "collar": "تمتك"
+      },
+      "fabric_type": "قطن",
+      "fabric_source": "داخل المحل",
+      "collar_type": "رسمية",
+      "chest_style": "صدر مزدوج",
+      "sleeve_end": "ردن عادي",
+      "bunija_type": "نصف بنيجة",
+      "paid_at": "2025-10-31",
+      "created_at": "2025-10-31T10:07:56.206Z",
+      "updated_at": "2025-10-31T10:07:56.216Z"
+    }
+  ],
+  "orders": [],
+  "items": [],
+  "meta": {
+    "exportedAt": "2025-10-31T10:26:08.407Z",
+    "version": 1
+  }
+}

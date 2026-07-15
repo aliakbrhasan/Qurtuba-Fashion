@@ -1,17 +1,17 @@
 import { useState, useMemo, useEffect } from 'react';
-import { renderToStaticMarkup } from 'react-dom/server';
+import { useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent } from './ui/card';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
 import { Badge } from './ui/badge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from './ui/dialog';
 import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { useInvoices } from '@/hooks/useInvoices';
 import { usePermissions } from '@/hooks/usePermissions';
 import { authService } from '@/services/auth.service';
+import { formatArabicNumber, formatStringNumber } from '@/utils/arabicNumbers';
 import {
   Plus,
   Search,
@@ -26,17 +26,22 @@ import {
   CheckCircle,
   FilterX,
   RefreshCw,
+  Trash2,
 } from 'lucide-react';
+import { Clock, CreditCard } from 'lucide-react';
+import { Handshake } from 'lucide-react';
 import { ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
 import { InvoiceDetailsDialog } from './InvoiceDetailsDialog';
+import { NewInvoiceDialogWithDB } from './NewInvoiceDialogWithDB';
 import {
   PrintableInvoice,
-  receiptStyles,
   formatCurrency,
   formatDate,
   PrintableInvoiceData,
 } from './PrintableInvoice';
-import { openPrintWindow, formatPrintDateTime } from './print/PrintUtils';
+import { openPrintWindow, openPrintInvoiceWindow, formatPrintDateTime } from './print/PrintUtils.tsx';
+import { PrintInvoicesDialog } from './PrintInvoicesDialog';
+
 
 type DateParts = {
   year: string;
@@ -64,7 +69,7 @@ const dayOptions = Array.from({ length: 31 }, (_, index) => (index + 1).toString
 const getLastDayOfMonth = (year: number, month: number) => new Date(year, month, 0).getDate();
 
 const formatRangeDate = (date: Date) =>
-  new Intl.DateTimeFormat('ar-IQ', {
+  new Intl.DateTimeFormat('en-US', {
     year: 'numeric',
     month: 'long',
     day: 'numeric',
@@ -117,9 +122,11 @@ interface InvoicesPageProps {
 }
 
 export function InvoicesPageWithDB({ onCreateInvoice, onViewInvoiceDetails, onMarkAsPaid }: InvoicesPageProps) {
+  const queryClient = useQueryClient();
   const { invoices, loading, error, markAsPaid: markInvoiceAsPaid, loadInvoices } = useInvoices();
   const [currentUser] = useState(authService.getCurrentUser());
   const { hasActionPermission } = usePermissions(currentUser);
+  const canCreateInvoice = hasActionPermission('create_invoice') || !currentUser;
   const [searchTerm, setSearchTerm] = useState('');
   const [sortField, setSortField] = useState<string>('invoice_date');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
@@ -128,6 +135,10 @@ export function InvoicesPageWithDB({ onCreateInvoice, onViewInvoiceDetails, onMa
   const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
   const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isDuplicateDialogOpen, setIsDuplicateDialogOpen] = useState(false);
+  const [invoiceToEdit, setInvoiceToEdit] = useState<any | null>(null);
+  const [invoiceToDuplicate, setInvoiceToDuplicate] = useState<any | null>(null);
 
   // Auto-refresh data every 30 seconds
   useEffect(() => {
@@ -286,6 +297,15 @@ export function InvoicesPageWithDB({ onCreateInvoice, onViewInvoiceDetails, onMa
     return invoice.status === 'معلق' || invoice.status === 'جزئي';
   };
 
+  const canMarkAsDelivered = (invoice: any) => {
+    if (!invoice?.due_date) return false;
+    const dueDate = new Date(invoice.due_date);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const diffDays = Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    return diffDays > 0;
+  };
+
   // Handle mark as paid
   const handleMarkAsPaid = async (invoiceId: string) => {
     try {
@@ -303,6 +323,35 @@ export function InvoicesPageWithDB({ onCreateInvoice, onViewInvoiceDetails, onMa
       console.error('Error marking invoice as paid:', error);
       // Show error message with more details
       alert(`حدث خطأ في تمييز الفاتورة كمدفوعة: ${error instanceof Error ? error.message : 'خطأ غير معروف'}`);
+    }
+  };
+
+  // Handle delete invoice
+  const handleDeleteInvoice = async (invoice: any) => {
+    const confirmMessage = `هل أنت متأكد من حذف الفاتورة رقم ${invoice.invoice_number}؟\n\nهذا الإجراء لا يمكن التراجع عنه.`;
+    
+    if (window.confirm(confirmMessage)) {
+      try {
+        const { InvoiceService } = await import('@/services/invoice.service');
+        await InvoiceService.deleteInvoice(invoice.id);
+        // Optimistically remove from cache to reflect instantly
+        try {
+          queryClient.setQueryData(['invoices'], (oldData: any[] = []) =>
+            Array.isArray(oldData) ? oldData.filter((inv) => inv.id !== invoice.id) : oldData
+          );
+        } catch {}
+        
+        // Refresh data after deletion
+        if (loadInvoices) {
+          await loadInvoices();
+        }
+        
+        // Show success message
+        alert('تم حذف الفاتورة بنجاح!');
+      } catch (error) {
+        console.error('Error deleting invoice:', error);
+        alert(`حدث خطأ في حذف الفاتورة: ${error instanceof Error ? error.message : 'خطأ غير معروف'}`);
+      }
     }
   };
 
@@ -343,6 +392,23 @@ export function InvoicesPageWithDB({ onCreateInvoice, onViewInvoiceDetails, onMa
     }
   };
 
+  // Edit and duplicate handlers
+  const handleEditInvoice = (invoice: any) => {
+    if (hasActionPermission('edit_invoice')) {
+      setInvoiceToEdit(invoice);
+      setIsEditDialogOpen(true);
+    }
+  };
+
+  const handleDuplicateInvoice = (invoice: any) => {
+    if (canCreateInvoice) {
+      setInvoiceToDuplicate(invoice);
+      setIsDuplicateDialogOpen(true);
+    }
+  };
+
+  // mark delivered action is inlined in the action button to avoid unused warnings
+
   // Handle create new invoice - delegate to parent to open the global dialog
   const handleCreateInvoice = () => {
     if (onCreateInvoice) {
@@ -366,13 +432,6 @@ export function InvoicesPageWithDB({ onCreateInvoice, onViewInvoiceDetails, onMa
   };
 
   const handlePrintInvoice = (invoice: any) => {
-    const receiptWindow = window.open('', '_blank', 'width=900,height=700');
-
-    if (!receiptWindow) {
-      return;
-    }
-
-    // Transform invoice to PrintableInvoiceData format
     const printableInvoice: PrintableInvoiceData = {
       id: invoice.invoice_number,
       customerName: invoice.customer_name,
@@ -382,41 +441,18 @@ export function InvoicesPageWithDB({ onCreateInvoice, onViewInvoiceDetails, onMa
       paid: invoice.paid_amount,
       receivedDate: invoice.invoice_date || invoice.created_at || new Date().toISOString(),
       deliveryDate: invoice.due_date || invoice.invoice_date || invoice.created_at || new Date().toISOString(),
+      paymentDate: invoice.paid_at || undefined,
       notes: invoice.notes || ''
     };
-
-    const markup = renderToStaticMarkup(<PrintableInvoice invoice={printableInvoice} />);
-
-    receiptWindow.document.write(`<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-  <head>
-    <meta charSet="utf-8" />
-    <title>فاتورة ${invoice.invoice_number}</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet" />
-    <style>${receiptStyles}</style>
-  </head>
-  <body>
-    ${markup}
-    <script>
-      window.onload = () => {
-        window.focus();
-        setTimeout(() => window.print(), 300);
-      };
-    <\/script>
-  </body>
-</html>`);
-    receiptWindow.document.close();
-    receiptWindow.focus();
+    openPrintInvoiceWindow(`فاتورة ${invoice.invoice_number}`, <PrintableInvoice invoice={printableInvoice} />);
   };
 
   // Enhanced filtering and sorting logic
   const filteredAndSortedInvoices = useMemo(() => {
     let filtered = invoices.filter(invoice => {
       // Search filter
-      const matchesSearch = invoice.customer_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        invoice.invoice_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      const matchesSearch = (invoice.customer_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (invoice.invoice_number || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
         (invoice.customer_phone?.includes(searchTerm) ?? false) ||
         (invoice.customer_address?.toLowerCase().includes(searchTerm.toLowerCase()) ?? false);
       
@@ -595,7 +631,7 @@ export function InvoicesPageWithDB({ onCreateInvoice, onViewInvoiceDetails, onMa
           </div>
         </section>
       </>
-    ));
+    ), { pageSize: 'A4', landscape: false });
   };
 
   const handleConfirmPrintRange = () => {
@@ -700,111 +736,140 @@ export function InvoicesPageWithDB({ onCreateInvoice, onViewInvoiceDetails, onMa
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#F6E9CA] to-[#FDFBF7]">
       <div className="container mx-auto p-4 space-y-6">
-        {/* Enhanced Header (Title and Buttons) */}
-        <div className="bg-white rounded-xl shadow-lg border border-[#C69A72]/20 p-4 mb-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="flex-1">
+        {/* Header Section with inline Search and Controls */}
+        <div className="bg-white rounded-xl shadow-lg border border-[#C69A72]/20 p-6">
+          <div className="flex flex-row-reverse items-center justify-between gap-4 overflow-x-auto whitespace-nowrap md:flex-nowrap">
+            {/* Title and description (right) */}
+            <div className="flex-shrink-0 text-right">
               <h1 className="text-3xl font-bold text-[#13312A] arabic-text mb-1">إدارة الفواتير</h1>
-              <p className="text-sm text-[#155446] arabic-text">إدارة شاملة لفواتير العملاء والطلبات</p>
-        </div>
-            
-            {/* Action Buttons */}
-            <div className="flex flex-wrap justify-end gap-2">
-              {hasActionPermission('create_invoice') && (
+              <p className="text-[#155446] arabic-text">إدارة شاملة لفواتير العملاء والطلبات</p>
+            </div>
+
+            {/* Center controls: search + sort + clear */}
+            <div className="flex-1 flex items-center justify-center gap-3 min-w-[320px]">
+              <div className="relative w-[360px] md:w-[480px]">
+                <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 text-[#155446] w-5 h-5 pointer-events-none" />
+                <Input
+                  placeholder="بحث عن الفواتير، الزبائن، أو أرقام الهاتف..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pr-16 pl-4 py-3 bg-white border-2 border-[#C69A72]/30 rounded-xl text-right text-base focus:border-[#155446] focus:ring-2 focus:ring-[#155446]/20 transition-all duration-300"
+                />
+              </div>
+
+              <Select value={sortField} onValueChange={(val: string) => { setSortField(val); setSortDirection(defaultDescFields.has(val) ? 'desc' : 'asc'); }}>
+                <SelectTrigger className="w-40 border-2 border-[#C69A72]/30 rounded-xl" aria-label="ترتيب حسب" title="ترتيب حسب">
+                  <SelectValue placeholder="ترتيب حسب" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="invoice_date">التاريخ</SelectItem>
+                  <SelectItem value="customer_name">اسم الزبون</SelectItem>
+                  <SelectItem value="total">المبلغ</SelectItem>
+                  <SelectItem value="status">الحالة</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setSearchTerm('');
+                  setStatusFilter('all');
+                  setDateFilter('all');
+                  setSortField('invoice_date');
+                  setSortDirection('desc');
+                }}
+                className="border-2 border-red-300 text-red-600 hover:bg-red-50 flex items-center gap-2 px-4 py-3 rounded-xl"
+              >
+                <FilterX className="w-4 h-4" />
+                <span className="arabic-text">مسح</span>
+              </Button>
+            </div>
+
+            {/* Action Buttons (left) */}
+            <div className="flex items-center gap-3 flex-shrink-0">
+              {canCreateInvoice && (
                 <Button
-                  className="bg-[#13312A] hover:bg-[#155446] text-[#F6E9CA] px-4 py-2 text-sm rounded-md flex items-center gap-2 arabic-text"
+                  variant="default"
+                  className="!bg-[#13312A] hover:!bg-[#155446] text-[#F6E9CA] px-6 py-3 text-lg rounded-xl flex items-center gap-2 arabic-text shadow-md"
                   onClick={handleCreateInvoice}
                 >
-                  <Plus className="w-4 h-4" />
+                  <Plus className="w-5 h-5" />
                   فاتورة جديدة
                 </Button>
               )}
               {hasActionPermission('print_invoices_list') && (
                 <Button
-                  className="bg-[#C69A72] hover:bg-[#A87B5A] text-[#13312A] px-4 py-2 text-sm rounded-md flex items-center gap-2 arabic-text"
+                  className="border-2 border-[#C69A72] text-[#13312A] hover:bg-[#C69A72] hover:text-white px-6 py-3 text-lg rounded-xl flex items-center gap-2 arabic-text"
+                  variant="outline"
                   onClick={openPrintDialog}
                 >
-                  <Printer className="w-4 h-4" />
+                  <Printer className="w-5 h-5" />
                   طباعة القائمة
                 </Button>
               )}
               <Button
-                className="bg-[#13312A] hover:bg-[#155446] text-[#F6E9CA] px-4 py-2 text-sm rounded-md flex items-center gap-2 arabic-text"
+                className="border-2 border-[#155446] text-[#155446] hover:bg-[#155446] hover:text-white px-6 py-3 text-lg rounded-xl flex items-center gap-2 arabic-text"
+                variant="outline"
                 onClick={() => setShowFilters(!showFilters)}
               >
-                <Filter className="w-4 h-4" />
+                <Filter className="w-5 h-5" />
                 تصفية متقدمة
               </Button>
             </div>
           </div>
-      </div>
+        </div>
 
-        {/* Statistics Cards - Now in a separate section - Only show if user has permission */}
+        {/* Statistics Cards - compact layout */}
         {hasActionPermission('view_financial_reports') && (
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
-            <div className="bg-white text-[#13312A] p-3 rounded-lg text-center border border-[#C69A72]/20 shadow-sm">
-              <div className="text-xl font-bold">{stats.total}</div>
-              <div className="text-xs text-[#155446] arabic-text">إجمالي الفواتير</div>
-            </div>
-            <div className="bg-white text-[#13312A] p-3 rounded-lg text-center border border-[#C69A72]/20 shadow-sm">
-              <div className="text-xl font-bold">{stats.paid}</div>
-              <div className="text-xs text-[#155446] arabic-text">الفواتير المدفوعة</div>
-            </div>
-            <div className="bg-white text-[#13312A] p-3 rounded-lg text-center border border-[#C69A72]/20 shadow-sm">
-              <div className="text-xl font-bold">{stats.pending}</div>
-              <div className="text-xs text-[#155446] arabic-text">الفواتير المعلقة</div>
-            </div>
-            <div className="bg-white text-[#13312A] p-3 rounded-lg text-center border border-[#C69A72]/20 shadow-sm">
-              <div className="text-xl font-bold">{formatCurrency(stats.totalAmount)}</div>
-              <div className="text-xs text-[#155446] arabic-text">إجمالي المبلغ</div>
-            </div>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+            <Card className="bg-gradient-to-br from-[#155446] to-[#13312A] border-0 shadow-md hover:shadow-lg transition-all duration-300">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-semibold arabic-text text-black">إجمالي الفواتير</span>
+                  <div className="w-8 h-8 bg-white rounded-md flex items-center justify-center">
+                    {/* Simple list icon via CSS border boxes would be complex; keeping text-only title here */}
+                  </div>
+                </div>
+                <div className="mt-2 text-2xl font-bold text-black">{formatArabicNumber(stats.total)}</div>
+              </CardContent>
+            </Card>
+            <Card className="bg-gradient-to-br from-green-500 to-green-600 border-0 shadow-md hover:shadow-lg transition-all duration-300">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-semibold arabic-text text-black">مدفوعة</span>
+                  <div className="w-8 h-8 bg-white rounded-md flex items-center justify-center">
+                    <CheckCircle className="w-5 h-5 text-[#13312A]" />
+                  </div>
+                </div>
+                <div className="mt-2 text-2xl font-bold text-black">{formatArabicNumber(stats.paid)}</div>
+              </CardContent>
+            </Card>
+            <Card className="bg-gradient-to-br from-yellow-500 to-orange-500 border-0 shadow-md hover:shadow-lg transition-all duration-300">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-semibold arabic-text text-black">معلقة</span>
+                  <div className="w-8 h-8 bg-white rounded-md flex items-center justify-center">
+                    <Clock className="w-5 h-5 text-[#13312A]" />
+                  </div>
+                </div>
+                <div className="mt-2 text-2xl font-bold text-black">{formatArabicNumber(stats.pending)}</div>
+              </CardContent>
+            </Card>
+            <Card className="bg-gradient-to-br from-[#C69A72] to-[#B8860B] border-0 shadow-md hover:shadow-lg transition-all duration-300">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-semibold arabic-text text-black">إجمالي المبلغ</span>
+                  <div className="w-8 h-8 bg-white rounded-md flex items-center justify-center">
+                    <CreditCard className="w-5 h-5 text-[#13312A]" />
+                  </div>
+                </div>
+                <div className="mt-2 text-2xl font-bold text-black">{formatCurrency(stats.totalAmount)}</div>
+              </CardContent>
+            </Card>
           </div>
         )}
 
-        {/* Search and Basic Filters */}
-        <Card className="bg-white rounded-xl shadow-lg border border-[#C69A72]/20">
-        <CardContent className="p-6">
-            <div className="flex flex-col lg:flex-row gap-4">
-              <div className="flex-1 relative">
-                <Search className="absolute right-4 top-1/2 transform -translate-y-1/2 text-[#155446] w-5 h-5" />
-                <Input
-                  placeholder="بحث عن الفواتير، الزبائن، أو أرقام الهاتف..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pr-12 pl-4 py-3 bg-white border-2 border-[#C69A72]/30 rounded-xl text-right text-lg focus:border-[#155446] focus:ring-2 focus:ring-[#155446]/20 transition-all duration-300"
-                />
-              </div>
-              <div className="flex flex-wrap gap-3">
-                <Select value={sortField} onValueChange={(val: string) => { setSortField(val); setSortDirection(defaultDescFields.has(val) ? 'desc' : 'asc'); }}>
-                  <SelectTrigger className="w-48 border-2 border-[#C69A72]/30 rounded-xl">
-                    <SelectValue placeholder="ترتيب حسب" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="invoice_date">التاريخ</SelectItem>
-                    <SelectItem value="customer_name">اسم الزبون</SelectItem>
-                    <SelectItem value="total">المبلغ</SelectItem>
-                    <SelectItem value="status">الحالة</SelectItem>
-                  </SelectContent>
-                </Select>
-                
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setSearchTerm('');
-                    setStatusFilter('all');
-                    setDateFilter('all');
-                    setSortField('invoice_date');
-                    setSortDirection('desc');
-                  }}
-                  className="border-2 border-red-300 text-red-600 hover:bg-red-50 flex items-center gap-2 px-4 py-3 rounded-xl"
-                >
-                  <FilterX className="w-4 h-4" />
-                  <span className="arabic-text">مسح الفلاتر</span>
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        {/* Search card removed; controls moved into header */}
 
         {/* Advanced Filters */}
         {showFilters && (
@@ -815,7 +880,7 @@ export function InvoicesPageWithDB({ onCreateInvoice, onViewInvoiceDetails, onMa
                 <div>
                   <Label className="text-black arabic-text font-semibold mb-2 block">حالة الفاتورة</Label>
                   <Select value={statusFilter} onValueChange={setStatusFilter}>
-                    <SelectTrigger className="border-2 border-[#C69A72]/30 rounded-xl">
+                <SelectTrigger className="border-2 border-[#C69A72]/30 rounded-xl" aria-label="تصفية حسب الحالة" title="تصفية حسب الحالة">
                       <SelectValue placeholder="اختر الحالة" />
                     </SelectTrigger>
                     <SelectContent>
@@ -830,7 +895,7 @@ export function InvoicesPageWithDB({ onCreateInvoice, onViewInvoiceDetails, onMa
                 <div>
                   <Label className="text-black arabic-text font-semibold mb-2 block">الفترة الزمنية</Label>
                   <Select value={dateFilter} onValueChange={setDateFilter}>
-                    <SelectTrigger className="border-2 border-[#C69A72]/30 rounded-xl">
+                <SelectTrigger className="border-2 border-[#C69A72]/30 rounded-xl" aria-label="تصفية حسب المدة" title="تصفية حسب المدة">
                       <SelectValue placeholder="اختر الفترة" />
                     </SelectTrigger>
                     <SelectContent>
@@ -878,9 +943,9 @@ export function InvoicesPageWithDB({ onCreateInvoice, onViewInvoiceDetails, onMa
             <div className="overflow-x-auto">
             <Table>
               <TableHeader>
-                      <TableRow className="bg-gradient-to-r from-[#13312A] to-[#155446] hover:bg-gradient-to-r hover:from-[#13312A] hover:to-[#155446]">
+                      <TableRow className="bg-[#155446] hover:bg-[#13312A]">
                        <TableHead 
-                         className="text-black arabic-text text-right font-bold text-base relative select-none group"
+                         className="text-[#F6E9CA] arabic-text text-right font-bold text-base relative select-none group"
                          style={{ width: `${columnWidths.invoiceNumber}px` }}
                        >
                          <div className="pr-2 flex items-center justify-between cursor-pointer" onClick={() => handleHeaderSort('invoice_number')}>
@@ -890,7 +955,7 @@ export function InvoicesPageWithDB({ onCreateInvoice, onViewInvoiceDetails, onMa
                          <ResizeHandle column="invoiceNumber" />
                        </TableHead>
                        <TableHead 
-                         className="text-black arabic-text text-right font-bold text-base relative select-none group"
+                         className="text-[#F6E9CA] arabic-text text-right font-bold text-base relative select-none group"
                          style={{ width: `${columnWidths.customerName}px` }}
                        >
                          <div className="pr-2 flex items-center justify-between cursor-pointer" onClick={() => handleHeaderSort('customer_name')}>
@@ -900,7 +965,7 @@ export function InvoicesPageWithDB({ onCreateInvoice, onViewInvoiceDetails, onMa
                          <ResizeHandle column="customerName" />
                        </TableHead>
                        <TableHead 
-                         className="text-black arabic-text text-right font-bold text-base relative select-none group"
+                         className="text-[#F6E9CA] arabic-text text-right font-bold text-base relative select-none group"
                          style={{ width: `${columnWidths.phone}px` }}
                        >
                          <div className="pr-2 flex items-center justify-between cursor-pointer" onClick={() => handleHeaderSort('customer_phone')}>
@@ -910,7 +975,7 @@ export function InvoicesPageWithDB({ onCreateInvoice, onViewInvoiceDetails, onMa
                          <ResizeHandle column="phone" />
                        </TableHead>
                        <TableHead 
-                         className="text-black arabic-text text-right font-bold text-base relative select-none group"
+                         className="text-[#F6E9CA] arabic-text text-right font-bold text-base relative select-none group"
                          style={{ width: `${columnWidths.totalAmount}px` }}
                        >
                          <div className="pr-2 flex items-center justify-between cursor-pointer" onClick={() => handleHeaderSort('total')}>
@@ -920,7 +985,7 @@ export function InvoicesPageWithDB({ onCreateInvoice, onViewInvoiceDetails, onMa
                          <ResizeHandle column="totalAmount" />
                        </TableHead>
                        <TableHead 
-                         className="text-black arabic-text text-right font-bold text-base relative select-none group"
+                         className="text-[#F6E9CA] arabic-text text-right font-bold text-base relative select-none group"
                          style={{ width: `${columnWidths.paidAmount}px` }}
                        >
                          <div className="pr-2">
@@ -929,7 +994,7 @@ export function InvoicesPageWithDB({ onCreateInvoice, onViewInvoiceDetails, onMa
                          <ResizeHandle column="paidAmount" />
                        </TableHead>
                        <TableHead 
-                         className="text-black arabic-text text-right font-bold text-base relative select-none group"
+                         className="text-[#F6E9CA] arabic-text text-right font-bold text-base relative select-none group"
                          style={{ width: `${columnWidths.remainingAmount}px` }}
                        >
                          <div className="pr-2">
@@ -938,7 +1003,7 @@ export function InvoicesPageWithDB({ onCreateInvoice, onViewInvoiceDetails, onMa
                          <ResizeHandle column="remainingAmount" />
                        </TableHead>
                        <TableHead 
-                         className="text-black arabic-text text-right font-bold text-base relative select-none group"
+                         className="text-[#F6E9CA] arabic-text text-right font-bold text-base relative select-none group"
                          style={{ width: `${columnWidths.receivedDate}px` }}
                        >
                          <div className="pr-2 flex items-center justify-between cursor-pointer" onClick={() => handleHeaderSort('invoice_date')}>
@@ -948,7 +1013,7 @@ export function InvoicesPageWithDB({ onCreateInvoice, onViewInvoiceDetails, onMa
                          <ResizeHandle column="receivedDate" />
                        </TableHead>
                        <TableHead 
-                         className="text-black arabic-text text-right font-bold text-base relative select-none group"
+                         className="text-[#F6E9CA] arabic-text text-right font-bold text-base relative select-none group"
                          style={{ width: `${columnWidths.deliveryDate}px` }}
                        >
                          <div className="pr-2 flex items-center justify-between cursor-pointer" onClick={() => handleHeaderSort('due_date')}>
@@ -958,7 +1023,7 @@ export function InvoicesPageWithDB({ onCreateInvoice, onViewInvoiceDetails, onMa
                          <ResizeHandle column="deliveryDate" />
                        </TableHead>
                        <TableHead 
-                         className="text-black arabic-text text-right font-bold text-base relative select-none group"
+                         className="text-[#F6E9CA] arabic-text text-right font-bold text-base relative select-none group"
                          style={{ width: `${columnWidths.status}px` }}
                        >
                          <div className="pr-2 flex items-center justify-between cursor-pointer" onClick={() => handleHeaderSort('status')}>
@@ -968,7 +1033,7 @@ export function InvoicesPageWithDB({ onCreateInvoice, onViewInvoiceDetails, onMa
                          <ResizeHandle column="status" />
                        </TableHead>
                        <TableHead 
-                         className="text-black arabic-text text-right font-bold text-base relative select-none"
+                         className="text-[#F6E9CA] arabic-text text-right font-bold text-base relative select-none"
                          style={{ width: `${columnWidths.actions}px` }}
                        >
                          الإجراءات
@@ -988,7 +1053,7 @@ export function InvoicesPageWithDB({ onCreateInvoice, onViewInvoiceDetails, onMa
                            className="text-black arabic-text font-semibold text-lg"
                            style={{ width: `${columnWidths.invoiceNumber}px` }}
                          >
-                      {invoice.invoice_number}
+                      {formatStringNumber(invoice.invoice_number)}
                     </TableCell>
                          <TableCell 
                            className="text-black arabic-text font-medium"
@@ -1000,7 +1065,7 @@ export function InvoicesPageWithDB({ onCreateInvoice, onViewInvoiceDetails, onMa
                            className="text-black font-mono"
                            style={{ width: `${columnWidths.phone}px` }}
                          >
-                           {invoice.customer_phone || '-'}
+                           {invoice.customer_phone ? formatStringNumber(invoice.customer_phone) : '-'}
                          </TableCell>
                          <TableCell 
                            className="text-black font-bold text-lg"
@@ -1066,6 +1131,41 @@ export function InvoicesPageWithDB({ onCreateInvoice, onViewInvoiceDetails, onMa
                                 <CheckCircle className="w-4 h-4" />
                               </Button>
                             )}
+                            {canMarkAsDelivered(invoice) && (
+                              <Button
+                                size="sm"
+                                onClick={async () => {
+                                  try {
+                                    const { InvoiceService } = await import('@/services/invoice.service');
+                                    await InvoiceService.markAsDelivered(invoice.id);
+                                    // Optimistically update the invoices cache so the button hides immediately
+                                    const today = new Date();
+                                    const yyyy = today.getFullYear();
+                                    const mm = String(today.getMonth() + 1).padStart(2, '0');
+                                    const dd = String(today.getDate()).padStart(2, '0');
+                                    const todayYmd = `${yyyy}-${mm}-${dd}`;
+                                    try {
+                                      queryClient.setQueryData(['invoices'], (oldData: any[] = []) =>
+                                        Array.isArray(oldData)
+                                          ? oldData.map((inv) => inv.id === invoice.id ? { ...inv, due_date: todayYmd } : inv)
+                                          : oldData
+                                      );
+                                    } catch {}
+                                    if (loadInvoices) {
+                                      await loadInvoices();
+                                    }
+                                  } catch (e) {
+                                    console.error(e);
+                                    alert('حدث خطأ أثناء تحديث تاريخ التسليم');
+                                  }
+                                }}
+                                className="bg-[#155446] hover:bg-[#13312A] text-[#F6E9CA] rounded-lg flex items-center gap-1 transition-all duration-200 hover:scale-105"
+                                aria-label={`تم التسليم لفاتورة ${invoice.customer_name}`}
+                                title="تم التسليم"
+                              >
+                                <Handshake className="w-4 h-4" />
+                              </Button>
+                            )}
                             
                       <DropdownMenu>
                               <DropdownMenuTrigger className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground h-8 px-3">
@@ -1077,13 +1177,13 @@ export function InvoicesPageWithDB({ onCreateInvoice, onViewInvoiceDetails, onMa
                                   عرض التفاصيل
                                 </DropdownMenuItem>
                                 {hasActionPermission('edit_invoice') && (
-                                  <DropdownMenuItem className="arabic-text">
+                                  <DropdownMenuItem onClick={() => handleEditInvoice(invoice)} className="arabic-text">
                                     <Edit className="w-4 h-4 ml-2" />
                                     تعديل الفاتورة
                                   </DropdownMenuItem>
                                 )}
-                                {hasActionPermission('create_invoice') && (
-                                  <DropdownMenuItem className="arabic-text">
+                                {canCreateInvoice && (
+                                  <DropdownMenuItem onClick={() => handleDuplicateInvoice(invoice)} className="arabic-text">
                                     <Copy className="w-4 h-4 ml-2" />
                                     تكرار الفاتورة
                                   </DropdownMenuItem>
@@ -1092,6 +1192,15 @@ export function InvoicesPageWithDB({ onCreateInvoice, onViewInvoiceDetails, onMa
                                   <DropdownMenuItem onClick={() => handlePrintInvoice(invoice)} className="arabic-text">
                                     <Download className="w-4 h-4 ml-2" />
                                     تصدير إلى PDF
+                                  </DropdownMenuItem>
+                                )}
+                                {hasActionPermission('delete_invoice') && (
+                                  <DropdownMenuItem 
+                                    onClick={() => handleDeleteInvoice(invoice)} 
+                                    className="arabic-text text-red-600 hover:text-red-700 hover:bg-red-50"
+                                  >
+                                    <Trash2 className="w-4 h-4 ml-2" />
+                                    حذف الفاتورة
                                   </DropdownMenuItem>
                                 )}
                         </DropdownMenuContent>
@@ -1107,157 +1216,123 @@ export function InvoicesPageWithDB({ onCreateInvoice, onViewInvoiceDetails, onMa
           </Card>
         )}
 
-        {/* Print Dialog */}
-        <Dialog open={isPrintDialogOpen} onOpenChange={handlePrintDialogOpenChange}>
-          <DialogContent className="max-w-3xl bg-[#F6E9CA] border-[#C69A72]">
-            <DialogHeader>
-              <DialogTitle className="text-[#13312A] arabic-text">تحديد فترة الطباعة</DialogTitle>
-              <DialogDescription className="text-[#155446] arabic-text">
-                اختر تاريخ البداية والنهاية قبل طباعة قائمة الفواتير، ويمكنك توسيع الفترة أو تقليصها حسب الحاجة.
-              </DialogDescription>
-            </DialogHeader>
-
-            <div className="space-y-6">
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="space-y-4 rounded-xl border border-[#C69A72] bg-[#FDFBF7] p-4">
-                  <h3 className="text-lg font-semibold text-[#13312A] arabic-text">بداية الفترة (من)</h3>
-                  <div className="grid gap-3 sm:grid-cols-3">
-                    <div className="flex flex-col gap-1">
-                      <Label className="text-black arabic-text">السنة</Label>
-                      <Input
-                        type="number"
-                        min={2000}
-                        max={2100}
-                        value={fromDateParts.year}
-                        onChange={(e) => handleFromYearChange(e.target.value)}
-                        placeholder="مثال: 2024"
-                        className="border-[#C69A72] text-right arabic-text touch-target"
-                      />
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <Label className="text-black arabic-text">الشهر</Label>
-                      <select
-                        value={fromDateParts.month}
-                        onChange={(e) => handleFromMonthChange(e.target.value)}
-                        className="px-3 py-2 border border-[#C69A72] rounded-md bg-white text-[#13312A] arabic-text touch-target focus:border-[#155446] focus:ring-1 focus:ring-[#155446]"
-                      >
-                        <option value="">من بداية السنة</option>
-                        {monthOptions.map((month) => (
-                          <option key={`from-month-${month.value}`} value={month.value}>
-                            {month.label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <Label className="text-black arabic-text">اليوم</Label>
-                      <select
-                        value={fromDateParts.day}
-                        onChange={(e) => handleFromDayChange(e.target.value)}
-                        disabled={!fromDateParts.month}
-                        className="px-3 py-2 border border-[#C69A72] rounded-md bg-white text-[#13312A] arabic-text touch-target focus:border-[#155446] focus:ring-1 focus:ring-[#155446] disabled:cursor-not-allowed disabled:bg-[#E2D4BD] disabled:text-[#7A6A58]"
-                      >
-                        <option value="">من بداية الشهر</option>
-                        {dayOptions.map((day) => (
-                          <option key={`from-day-${day}`} value={day}>
-                            {day}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="space-y-4 rounded-xl border border-[#C69A72] bg-[#FDFBF7] p-4">
-                  <h3 className="text-lg font-semibold text-[#13312A] arabic-text">نهاية الفترة (إلى)</h3>
-                  <div className="grid gap-3 sm:grid-cols-3">
-                    <div className="flex flex-col gap-1">
-                      <Label className="text-black arabic-text">السنة</Label>
-                      <Input
-                        type="number"
-                        min={2000}
-                        max={2100}
-                        value={toDateParts.year}
-                        onChange={(e) => handleToYearChange(e.target.value)}
-                        placeholder="مثال: 2024"
-                        className="border-[#C69A72] text-right arabic-text touch-target"
-                      />
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <Label className="text-black arabic-text">الشهر</Label>
-                      <select
-                        value={toDateParts.month}
-                        onChange={(e) => handleToMonthChange(e.target.value)}
-                        className="px-3 py-2 border border-[#C69A72] rounded-md bg-white text-[#13312A] arabic-text touch-target focus:border-[#155446] focus:ring-1 focus:ring-[#155446]"
-                      >
-                        <option value="">حتى نهاية السنة</option>
-                        {monthOptions.map((month) => (
-                          <option key={`to-month-${month.value}`} value={month.value}>
-                            {month.label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <Label className="text-black arabic-text">اليوم</Label>
-                      <select
-                        value={toDateParts.day}
-                        onChange={(e) => handleToDayChange(e.target.value)}
-                        disabled={!toDateParts.month}
-                        className="px-3 py-2 border border-[#C69A72] rounded-md bg-white text-[#13312A] arabic-text touch-target focus:border-[#155446] focus:ring-1 focus:ring-[#155446] disabled:cursor-not-allowed disabled:bg-[#E2D4BD] disabled:text-[#7A6A58]"
-                      >
-                        <option value="">حتى نهاية الشهر</option>
-                        {dayOptions.map((day) => (
-                          <option key={`to-day-${day}`} value={day}>
-                            {day}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <p className="text-sm text-[#155446] arabic-text">
-                ترك حقل الشهر أو اليوم فارغاً يعني طباعة الفترة الكاملة للسنة أو الشهر المحدد. سيتم استخدام تاريخ الاستلام لكل فاتورة لتحديد مدى الطباعة.
-              </p>
-
-              {printError && (
-                <p className="text-sm text-red-600 arabic-text">{printError}</p>
-              )}
-            </div>
-
-            <DialogFooter className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => handlePrintDialogOpenChange(false)}
-                className="border-[#C69A72] text-[#13312A] hover:bg-[#C69A72] touch-target"
-              >
-                إلغاء
-              </Button>
-              <Button
-                type="button"
-                onClick={handleConfirmPrintRange}
-                className="bg-[#155446] hover:bg-[#13312A] text-[#F6E9CA] touch-target"
-              >
-                بدء الطباعة
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        <PrintInvoicesDialog
+          isOpen={isPrintDialogOpen}
+          fromDateParts={fromDateParts}
+          toDateParts={toDateParts}
+          monthOptions={monthOptions}
+          dayOptions={dayOptions}
+          printError={printError}
+          onClose={() => handlePrintDialogOpenChange(false)}
+          onConfirm={handleConfirmPrintRange}
+          onFromYearChange={handleFromYearChange}
+          onFromMonthChange={handleFromMonthChange}
+          onFromDayChange={handleFromDayChange}
+          onToYearChange={handleToYearChange}
+          onToMonthChange={handleToMonthChange}
+          onToDayChange={handleToDayChange}
+        />
 
       {/* Invoice Details Dialog */}
       {selectedInvoice && (
         <InvoiceDetailsDialog
-          isOpen={isDetailsDialogOpen}
+          isOpen={isPrintDialogOpen ? false : isDetailsDialogOpen}
           onOpenChange={setIsDetailsDialogOpen}
           invoice={selectedInvoice}
+        />
+      )}
+
+      {/* Edit Invoice Dialog */}
+      {invoiceToEdit && (
+        <NewInvoiceDialogWithDB
+          isOpen={isEditDialogOpen}
+          onOpenChange={(open) => {
+            setIsEditDialogOpen(open);
+            if (!open) setInvoiceToEdit(null);
+          }}
+          onInvoiceCreated={async () => {
+            setIsEditDialogOpen(false);
+            setInvoiceToEdit(null);
+            if (loadInvoices) {
+              await loadInvoices();
+            }
+          }}
+          prefillCustomer={{
+            id: invoiceToEdit.id, // Pass the invoice ID for editing
+            name: invoiceToEdit.customer_name,
+            phone: invoiceToEdit.customer_phone,
+            address: invoiceToEdit.customer_address,
+            total: invoiceToEdit.total,
+            paidAmount: invoiceToEdit.paid_amount,
+            status: invoiceToEdit.status,
+            deliveryDate: typeof invoiceToEdit.due_date === 'string' ? (invoiceToEdit.due_date || '') : new Date(invoiceToEdit.due_date).toISOString().split('T')[0],
+            notes: invoiceToEdit.notes,
+            // Existing image (if any)
+            fabricImageUrl: (invoiceToEdit as any).fabric_image_url || undefined,
+            // Prefill design sections from saved invoice fields if present.
+            // Leave empty when not previously saved (per requirement).
+            designDetails: {
+              fabricType: typeof (invoiceToEdit as any).fabric_type === 'string' && (invoiceToEdit as any).fabric_type
+                ? String((invoiceToEdit as any).fabric_type).split(',').filter(Boolean)
+                : [],
+              fabricSource: typeof (invoiceToEdit as any).fabric_source === 'string' && (invoiceToEdit as any).fabric_source
+                ? String((invoiceToEdit as any).fabric_source).split(',').filter(Boolean)
+                : [],
+              collarType: typeof (invoiceToEdit as any).collar_type === 'string' && (invoiceToEdit as any).collar_type
+                ? String((invoiceToEdit as any).collar_type).split(',').filter(Boolean)
+                : [],
+              chestStyle: typeof (invoiceToEdit as any).chest_style === 'string' && (invoiceToEdit as any).chest_style
+                ? String((invoiceToEdit as any).chest_style).split(',').filter(Boolean)
+                : [],
+              sleeveEnd: typeof (invoiceToEdit as any).sleeve_end === 'string' && (invoiceToEdit as any).sleeve_end
+                ? String((invoiceToEdit as any).sleeve_end).split(',').filter(Boolean)
+                : [],
+              bunijaType: (invoiceToEdit as any).bunija_type || ''
+            },
+            // Keep items/measurements empty when not stored with the invoice
+            items: [],
+            measurements: undefined,
+            // Map payment date when available so the UI shows it
+            paymentDate: (invoiceToEdit as any).paid_at ? String((invoiceToEdit as any).paid_at).split('T')[0] : undefined
+          }}
+        />
+      )}
+
+      {/* Duplicate Invoice Dialog */}
+      {invoiceToDuplicate && (
+        <NewInvoiceDialogWithDB
+          isOpen={isDuplicateDialogOpen}
+          onOpenChange={(open) => {
+            setIsDuplicateDialogOpen(open);
+            if (!open) setInvoiceToDuplicate(null);
+          }}
+          onInvoiceCreated={async () => {
+            setIsDuplicateDialogOpen(false);
+            setInvoiceToDuplicate(null);
+            if (loadInvoices) {
+              await loadInvoices();
+            }
+          }}
+          prefillCustomer={{
+            name: invoiceToDuplicate.customer_name,
+            phone: invoiceToDuplicate.customer_phone,
+            address: invoiceToDuplicate.customer_address,
+            total: invoiceToDuplicate.total,
+            paidAmount: 0,
+            status: 'معلق',
+            deliveryDate: typeof invoiceToDuplicate.due_date === 'string' ? (invoiceToDuplicate.due_date || '') : new Date(invoiceToDuplicate.due_date).toISOString().split('T')[0],
+            notes: invoiceToDuplicate.notes,
+            items: [],
+            measurements: undefined,
+            designDetails: undefined
+          }}
         />
       )}
       </div>
     </div>
   );
 }
+
+
 
 

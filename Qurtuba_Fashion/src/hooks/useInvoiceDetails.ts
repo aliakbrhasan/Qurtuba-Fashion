@@ -6,10 +6,11 @@ export interface InvoiceDetails extends Invoice {
   items: InvoiceItem[];
   fabricImageUrl?: string;
   measurements?: {
-    length?: number;
-    shoulder?: number;
-    waist?: number;
-    chest?: number;
+    length?: string | number;
+    shoulder?: string | number;
+    waist?: string | number;
+    chest?: string | number;
+    collar?: string | number;
   };
   designDetails?: {
     fabricType?: string[];
@@ -17,6 +18,7 @@ export interface InvoiceDetails extends Invoice {
     collarType?: string[];
     chestStyle?: string[];
     sleeveEnd?: string[];
+    bunijaType?: string;
   };
 }
 
@@ -30,68 +32,84 @@ export function useInvoiceDetails(invoiceId: string | null) {
     queryKey: ['invoice-details', invoiceId],
     queryFn: async (): Promise<InvoiceDetails | null> => {
       if (!invoiceId) return null;
-      
-      try {
-        // جلب بيانات الفاتورة مباشرة عبر المعرف لتفادي مشاكل التطابق أو التأخير
-        const invoice = await databaseService.getInvoiceById(invoiceId);
-        if (!invoice) {
-          throw new Error('الفاتورة غير موجودة');
-        }
 
-        // جلب عناصر الفاتورة
+      try {
+        const invoice = await databaseService.getInvoiceById(invoiceId);
+        if (!invoice) throw new Error('تعذر العثور على الفاتورة');
+
         const items = await databaseService.getInvoiceItems(invoiceId);
 
-        // جلب القياسات الفعلية للزبون
-        let measurements: { length?: number; shoulder?: number; waist?: number; chest?: number } | undefined = undefined;
-        if (invoice.customer_id) {
-          try {
-            const customerMeasurements = await databaseService.getCustomerMeasurements(parseInt(invoice.customer_id));
-            if (customerMeasurements && customerMeasurements.length > 0) {
-              const latestMeasurement = customerMeasurements[0];
-            measurements = {
-                length: latestMeasurement.height,
-                shoulder: latestMeasurement.shoulder,
-                waist: latestMeasurement.waist,
-                chest: latestMeasurement.chest
-              };
-            }
-          } catch (error) {
-            console.warn('Error fetching customer measurements:', error);
+        // Measurements: look in invoice first, then customer record
+        let measurements: { length?: string | number; shoulder?: string | number; waist?: string | number; chest?: string | number; collar?: string | number } | undefined;
+        try {
+          let cm: any = (invoice as any).measurements || (invoice as any).customer_measurements;
+          if (!cm) {
+            const customers = await databaseService.getCustomers();
+            const cid: any = (invoice as any).customer_id;
+            const byId = customers.find((c: any) => String(c.id) === String(cid));
+            const byAlias = customers.find((c: any) => (c.name || '').trim() === (invoice as any).customer_name?.trim() && (c.phone || '').trim() === ((invoice as any).customer_phone || '').trim());
+            const customer: any = byId || byAlias;
+            cm = customer?.measurements;
           }
+          if (typeof cm === 'string') { try { cm = JSON.parse(cm); } catch { cm = null; } }
+          if (cm && typeof cm === 'object') {
+            measurements = {
+              length: String(cm.length ?? cm.height ?? ''),
+              shoulder: String(cm.shoulder ?? ''),
+              waist: String(cm.waist ?? ''),
+              chest: String(cm.chest ?? ''),
+              collar: String(cm.collar ?? ''),
+            };
+          }
+        } catch (e) {
+          console.warn('Error resolving customer measurements:', e);
         }
 
-        // جلب تفاصيل التصميم الفعلية (يمكن ربطها بجدول منفصل في المستقبل)
+        // Design details: read from invoice fields or legacy design_details object
+        const parseList = (val: any): string[] => {
+          if (Array.isArray(val)) return val.map((v) => String(v).trim()).filter(Boolean);
+          if (typeof val === 'string') {
+            const s = val.trim();
+            if (!s) return [];
+            // Try JSON array first
+            if ((s.startsWith('[') && s.endsWith(']')) || (s.startsWith('"[') && s.endsWith(']"'))) {
+              try {
+                const arr = JSON.parse(s.replace(/^"|"$/g, ''));
+                if (Array.isArray(arr)) return arr.map((v: any) => String(v).trim()).filter(Boolean);
+              } catch {}
+            }
+            // Split by English comma or Arabic comma U+060C
+            return s.split(/[,،]/).map((v) => v.trim()).filter(Boolean);
+          }
+          return [];
+        };
+        const dd = (invoice as any).design_details || (invoice as any).designDetails || {};
         const designDetails = {
-          fabricType: (invoice as any).fabric_type ? (invoice as any).fabric_type.split(',') : [],
-          fabricSource: (invoice as any).fabric_source ? (invoice as any).fabric_source.split(',') : [],
-          collarType: (invoice as any).collar_type ? (invoice as any).collar_type.split(',') : [],
-          chestStyle: (invoice as any).chest_style ? (invoice as any).chest_style.split(',') : [],
-          sleeveEnd: (invoice as any).sleeve_end ? (invoice as any).sleeve_end.split(',') : []
+          fabricType: (invoice as any).fabric_type ? parseList((invoice as any).fabric_type) : parseList(dd.fabric_type),
+          fabricSource: (invoice as any).fabric_source ? parseList((invoice as any).fabric_source) : parseList(dd.fabric_source),
+          collarType: (invoice as any).collar_type ? parseList((invoice as any).collar_type) : parseList(dd.collar_type),
+          chestStyle: (invoice as any).chest_style ? parseList((invoice as any).chest_style) : parseList(dd.chest_style),
+          sleeveEnd: (invoice as any).sleeve_end ? parseList((invoice as any).sleeve_end) : parseList(dd.sleeve_end),
+          bunijaType: (invoice as any).bunija_type ? String((invoice as any).bunija_type).trim() : (dd.bunija_type || undefined),
         };
 
-        // تحويل البيانات إلى الصيغة المطلوبة
         const details: InvoiceDetails = {
           ...invoice,
           items,
           fabricImageUrl: (invoice as any).fabric_image_url,
           measurements,
-          designDetails
+          designDetails,
         };
 
         return details;
-      } catch (error) {
-        console.error('Error fetching invoice details:', error);
-        throw error;
+      } catch (err) {
+        console.error('Error fetching invoice details:', err);
+        throw err;
       }
     },
     enabled: !!invoiceId,
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    staleTime: 5 * 60 * 1000,
   });
 
-  return {
-    invoiceDetails,
-    isLoading,
-    error: error?.message || null,
-    refetch
-  };
+  return { invoiceDetails, isLoading, error: (error as any)?.message || null, refetch };
 }

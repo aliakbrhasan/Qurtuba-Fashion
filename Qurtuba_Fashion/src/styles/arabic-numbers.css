@@ -1,0 +1,55 @@
+/* Arabic Numbers Support */
+.arabic-numbers {
+  font-variant-numeric: normal;
+  font-feature-settings: "lnum" 0, "tnum" 0;
+}
+
+/* Ensure Arabic digits are displayed correctly */
+.arabic-digits {
+  font-family: 'Cairo', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  direction: ltr;
+  unicode-bidi: bidi-override;
+}
+
+/* Currency formatting with Arabic digits */
+.currency-arabic {
+  font-family: 'Cairo', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  direction: ltr;
+  unicode-bidi: bidi-override;
+}
+
+/* Date formatting with Arabic digits */
+.date-arabic {
+  font-family: 'Cairo', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  direction: ltr;
+  unicode-bidi: bidi-override;
+}
+
+/* Number formatting with thousand separators */
+.number-arabic {
+  font-family: 'Cairo', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  direction: ltr;
+  unicode-bidi: bidi-override;
+}
+
+/* Ensure proper display in tables */
+table .arabic-numbers,
+table .arabic-digits,
+table .currency-arabic,
+table .date-arabic,
+table .number-arabic {
+  text-align: left;
+  direction: ltr;
+  unicode-bidi: bidi-override;
+}
+
+/* Ensure proper display in cards and components */
+.card .arabic-numbers,
+.card .arabic-digits,
+.card .currency-arabic,
+.card .date-arabic,
+.card .number-arabic {
+  text-align: left;
+  direction: ltr;
+  unicode-bidi: bidi-override;
+}

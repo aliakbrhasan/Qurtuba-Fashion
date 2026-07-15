@@ -1,4 +1,6 @@
-import { useState } from 'react';
+﻿import { useState, Suspense } from 'react';
+import React from 'react';
+const AppProvidersLazy = React.lazy(() => import('./app/AppProviders').then(m => ({ default: m.AppProviders })));
 import { Layout } from './components/Layout';
 import { LoginPage } from './components/LoginPage';
 import { Dashboard } from './components/Dashboard';
@@ -10,9 +12,11 @@ import { CustomerDetailsPageWithDB } from './components/CustomerDetailsPageWithD
 import { InvoiceDetailsPage } from './components/InvoiceDetailsPage';
 import { NewInvoiceDialogWithDB } from './components/NewInvoiceDialogWithDB';
 import { UsersManagementPage } from './components/UsersManagementPage';
+import { AdminLogPage } from './components/AdminLogPage';
 import { RolesManagementPage } from './components/RolesManagementPage';
 import { Toaster } from './components/ui/sonner';
-import { AppProviders } from './app/AppProviders';
+
+import { useArabicSanitizer } from './hooks/useArabicSanitizer';
 import { Customer } from './types/customer';
 import { authService, User } from './services/auth.service';
 // Database init removed to prevent test/sync side-effects on reload
@@ -20,6 +24,7 @@ import { authService, User } from './services/auth.service';
 // Legacy sample customers removed; customers are now sourced from DB/invoices via CustomersPageWithDB
 
 export default function App() {
+  useArabicSanitizer();
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [currentPage, setCurrentPage] = useState('dashboard');
@@ -54,7 +59,7 @@ export default function App() {
     }
   };
 
-  const handleNavigate = (page: string) => {
+  const handleNavigate = (page: string, itemId?: string) => {
     setCurrentPage(page);
     if (page !== 'customerDetails' && page !== 'invoiceDetails') {
       setSelectedCustomer(null);
@@ -63,6 +68,18 @@ export default function App() {
       setSelectedInvoice(null);
     }
     setIsNewInvoiceDialogOpen(false);
+
+    // Handle navigation with specific item IDs
+    if (itemId) {
+      if (page === 'invoices') {
+        setSelectedInvoice({ id: itemId });
+        setCurrentPage('invoiceDetails');
+      } else if (page === 'customers') {
+        // For customers, we need to load the customer data first
+        // This will be handled by the notification system
+        setCurrentPage('customers');
+      }
+    }
   };
 
   const handleCustomerSelect = (customer: Customer) => {
@@ -75,26 +92,25 @@ export default function App() {
   };
 
   const handleViewInvoiceDetails = (invoice: any) => {
-    // إذا كان invoice كائن كامل، نأخذ الـ ID
-    // إذا كان ID فقط، نستخدمه مباشرة
+    // Ø¥Ø°Ø§ ÙƒØ§Ù† invoice ÙƒØ§Ø¦Ù† ÙƒØ§Ù…Ù„ØŒ Ù†Ø£Ø®Ø° Ø§Ù„Ù€ ID
+    // Ø¥Ø°Ø§ ÙƒØ§Ù† ID ÙÙ‚Ø·ØŒ Ù†Ø³ØªØ®Ø¯Ù…Ù‡ Ù…Ø¨Ø§Ø´Ø±Ø©
     const invoiceId = typeof invoice === 'string' ? invoice : invoice.id;
     setSelectedInvoice({ id: invoiceId });
     setCurrentPage('invoiceDetails');
   };
 
-  const handleMarkAsPaid = (invoiceId: string) => {
-    // Here you would typically update the invoice status in your data store
-    console.log('Marking invoice as paid:', invoiceId);
-    // For now, we'll just update the local state
-    if (selectedInvoice && selectedInvoice.id === invoiceId) {
-      setSelectedInvoice({
-        ...selectedInvoice,
-        status: 'مدفوع',
-        paid: selectedInvoice.total
-      });
+  const handleMarkAsPaid = async (invoiceId: string) => {
+    try {
+      const { InvoiceService } = await import('@/services/invoice.service');
+      const { queryClient } = await import('./app/queryClient');
+      await InvoiceService.markAsPaid(invoiceId);
+      try { queryClient.invalidateQueries({ queryKey: ['invoices'] }); } catch {}
+      if (selectedInvoice && selectedInvoice.id === invoiceId) {
+        setSelectedInvoice({ ...selectedInvoice, status: 'مدفوع' });
+      }
+    } catch (e) {
+      console.error('Failed to mark as paid:', e);
     }
-    // You would also update the invoices list here in a real application
-    // This is just for demonstration purposes
   };
 
   const renderCurrentPage = () => {
@@ -144,6 +160,8 @@ export default function App() {
         );
       case 'financial':
         return <FinancialPage />;
+      case 'adminLog':
+        return <AdminLogPage />;
       case 'users':
         return <UsersManagementPage onNavigate={handleNavigate} />;
       case 'roles':
@@ -159,7 +177,8 @@ export default function App() {
   };
 
   return (
-    <AppProviders>
+    <Suspense fallback={null}>
+    <AppProvidersLazy>
       <div className="min-h-screen">
         {!isLoggedIn ? (
           <LoginPage onLogin={handleLogin} />
@@ -175,11 +194,21 @@ export default function App() {
             <NewInvoiceDialogWithDB
               isOpen={isNewInvoiceDialogOpen}
               onOpenChange={setIsNewInvoiceDialogOpen}
+              onInvoiceCreated={async () => {
+                // Refresh invoices data after creating a new invoice
+                const { queryClient } = await import('./app/queryClient');
+                queryClient.invalidateQueries({ queryKey: ['invoices'] });
+                queryClient.invalidateQueries({ queryKey: ['customers'] });
+                queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+              }}
             />
           </Layout>
         )}
         <Toaster position="top-center" />
       </div>
-    </AppProviders>
+    </AppProvidersLazy>
+    </Suspense>
   );
 }
+
+
